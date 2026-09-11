@@ -7,8 +7,8 @@ media controls.
 The repository currently contains the first executable product slice:
 
 - A SwiftUI macOS preview of collapsed and expanded notch states.
-- The next upcoming Calendar event, loaded locally through EventKit.
-- An amber collapsed-state indicator when that event starts within five minutes.
+- A selectable week showing every Calendar event for the chosen day.
+- An amber Calendar icon when the next event starts within ten minutes.
 - A Join action for Google Meet, Zoom, Teams, and Webex links.
 - A platform-independent domain module.
 - Deterministic unit tests for activity ordering.

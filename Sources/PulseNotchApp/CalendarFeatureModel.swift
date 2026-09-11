@@ -6,8 +6,7 @@ import PulseNotchCore
 final class CalendarFeatureModel: ObservableObject {
     enum State: Equatable {
         case loading
-        case event(CalendarEvent)
-        case noUpcomingEvent
+        case loaded(CalendarEventSchedule)
         case accessDenied
         case unavailable
     }
@@ -21,12 +20,20 @@ final class CalendarFeatureModel: ObservableObject {
     }
 
     func refresh(at date: Date = Date()) async {
+        let calendar = Calendar.autoupdatingCurrent
+        guard
+            let week = calendar.dateInterval(of: .weekOfYear, for: date),
+            let end = calendar.date(byAdding: .day, value: 21, to: week.start)
+        else {
+            state = .unavailable
+            return
+        }
+
         do {
-            if let event = try await provider.nextEvent(after: date) {
-                state = .event(event)
-            } else {
-                state = .noUpcomingEvent
-            }
+            let events = try await provider.events(
+                in: DateInterval(start: week.start, end: end)
+            )
+            state = .loaded(CalendarEventSchedule(events: events))
         } catch CalendarEventProviderError.accessDenied {
             state = .accessDenied
         } catch {

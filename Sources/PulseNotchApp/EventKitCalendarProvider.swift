@@ -1,36 +1,30 @@
+@preconcurrency import AppKit
 @preconcurrency import EventKit
 import Foundation
 import PulseNotchCore
 
 actor EventKitCalendarProvider: CalendarEventProviding {
     private let eventStore: EKEventStore
-    private let searchInterval: TimeInterval
 
-    init(
-        eventStore: EKEventStore = EKEventStore(),
-        searchInterval: TimeInterval = 14 * 24 * 60 * 60
-    ) {
+    init(eventStore: EKEventStore = EKEventStore()) {
         self.eventStore = eventStore
-        self.searchInterval = searchInterval
     }
 
-    func nextEvent(after date: Date) async throws -> CalendarEvent? {
+    func events(in interval: DateInterval) async throws -> [CalendarEvent] {
         try await ensureCalendarAccess()
 
         let predicate = eventStore.predicateForEvents(
-            withStart: date,
-            end: date.addingTimeInterval(searchInterval),
+            withStart: interval.start,
+            end: interval.end,
             calendars: nil
         )
 
-        let events = eventStore.events(matching: predicate)
+        return eventStore.events(matching: predicate)
             .filter { event in
                 event.status != .canceled
                     && currentUserHasNotDeclined(event)
             }
             .map(calendarEvent(from:))
-
-        return NextCalendarEvent().select(from: events, after: date)
     }
 
     private func ensureCalendarAccess() async throws {
@@ -61,11 +55,35 @@ actor EventKitCalendarProvider: CalendarEventProviding {
                 .nilIfEmpty ?? "Untitled event",
             startsAt: event.startDate,
             endsAt: event.endDate,
+            isAllDay: event.isAllDay,
+            calendarName: event.calendar.title,
+            calendarColor: calendarColor(for: event),
+            location: event.location?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .nilIfEmpty,
+            notes: event.notes?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .nilIfEmpty,
             meetingURL: MeetingLinkResolver.resolve(
                 eventURL: event.url,
                 location: event.location,
                 notes: event.notes
             )
+        )
+    }
+
+    private func calendarColor(for event: EKEvent) -> CalendarEventColor {
+        guard let color = NSColor(cgColor: event.calendar.cgColor)?
+            .usingColorSpace(.sRGB)
+        else {
+            return .orange
+        }
+
+        return CalendarEventColor(
+            red: Double(color.redComponent),
+            green: Double(color.greenComponent),
+            blue: Double(color.blueComponent),
+            opacity: Double(color.alphaComponent)
         )
     }
 }
