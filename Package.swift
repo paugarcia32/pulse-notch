@@ -29,7 +29,16 @@ let package = Package(
         ),
         .executableTarget(
             name: "PulseNotchApp",
-            dependencies: ["PulseNotchCore"]
+            dependencies: ["PulseNotchCore"],
+            exclude: ["Info.plist"],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "Sources/PulseNotchApp/Info.plist"
+                ])
+            ]
         ),
         .testTarget(
             name: "PulseNotchCoreTests",
