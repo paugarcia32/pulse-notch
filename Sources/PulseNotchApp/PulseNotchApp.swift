@@ -17,7 +17,7 @@ struct PulseNotchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            NotchPreview(
+            NotchSurface(
                 calendarModel: calendarModel,
                 codingAgentModel: codingAgentModel
             )

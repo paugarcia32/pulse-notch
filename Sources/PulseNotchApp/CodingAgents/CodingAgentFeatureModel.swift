@@ -12,7 +12,7 @@ final class CodingAgentFeatureModel: ObservableObject {
 
     enum UsageState: Equatable {
         case loading
-        case loaded([CodingAgentUsage])
+        case loaded([CodingAgentUsageAvailability])
         case unavailable
     }
 

@@ -48,7 +48,7 @@ public struct DetectedCodingAgent: Identifiable, Equatable, Sendable {
 
 public protocol CodingAgentProviding: Sendable {
     func activeAgents() async throws -> [DetectedCodingAgent]
-    func usage() async throws -> [CodingAgentUsage]
+    func usage() async throws -> [CodingAgentUsageAvailability]
 }
 
 public struct CodingAgentUsage: Identifiable, Equatable, Sendable {
@@ -86,6 +86,25 @@ public struct CodingAgentUsage: Identifiable, Equatable, Sendable {
             self.label = label
             self.usedPercent = usedPercent
             self.resetsAt = resetsAt
+        }
+    }
+}
+
+public enum CodingAgentUsageAvailability: Identifiable, Equatable, Sendable {
+    case available(CodingAgentUsage)
+    case unavailable(CodingAgentKind)
+
+    public var id: CodingAgentKind {
+        switch self {
+        case let .available(usage): usage.kind
+        case let .unavailable(kind): kind
+        }
+    }
+
+    public var kind: CodingAgentKind {
+        switch self {
+        case let .available(usage): usage.kind
+        case let .unavailable(kind): kind
         }
     }
 }

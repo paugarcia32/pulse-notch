@@ -1,8 +1,20 @@
 import PulseNotchCore
 import SwiftUI
 
+extension CodingAgentKind {
+    var notchColor: Color {
+        switch self {
+        case .codex: .cyan
+        case .claude: .orange
+        case .cursor: .purple
+        case .antigravity: .indigo
+        case .opencode: .mint
+        }
+    }
+}
+
 struct NotchIndicator: Identifiable {
-    enum Content {
+    enum Content: Equatable {
         case upcomingCalendarEvent
         case runningAgent(CodingAgentKind)
         case completedAgent(CodingAgentKind)
@@ -15,15 +27,48 @@ struct NotchIndicator: Identifiable {
     var color: Color {
         switch content {
         case .upcomingCalendarEvent: .orange
-        case .runningAgent(.codex): .cyan
-        case .runningAgent(.claude): .orange
-        case .runningAgent(.cursor): .purple
-        case .runningAgent(.antigravity): .indigo
-        case .runningAgent(.opencode): .mint
+        case let .runningAgent(kind): kind.notchColor
         case .completedAgent: .green
         }
     }
 
+}
+
+enum CollapsedNotchIndicators {
+    static func make(
+        schedule: CalendarEventSchedule?,
+        sessions: [CodingAgentSession],
+        at date: Date,
+        calendarReminderLeadTime: TimeInterval
+    ) -> [NotchIndicator] {
+        var indicators: [NotchIndicator] = []
+
+        if let event = schedule?.next(after: date), event.startsSoon(
+            relativeTo: date,
+            threshold: calendarReminderLeadTime
+        ) {
+            indicators.append(
+                NotchIndicator(
+                    id: "calendar-\(event.id)",
+                    content: .upcomingCalendarEvent,
+                    accessibilityLabel: "Calendar event starting within ten minutes"
+                )
+            )
+        }
+
+        indicators.append(contentsOf: sessions.prefix(4).map { session in
+            let isRunning = session.status == .running
+            return NotchIndicator(
+                id: session.id,
+                content: isRunning
+                    ? .runningAgent(session.kind)
+                    : .completedAgent(session.kind),
+                accessibilityLabel: "\(session.kind.displayName) agent \(isRunning ? "running" : "completed")"
+            )
+        })
+
+        return Array(indicators.prefix(5))
+    }
 }
 
 struct NotchIndicatorView: View {
@@ -76,13 +121,7 @@ struct AgentMark: View {
     }
 
     private var color: Color {
-        switch kind {
-        case .codex: .white.opacity(0.85)
-        case .claude: .orange
-        case .cursor: .purple
-        case .antigravity: .indigo
-        case .opencode: .mint
-        }
+        kind == .codex ? .white.opacity(0.85) : kind.notchColor
     }
 }
 

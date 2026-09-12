@@ -24,24 +24,21 @@ actor LocalCodingAgentProvider: CodingAgentProviding {
         return agents.map { enrich($0, at: date) }
     }
 
-    func usage() throws -> [CodingAgentUsage] {
-        var usages = LocalCodingAgentInstallation.installedKinds.map {
-            CodingAgentUsage(kind: $0, windows: [])
+    func usage() -> [CodingAgentUsageAvailability] {
+        LocalCodingAgentInstallation.installedKinds.map { kind in
+            do {
+                let usage: CodingAgentUsage? = switch kind {
+                case .codex: try CodexUsageReader.read()
+                case .claude: try ClaudeUsageReader.read()
+                case .antigravity: try AntigravityUsageReader.read()
+                case .cursor, .opencode: nil
+                }
+                return usage.map(CodingAgentUsageAvailability.available)
+                    ?? .unavailable(kind)
+            } catch {
+                return .unavailable(kind)
+            }
         }
-
-        if let index = usages.firstIndex(where: { $0.kind == .codex }),
-           let codexUsage = try? CodexUsageReader.read() {
-            usages[index] = codexUsage
-        }
-        if let index = usages.firstIndex(where: { $0.kind == .claude }),
-           let claudeUsage = try? ClaudeUsageReader.read() {
-            usages[index] = claudeUsage
-        }
-        if let index = usages.firstIndex(where: { $0.kind == .antigravity }),
-           let antigravityUsage = try? AntigravityUsageReader.read() {
-            usages[index] = antigravityUsage
-        }
-        return usages
     }
 
     private func enrich(
@@ -136,14 +133,16 @@ enum LocalCodingAgentInstallation {
     }
 }
 
-enum CodingAgentProviderError: Error {
+enum CodingAgentProviderError: Error, Equatable {
     case commandFailed
+    case commandTimedOut
 }
 
 enum CommandOutput {
     static func read(
         executable: String,
-        arguments: [String]
+        arguments: [String],
+        timeout: TimeInterval = 5
     ) throws -> String {
         let process = Process()
         let output = Pipe()
@@ -151,16 +150,50 @@ enum CommandOutput {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         process.standardOutput = output
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
 
         try process.run()
+        let timeoutState = CommandTimeoutState(process: process)
+        let timeoutWork = DispatchWorkItem { timeoutState.terminateProcess() }
+        DispatchQueue.global().asyncAfter(
+            deadline: .now() + timeout,
+            execute: timeoutWork
+        )
         let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        timeoutWork.cancel()
 
+        guard !timeoutState.didTimeOut else {
+            throw CodingAgentProviderError.commandTimedOut
+        }
         guard process.terminationStatus == 0 else {
             throw CodingAgentProviderError.commandFailed
         }
         return String(decoding: data, as: UTF8.self)
+    }
+}
+
+private final class CommandTimeoutState: @unchecked Sendable {
+    private let lock = NSLock()
+    private let process: Process
+    private var timedOut = false
+
+    init(process: Process) {
+        self.process = process
+    }
+
+    var didTimeOut: Bool {
+        lock.withLock { timedOut }
+    }
+
+    func terminateProcess() {
+        lock.withLock {
+            guard process.isRunning else {
+                return
+            }
+            timedOut = true
+            process.terminate()
+        }
     }
 }
 
@@ -273,19 +306,8 @@ enum LocalCodingAgentProcessParser {
 enum CodexSessionReader {
     private struct ActiveSession: Decodable {
         let id: String
-        let fallbackTitle: String?
         let workingDirectory: String?
         let startedAt: TimeInterval?
-    }
-
-    private struct SessionIndexEntry: Decodable {
-        let id: String
-        let threadName: String
-
-        enum CodingKeys: String, CodingKey {
-            case id
-            case threadName = "thread_name"
-        }
     }
 
     static func activeSessions() throws -> [DetectedCodingAgent] {
@@ -298,10 +320,6 @@ enum CodexSessionReader {
 
         let query = """
         SELECT DISTINCT t.thread_id AS id,
-          (SELECT json_extract(i.item_json, '$.content[0].text')
-           FROM thread_items i
-           WHERE i.thread_id = t.thread_id AND i.item_type = 'userMessage'
-           ORDER BY i.rollout_ordinal LIMIT 1) AS fallbackTitle,
           (SELECT json_extract(i.item_json, '$.cwd')
            FROM thread_items i
            WHERE i.thread_id = t.thread_id
@@ -319,38 +337,17 @@ enum CodexSessionReader {
             [ActiveSession].self,
             from: Data(output.utf8)
         )
-        let titles = sessionTitles(
-            at: codexDirectory.appending(path: "session_index.jsonl")
-        )
-
         return active.map { session in
             DetectedCodingAgent(
                 id: "codex-\(session.id)",
                 kind: .codex,
-                title: (titles[session.id] ?? session.fallbackTitle
-                    ?? "Active coding session").condensedAgentTitle,
+                title: "Active coding session",
                 workingDirectory: session.workingDirectory,
                 startedAt: session.startedAt.map(Date.init(timeIntervalSince1970:))
             )
         }
     }
 
-    private static func sessionTitles(at url: URL) -> [String: String] {
-        guard let data = try? Data(contentsOf: url) else {
-            return [:]
-        }
-
-        let decoder = JSONDecoder()
-        return String(decoding: data, as: UTF8.self)
-            .split(separator: "\n")
-            .compactMap { try? decoder.decode(
-                SessionIndexEntry.self,
-                from: Data($0.utf8)
-            ) }
-            .reduce(into: [:]) { titles, entry in
-                titles[entry.id] = entry.threadName
-            }
-    }
 }
 
 private extension String {

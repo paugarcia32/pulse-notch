@@ -47,8 +47,9 @@ chats cannot currently be distinguished reliably from the editor's background
 processes.
 
 For active sessions, Pulse Notch reads the working directory and Git branch locally
-when the agent exposes them. This metadata stays in memory; directory and branch
-lookups are cached for thirty seconds while the agent is running.
+when the agent exposes them. It does not read or show coding-agent prompts or thread
+titles. This metadata stays in memory; directory and branch lookups are cached for
+thirty seconds while the agent is running.
 
 When the coding-agent page is visible, Pulse Notch asks the locally installed Codex
 App Server for the current quota windows once per minute. This reuses Codex's own
