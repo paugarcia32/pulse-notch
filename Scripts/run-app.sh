@@ -8,6 +8,7 @@ configuration=debug
 app_path="$repository_root/.build/PulseNotch.app"
 contents_path="$app_path/Contents"
 executable_path="$contents_path/MacOS/PulseNotch"
+claude_bridge_path="$contents_path/MacOS/PulseNotchClaudeBridge"
 info_plist_path="$repository_root/Sources/PulseNotchApp/Info.plist"
 launch_services_register="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 should_open=true
@@ -33,6 +34,11 @@ swift build \
     --configuration "$configuration" \
     --product PulseNotch
 
+swift build \
+    --package-path "$repository_root" \
+    --configuration "$configuration" \
+    --product PulseNotchClaudeBridge
+
 binary_directory=$(swift build \
     --package-path "$repository_root" \
     --configuration "$configuration" \
@@ -40,6 +46,7 @@ binary_directory=$(swift build \
 
 mkdir -p "$contents_path/MacOS"
 install -m 755 "$binary_directory/PulseNotch" "$executable_path"
+install -m 755 "$binary_directory/PulseNotchClaudeBridge" "$claude_bridge_path"
 install -m 644 "$info_plist_path" "$contents_path/Info.plist"
 
 codesign \
