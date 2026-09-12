@@ -1,3 +1,4 @@
+import AppKit
 import PulseNotchCore
 import SwiftUI
 
@@ -169,27 +170,22 @@ struct AgentMark: View {
 
     var body: some View {
         Group {
-            switch kind {
-            case .codex:
-                Image(systemName: "circle.hexagongrid.fill")
-            case .claude:
-                Image(systemName: "sparkles")
-            case .cursor:
-                Image(systemName: "cursorarrow.rays")
-            case .antigravity:
-                Image(systemName: "circle.dashed")
-            case .opencode:
-                Image(systemName: "chevron.left.forwardslash.chevron.right")
+            if let iconURL, let image = NSImage(contentsOf: iconURL) {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                Image(systemName: "terminal")
+                    .font(.system(size: size, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
         }
-        .font(.system(size: size, weight: .medium))
-        .foregroundStyle(color)
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
 
-    private var color: Color {
-        kind == .codex ? .white.opacity(0.85) : kind.notchColor
+    private var iconURL: URL? {
+        Bundle.module.url(forResource: kind.rawValue, withExtension: "png")
     }
 }
 

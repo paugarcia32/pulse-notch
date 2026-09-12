@@ -25,17 +25,12 @@ struct CodingAgentsPage: View {
     }
 
     private func content(_ sessions: [CodingAgentSession]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Coding agents").font(.headline)
-                Text(summary(sessions)).font(.caption).foregroundStyle(.secondary)
-            }
-            Divider()
+        VStack(alignment: .leading, spacing: 14) {
+            agentHeader(sessions)
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 10) {
+                LazyVStack(alignment: .leading, spacing: 8) {
                     if sessions.isEmpty {
-                        Label("No coding agents detected", systemImage: "checkmark.circle")
-                            .foregroundStyle(.secondary)
+                        emptyState
                     } else {
                         ForEach(sessions) { session in agentRow(session) }
                     }
@@ -46,10 +41,29 @@ struct CodingAgentsPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    private func agentHeader(_ sessions: [CodingAgentSession]) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("AGENTS")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.pink)
+            Text(summary(sessions))
+                .font(.title3.weight(.semibold))
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("No agents running").font(.title3.weight(.semibold))
+            Text("Watching this Mac for coding sessions").font(.callout).foregroundStyle(.secondary)
+        }
+        .padding(.top, 8)
+    }
+
     private func agentRow(_ session: CodingAgentSession) -> some View {
         let running = session.status == .running
-        return HStack(spacing: 12) {
-            AgentMark(kind: session.kind, size: 19).frame(width: 22)
+        return HStack(spacing: 10) {
+            AgentMark(kind: session.kind, size: 24)
+                .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: 3) {
                 Text(session.title).font(.callout.weight(.semibold)).lineLimit(1)
                 HStack(spacing: 7) {
@@ -65,6 +79,15 @@ struct CodingAgentsPage: View {
                 .lineLimit(1)
             }
             Spacer()
+            status(session, running: running)
+        }
+        .padding(8)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func status(_ session: CodingAgentSession, running: Bool) -> some View {
+        HStack(spacing: 4) {
             NotchIndicatorView(
                 indicator: NotchIndicator(
                     id: session.id,
@@ -73,11 +96,10 @@ struct CodingAgentsPage: View {
                 ),
                 reduceMotion: reduceMotion
             )
+            Text(running ? "Working" : "Finished")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 10))
-        .accessibilityElement(children: .combine)
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(running ? session.kind.notchColor : .green)
     }
 
     @ViewBuilder
@@ -108,7 +130,8 @@ struct CodingAgentsPage: View {
 
     private func usageRow(_ usage: CodingAgentUsage) -> some View {
         HStack(spacing: 12) {
-            AgentMark(kind: usage.kind, size: 15).frame(width: 24)
+            AgentMark(kind: usage.kind, size: 15)
+                .frame(width: 24, height: 24)
             Text(usage.kind.displayName).font(.callout.weight(.semibold))
             Spacer(minLength: 8)
             if usage.windows.isEmpty {
@@ -121,21 +144,20 @@ struct CodingAgentsPage: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 10))
+        .padding(8)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func unavailableUsageRow(_ kind: CodingAgentKind) -> some View {
         HStack(spacing: 12) {
-            AgentMark(kind: kind, size: 15).frame(width: 24)
+            AgentMark(kind: kind, size: 15)
+                .frame(width: 24, height: 24)
             Text(kind.displayName).font(.callout.weight(.semibold))
             Spacer(minLength: 8)
             Text(unavailableDescription(kind)).font(.caption2).foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 10))
+        .padding(8)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func usageGauge(_ window: CodingAgentUsage.Window, color: Color) -> some View {
@@ -162,9 +184,13 @@ struct CodingAgentsPage: View {
             .foregroundStyle(.secondary)
             if showsSetup {
                 ForEach(unavailable, id: \.self) { kind in
-                    Label(setupInstruction(kind), systemImage: "terminal")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        AgentMark(kind: kind, size: 16)
+                            .frame(width: 24, height: 24)
+                        Text(setupInstruction(kind))
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                 }
             }
         }

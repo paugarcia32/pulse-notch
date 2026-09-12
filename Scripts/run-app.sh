@@ -9,6 +9,7 @@ app_path="$repository_root/.build/PulseNotch.app"
 contents_path="$app_path/Contents"
 executable_path="$contents_path/MacOS/PulseNotch"
 claude_bridge_path="$contents_path/MacOS/PulseNotchClaudeBridge"
+resource_bundle_name="PulseNotch_PulseNotchApp.bundle"
 info_plist_path="$repository_root/Sources/PulseNotchApp/Info.plist"
 launch_services_register="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 should_open=true
@@ -48,6 +49,10 @@ mkdir -p "$contents_path/MacOS"
 install -m 755 "$binary_directory/PulseNotch" "$executable_path"
 install -m 755 "$binary_directory/PulseNotchClaudeBridge" "$claude_bridge_path"
 install -m 644 "$info_plist_path" "$contents_path/Info.plist"
+if [[ -d "$binary_directory/$resource_bundle_name" ]]; then
+    mkdir -p "$contents_path/Resources"
+    ditto "$binary_directory/$resource_bundle_name" "$contents_path/Resources/$resource_bundle_name"
+fi
 
 codesign \
     --force \

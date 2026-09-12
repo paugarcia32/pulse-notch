@@ -35,6 +35,7 @@ let package = Package(
             name: "PulseNotchApp",
             dependencies: ["PulseNotchCore"],
             exclude: ["Info.plist"],
+            resources: [.process("Resources")],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",
