@@ -32,6 +32,7 @@ struct CollapsedNotchIndicatorsTests {
         )
 
         #expect(indicators.map(\.id) == ["calendar-event", "codex", "claude", "cursor", "antigravity"])
+        #expect(indicators.first?.content == .upcomingCalendarEvent(minutesUntilStart: 1))
     }
 
     @Test
@@ -51,6 +52,28 @@ struct CollapsedNotchIndicatorsTests {
         )
 
         #expect(indicators.map(\.id) == ["github-actions-running"])
+    }
+
+    @Test
+    func roundsCalendarCountdownUpToTheNextMinute() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let schedule = CalendarEventSchedule(events: [CalendarEvent(
+            id: "event",
+            title: "Planning",
+            startsAt: now.addingTimeInterval(119),
+            endsAt: now.addingTimeInterval(1_860)
+        )])
+
+        let indicators = CollapsedNotchIndicators.make(
+            schedule: schedule,
+            sessions: [],
+            actionSessions: [],
+            at: now,
+            calendarReminderLeadTime: 10 * 60
+        )
+
+        #expect(indicators.first?.content == .upcomingCalendarEvent(minutesUntilStart: 2))
+        #expect(indicators.first?.accessibilityLabel == "Next calendar event starts in 2 minutes")
     }
 
     private func actionSession(

@@ -51,6 +51,7 @@ final class NotchPreferences: ObservableObject {
     }
     @Published var hideFromDock: Bool { didSet { updateDockVisibility() } }
     @Published var hideFromMenuBar: Bool { didSet { defaults.set(hideFromMenuBar, forKey: Keys.hideFromMenuBar) } }
+    @Published private(set) var calendarReminderLeadTimeMinutes: Int
     @Published private(set) var shortcuts: [ShortcutAction: AppShortcut]
     @Published private(set) var startupError: String?
 
@@ -60,6 +61,7 @@ final class NotchPreferences: ObservableObject {
         static let openAtLogin = "settings.openAtLogin"
         static let hideFromDock = "settings.hideFromDock"
         static let hideFromMenuBar = "settings.hideFromMenuBar"
+        static let calendarReminderLeadTimeMinutes = "settings.calendarReminderLeadTimeMinutes"
         static let shortcuts = "settings.shortcuts"
     }
 
@@ -74,11 +76,13 @@ final class NotchPreferences: ObservableObject {
         openAtLogin = defaults.bool(forKey: Keys.openAtLogin)
         hideFromDock = defaults.bool(forKey: Keys.hideFromDock)
         hideFromMenuBar = defaults.bool(forKey: Keys.hideFromMenuBar)
+        calendarReminderLeadTimeMinutes = min(max(defaults.object(forKey: Keys.calendarReminderLeadTimeMinutes) as? Int ?? 10, 1), 60)
         shortcuts = Self.shortcuts(from: defaults.data(forKey: Keys.shortcuts))
         startupError = nil
     }
 
     var orderedVisiblePages: [NotchPage] { pageOrder.filter { visiblePages.contains($0) } }
+    var calendarReminderLeadTime: TimeInterval { TimeInterval(calendarReminderLeadTimeMinutes * 60) }
     var shortcutActions: [ShortcutAction] {
         [.openNotch] + orderedVisiblePages.indices.map(ShortcutAction.page(at:))
     }
@@ -111,6 +115,13 @@ final class NotchPreferences: ObservableObject {
         guard isVisible || visiblePages.count > 1 else { return }
         if isVisible { visiblePages.insert(page) } else { visiblePages.remove(page) }
         defaults.set(pageOrder.filter { visiblePages.contains($0) }.map(\.rawValue), forKey: Keys.visiblePages)
+    }
+
+    func setCalendarReminderLeadTimeMinutes(_ minutes: Int) {
+        let value = min(max(minutes, 1), 60)
+        guard calendarReminderLeadTimeMinutes != value else { return }
+        calendarReminderLeadTimeMinutes = value
+        defaults.set(value, forKey: Keys.calendarReminderLeadTimeMinutes)
     }
 
     func movePages(from offsets: IndexSet, to destination: Int) {

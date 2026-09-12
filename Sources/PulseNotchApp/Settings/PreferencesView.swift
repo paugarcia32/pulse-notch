@@ -19,6 +19,12 @@ struct PreferencesView: View {
                     Toggle("Show in Dock", isOn: showInDock)
                     Toggle("Show in Menu Bar", isOn: showInMenuBar)
                 }
+
+                Section("Calendar") {
+                    Stepper(value: calendarReminderLeadTimeMinutes, in: 1...60) {
+                        Text("Show upcoming events \(preferences.calendarReminderLeadTimeMinutes) minutes before they start")
+                    }
+                }
             }
             .formStyle(.grouped)
             .tabItem { Label("General", systemImage: "gear") }
@@ -66,6 +72,13 @@ struct PreferencesView: View {
 
     private var showInMenuBar: Binding<Bool> {
         Binding(get: { !preferences.hideFromMenuBar }, set: { preferences.hideFromMenuBar = !$0 })
+    }
+
+    private var calendarReminderLeadTimeMinutes: Binding<Int> {
+        Binding(
+            get: { preferences.calendarReminderLeadTimeMinutes },
+            set: { preferences.setCalendarReminderLeadTimeMinutes($0) }
+        )
     }
 }
 

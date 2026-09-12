@@ -2,7 +2,6 @@ import PulseNotchCore
 import SwiftUI
 
 struct NotchSurface: View {
-    private let calendarReminderLeadTime: TimeInterval = 10 * 60
     @ObservedObject var calendarModel: CalendarFeatureModel
     @ObservedObject var codingAgentModel: CodingAgentFeatureModel
     @ObservedObject var gitHubModel: GitHubFeatureModel
@@ -97,14 +96,27 @@ struct NotchSurface: View {
         .accessibilityLabel("Pulse Notch")
     }
 
+    @ViewBuilder
     private func collapsedIndicators(at date: Date) -> some View {
-        HStack(spacing: 8) {
-            ForEach(indicators(at: date)) {
-                NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion)
+        let currentIndicators = indicators(at: date)
+        if case let .upcomingCalendarEvent(minutesUntilStart) = currentIndicators.first?.content {
+            CalendarCountdownIndicator(
+                minutesUntilStart: minutesUntilStart,
+                color: currentIndicators[0].color,
+                reduceMotion: reduceMotion
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(currentIndicators[0].accessibilityLabel)
+        } else {
+            HStack(spacing: 8) {
+                ForEach(currentIndicators) {
+                    NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
     private func expandedContent(at date: Date) -> some View {
@@ -183,7 +195,7 @@ struct NotchSurface: View {
             sessions: sessions,
             actionSessions: gitHubModel.notificationActionSessions,
             at: date,
-            calendarReminderLeadTime: calendarReminderLeadTime
+            calendarReminderLeadTime: preferences.calendarReminderLeadTime
         )
     }
 
