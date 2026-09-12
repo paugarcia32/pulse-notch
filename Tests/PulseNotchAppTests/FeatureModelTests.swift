@@ -39,6 +39,20 @@ struct FeatureModelTests {
     }
 
     @Test
+    func githubModelReportsProviderFailure() async {
+        let model = GitHubFeatureModel(provider: GitHubProviderFake(fails: true))
+
+        await model.refresh()
+
+        #expect(model.state == .unavailable)
+    }
+
+    @Test
+    func moreEventsLabelIncludesTheRemainingEventCount() {
+        #expect(CalendarPage.moreEventsTitle(remainingCount: 3) == "Show 3 more events")
+    }
+
+    @Test
     func commandOutputTerminatesCommandsThatExceedTheirDeadline() {
         #expect(throws: CodingAgentProviderError.commandTimedOut) {
             _ = try CommandOutput.read(
@@ -82,5 +96,14 @@ private struct CodingAgentProviderFake: CodingAgentProviding {
 
     func usage() async throws -> [CodingAgentUsageAvailability] {
         usage
+    }
+}
+
+private struct GitHubProviderFake: GitHubPullRequestProviding {
+    let fails: Bool
+
+    func pullRequests() async throws -> [GitHubPullRequest] {
+        if fails { throw CocoaError(.fileReadUnknown) }
+        return []
     }
 }

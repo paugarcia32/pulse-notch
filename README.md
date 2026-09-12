@@ -17,6 +17,8 @@ The repository currently contains the first executable product slice:
 - Animated running and recently-completed agent indicators in the collapsed notch.
 - Live Codex five-hour and weekly usage gauges on the coding-agent page.
 - Agent cards with project, Git branch, and elapsed-session context when available.
+- A GitHub page for your open and draft pull requests, with comments, passed checks,
+  review state, and individual GitHub Actions runners.
 - A platform-independent domain module.
 - Deterministic unit tests for activity ordering.
 - Shared engineering rules for coding agents.
@@ -50,6 +52,13 @@ For active sessions, Pulse Notch reads the working directory and Git branch loca
 when the agent exposes them. It does not read or show coding-agent prompts or thread
 titles. This metadata stays in memory; directory and branch lookups are cached for
 thirty seconds while the agent is running.
+
+The GitHub page uses the official `gh` CLI session you have already authenticated with
+(`gh auth login`). It reads up to 100 open pull requests authored by you, including
+their review decision and GitHub Actions checks, refreshes every thirty seconds, and
+keeps the result in memory only. A workflow appears as a runner only while it is
+running or for five minutes after it finishes; completions appear in the collapsed
+notch until it is opened. It does not read, save, or log a token.
 
 When the coding-agent page is visible, Pulse Notch asks the locally installed Codex
 App Server for the current quota windows once per minute. This reuses Codex's own

@@ -73,13 +73,20 @@ struct CalendarPage: View {
                     LazyVStack(spacing: 0) {
                         ForEach(visibleEvents) { event in eventRow(event) }
                         if !showsAllEvents && events.count > visibleEvents.count {
-                            Button("Show (events.count - visibleEvents.count) more") {
+                            let remainingCount = events.count - visibleEvents.count
+                            Button {
                                 showsAllEvents = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(Self.moreEventsTitle(remainingCount: remainingCount))
+                                    Image(systemName: "chevron.down")
+                                }
                             }
                             .buttonStyle(.plain)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.top, 8)
+                            .accessibilityLabel("Show \(remainingCount) more events")
                         }
                     }
                 }
@@ -135,6 +142,10 @@ struct CalendarPage: View {
         let calendar = Calendar.autoupdatingCurrent
         guard let week = calendar.dateInterval(of: .weekOfYear, for: selectedDate) else { return [selectedDate] }
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: week.start) }
+    }
+
+    static func moreEventsTitle(remainingCount: Int) -> String {
+        "Show \(remainingCount) more events"
     }
 
     private func placeholder<Content: View>(@ViewBuilder content: () -> Content) -> some View {

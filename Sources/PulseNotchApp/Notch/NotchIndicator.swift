@@ -18,6 +18,7 @@ struct NotchIndicator: Identifiable {
         case upcomingCalendarEvent
         case runningAgent(CodingAgentKind)
         case completedAgent(CodingAgentKind)
+        case githubActions(GitHubPullRequest.ActionStatus)
     }
 
     let id: String
@@ -29,6 +30,9 @@ struct NotchIndicator: Identifiable {
         case .upcomingCalendarEvent: .orange
         case let .runningAgent(kind): kind.notchColor
         case .completedAgent: .green
+        case .githubActions(.running): .orange
+        case .githubActions(.failed): .red
+        case .githubActions: .green
         }
     }
 
@@ -38,6 +42,7 @@ enum CollapsedNotchIndicators {
     static func make(
         schedule: CalendarEventSchedule?,
         sessions: [CodingAgentSession],
+        actionSessions: [GitHubActionSession],
         at date: Date,
         calendarReminderLeadTime: TimeInterval
     ) -> [NotchIndicator] {
@@ -52,6 +57,27 @@ enum CollapsedNotchIndicators {
                     id: "calendar-\(event.id)",
                     content: .upcomingCalendarEvent,
                     accessibilityLabel: "Calendar event starting within ten minutes"
+                )
+            )
+        }
+
+        if actionSessions.contains(where: { $0.status == .running }) {
+            indicators.append(
+                NotchIndicator(
+                    id: "github-actions-running",
+                    content: .githubActions(.running),
+                    accessibilityLabel: "GitHub Actions running"
+                )
+            )
+        } else if actionSessions.contains(where: {
+            if case let .completed(status) = $0.status { return status == .failed }
+            return false
+        }) {
+            indicators.append(
+                NotchIndicator(
+                    id: "github-actions-failed",
+                    content: .githubActions(.failed),
+                    accessibilityLabel: "GitHub Actions failed"
                 )
             )
         }
@@ -86,6 +112,10 @@ struct NotchIndicatorView: View {
                 AgentActivityDots(color: indicator.color, reduceMotion: reduceMotion)
             case .completedAgent:
                 Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(indicator.color)
+            case let .githubActions(status):
+                Image(systemName: status == .running ? "arrow.triangle.2.circlepath" : "xmark.octagon.fill")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(indicator.color)
             }

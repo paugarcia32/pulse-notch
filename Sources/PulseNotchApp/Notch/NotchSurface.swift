@@ -5,14 +5,25 @@ struct NotchSurface: View {
     private enum Page: Int, CaseIterable {
         case calendar
         case agents
+        case github
+
+        var accessibilityName: String {
+            switch self {
+            case .calendar: "Calendar"
+            case .agents: "Agents"
+            case .github: "GitHub"
+            }
+        }
     }
 
     private let calendarReminderLeadTime: TimeInterval = 10 * 60
     @ObservedObject var calendarModel: CalendarFeatureModel
     @ObservedObject var codingAgentModel: CodingAgentFeatureModel
+    @ObservedObject var gitHubModel: GitHubFeatureModel
     @State private var isExpanded = false
     @State private var selectedPage = Page.calendar
     @State private var pageDragOffset: CGFloat = 0
+    @State private var isHoveringPageIndicator = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -33,6 +44,12 @@ struct NotchSurface: View {
         }
         .task {
             while !Task.isCancelled {
+                await gitHubModel.refresh()
+                try? await Task.sleep(for: .seconds(30))
+            }
+        }
+        .task {
+            while !Task.isCancelled {
                 await codingAgentModel.refresh()
                 try? await Task.sleep(for: .seconds(2))
             }
@@ -47,6 +64,9 @@ struct NotchSurface: View {
         .onChange(of: codingAgentModel.state) { _, _ in
             if isExpanded { codingAgentModel.acknowledgeCompletedSessions() }
         }
+        .onChange(of: gitHubModel.actionSessions) { _, _ in
+            if isExpanded { gitHubModel.acknowledgeCompletedActions() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchOpen)) { _ in toggleNotch() }
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowCalendar)) { _ in
             openNotch()
@@ -55,6 +75,10 @@ struct NotchSurface: View {
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowAgents)) { _ in
             openNotch()
             selectPage(.agents)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowGitHub)) { _ in
+            openNotch()
+            selectPage(.github)
         }
     }
 
@@ -73,7 +97,10 @@ struct NotchSurface: View {
         }
         .onHover { hovering in
             isExpanded = hovering
-            if hovering { codingAgentModel.acknowledgeCompletedSessions() }
+            if hovering {
+                codingAgentModel.acknowledgeCompletedSessions()
+                gitHubModel.acknowledgeCompletedActions()
+            }
         }
         .onTapGesture { openNotch() }
         .accessibilityElement(children: .contain)
@@ -99,14 +126,17 @@ struct NotchSurface: View {
                 CodingAgentsPage(model: codingAgentModel, date: date)
                     .frame(width: geometry.size.width)
                     .accessibilityHidden(selectedPage != .agents)
+                GitHubPage(model: gitHubModel, date: date)
+                    .frame(width: geometry.size.width)
+                    .accessibilityHidden(selectedPage != .github)
             }
             .offset(x: -CGFloat(selectedPage.rawValue) * geometry.size.width + pageDragOffset)
         }
         .clipped()
-        .overlay(alignment: .topTrailing) { pageIndicator().padding(.top, 5) }
+        .overlay(alignment: .topTrailing) { pageIndicator().offset(y: -3) }
         .contentShape(Rectangle())
         .background {
-            TrackpadSwipeDetector { selectPage($0 == .left ? .agents : .calendar) }
+            TrackpadSwipeDetector { selectPage($0 == .left ? nextPage : previousPage) }
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 12)
@@ -119,26 +149,36 @@ struct NotchSurface: View {
                         selectPage(selectedPage)
                         return
                     }
-                    selectPage($0.translation.width < 0 ? .agents : .calendar)
+                    selectPage($0.translation.width < 0 ? nextPage : previousPage)
                 }
         )
     }
 
     private func pageIndicator() -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: -3) {
             ForEach(Page.allCases, id: \.self) { page in
-                Circle()
-                    .fill(page == selectedPage ? .white : .white.opacity(0.35))
-                    .frame(width: page == selectedPage ? 7 : 4, height: page == selectedPage ? 7 : 4)
-                    .frame(width: 12, height: 12)
-                    .accessibilityHidden(true)
+                Button { selectPage(page) } label: {
+                    Circle()
+                        .fill(page == selectedPage ? .white : .white.opacity(0.35))
+                        .frame(
+                            width: page == selectedPage ? indicatorSize + 2 : indicatorSize,
+                            height: page == selectedPage ? indicatorSize + 2 : indicatorSize
+                        )
+                        .frame(width: 14, height: 14)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show \(page.accessibilityName) page")
+                .accessibilityAddTraits(page == selectedPage ? .isSelected : [])
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Page indicator")
-        .accessibilityValue(selectedPage == .calendar ? "Calendar page" : "Agents page")
-        .allowsHitTesting(false)
+        .onHover { hovering in
+            withAnimation(reduceMotion ? nil : .smooth(duration: 0.16)) {
+                isHoveringPageIndicator = hovering
+            }
+        }
     }
+
+    private var indicatorSize: CGFloat { isHoveringPageIndicator ? 5 : 3 }
 
     private func indicators(at date: Date) -> [NotchIndicator] {
         let schedule: CalendarEventSchedule?
@@ -155,6 +195,7 @@ struct NotchSurface: View {
         return CollapsedNotchIndicators.make(
             schedule: schedule,
             sessions: sessions,
+            actionSessions: gitHubModel.notificationActionSessions,
             at: date,
             calendarReminderLeadTime: calendarReminderLeadTime
         )
@@ -164,6 +205,7 @@ struct NotchSurface: View {
         guard !isExpanded else { return }
         isExpanded = true
         codingAgentModel.acknowledgeCompletedSessions()
+        gitHubModel.acknowledgeCompletedActions()
     }
 
     private func toggleNotch() {
@@ -176,4 +218,7 @@ struct NotchSurface: View {
             pageDragOffset = 0
         }
     }
+
+    private var nextPage: Page { Page(rawValue: min(selectedPage.rawValue + 1, Page.allCases.count - 1)) ?? selectedPage }
+    private var previousPage: Page { Page(rawValue: max(selectedPage.rawValue - 1, 0)) ?? selectedPage }
 }

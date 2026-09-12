@@ -26,10 +26,48 @@ struct CollapsedNotchIndicatorsTests {
         let indicators = CollapsedNotchIndicators.make(
             schedule: schedule,
             sessions: sessions,
+            actionSessions: [],
             at: now,
             calendarReminderLeadTime: 10 * 60
         )
 
         #expect(indicators.map(\.id) == ["calendar-event", "codex", "claude", "cursor", "antigravity"])
+    }
+
+    @Test
+    func prioritizesRunningGitHubActionsOverFailedActions() {
+        let url = URL(string: "https://github.com/acme/app/pull/1")!
+        let actionSessions = [
+            actionSession(id: "failed", status: .completed(.failed), url: url),
+            actionSession(id: "running", status: .running, url: url)
+        ]
+
+        let indicators = CollapsedNotchIndicators.make(
+            schedule: nil,
+            sessions: [],
+            actionSessions: actionSessions,
+            at: Date(timeIntervalSince1970: 1_000),
+            calendarReminderLeadTime: 10 * 60
+        )
+
+        #expect(indicators.map(\.id) == ["github-actions-running"])
+    }
+
+    private func actionSession(
+        id: String,
+        status: GitHubActionSession.Status,
+        url: URL
+    ) -> GitHubActionSession {
+        GitHubActionSession(
+            runner: .init(
+            id: id,
+                name: "Workflow",
+                pullRequestNumber: 1,
+                updatedAt: Date(timeIntervalSince1970: 1_000),
+                status: status == .running ? .running : .failed
+            ),
+            detectedAt: Date(timeIntervalSince1970: 1_000),
+            status: status
+        )
     }
 }
