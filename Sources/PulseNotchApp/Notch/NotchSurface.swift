@@ -2,26 +2,13 @@ import PulseNotchCore
 import SwiftUI
 
 struct NotchSurface: View {
-    private enum Page: Int, CaseIterable {
-        case calendar
-        case agents
-        case github
-
-        var accessibilityName: String {
-            switch self {
-            case .calendar: "Calendar"
-            case .agents: "Agents"
-            case .github: "GitHub"
-            }
-        }
-    }
-
     private let calendarReminderLeadTime: TimeInterval = 10 * 60
     @ObservedObject var calendarModel: CalendarFeatureModel
     @ObservedObject var codingAgentModel: CodingAgentFeatureModel
     @ObservedObject var gitHubModel: GitHubFeatureModel
+    @ObservedObject var preferences: NotchPreferences
     @State private var isExpanded = false
-    @State private var selectedPage = Page.calendar
+    @State private var selectedPage = NotchPage.calendar
     @State private var pageDragOffset: CGFloat = 0
     @State private var isHoveringPageIndicator = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -80,6 +67,9 @@ struct NotchSurface: View {
             openNotch()
             selectPage(.github)
         }
+        .onChange(of: preferences.orderedVisiblePages) { _, pages in
+            if !pages.contains(selectedPage), let firstPage = pages.first { selectedPage = firstPage }
+        }
     }
 
     private func notch(at date: Date) -> some View {
@@ -120,17 +110,13 @@ struct NotchSurface: View {
     private func expandedContent(at date: Date) -> some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                CalendarPage(model: calendarModel, date: date)
-                    .frame(width: geometry.size.width)
-                    .accessibilityHidden(selectedPage != .calendar)
-                CodingAgentsPage(model: codingAgentModel, date: date)
-                    .frame(width: geometry.size.width)
-                    .accessibilityHidden(selectedPage != .agents)
-                GitHubPage(model: gitHubModel, date: date)
-                    .frame(width: geometry.size.width)
-                    .accessibilityHidden(selectedPage != .github)
+                ForEach(preferences.orderedVisiblePages) { page in
+                    pageContent(page, at: date)
+                        .frame(width: geometry.size.width)
+                        .accessibilityHidden(selectedPage != page)
+                }
             }
-            .offset(x: -CGFloat(selectedPage.rawValue) * geometry.size.width + pageDragOffset)
+            .offset(x: -CGFloat(selectedPageIndex) * geometry.size.width + pageDragOffset)
         }
         .clipped()
         .overlay(alignment: .topTrailing) { pageIndicator().offset(y: -3) }
@@ -156,7 +142,7 @@ struct NotchSurface: View {
 
     private func pageIndicator() -> some View {
         HStack(spacing: -3) {
-            ForEach(Page.allCases, id: \.self) { page in
+            ForEach(preferences.orderedVisiblePages) { page in
                 Button { selectPage(page) } label: {
                     Circle()
                         .fill(page == selectedPage ? .white : .white.opacity(0.35))
@@ -167,7 +153,7 @@ struct NotchSurface: View {
                         .frame(width: 14, height: 14)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Show \(page.accessibilityName) page")
+                .accessibilityLabel("Show \(page.name) page")
                 .accessibilityAddTraits(page == selectedPage ? .isSelected : [])
             }
         }
@@ -212,13 +198,24 @@ struct NotchSurface: View {
         isExpanded ? (isExpanded = false) : openNotch()
     }
 
-    private func selectPage(_ page: Page) {
+    private func selectPage(_ page: NotchPage) {
+        guard preferences.orderedVisiblePages.contains(page) else { return }
         withAnimation(reduceMotion ? nil : .smooth(duration: 0.32)) {
             selectedPage = page
             pageDragOffset = 0
         }
     }
 
-    private var nextPage: Page { Page(rawValue: min(selectedPage.rawValue + 1, Page.allCases.count - 1)) ?? selectedPage }
-    private var previousPage: Page { Page(rawValue: max(selectedPage.rawValue - 1, 0)) ?? selectedPage }
+    @ViewBuilder
+    private func pageContent(_ page: NotchPage, at date: Date) -> some View {
+        switch page {
+        case .calendar: CalendarPage(model: calendarModel, date: date)
+        case .agents: CodingAgentsPage(model: codingAgentModel, date: date)
+        case .github: GitHubPage(model: gitHubModel, date: date)
+        }
+    }
+
+    private var selectedPageIndex: Int { preferences.orderedVisiblePages.firstIndex(of: selectedPage) ?? 0 }
+    private var nextPage: NotchPage { preferences.orderedVisiblePages[min(selectedPageIndex + 1, preferences.orderedVisiblePages.count - 1)] }
+    private var previousPage: NotchPage { preferences.orderedVisiblePages[max(selectedPageIndex - 1, 0)] }
 }

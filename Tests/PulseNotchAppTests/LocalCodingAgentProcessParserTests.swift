@@ -50,4 +50,10 @@ struct LocalCodingAgentProcessParserTests {
 
         #expect(LocalCodingAgentProcessParser.parse(output).isEmpty)
     }
+
+    @Test
+    func codexSessionQueryUsesOnlyTheLatestTurnInEachThread() {
+        #expect(CodexSessionReader.activeSessionsQuery.contains("PARTITION BY t.thread_id"))
+        #expect(CodexSessionReader.activeSessionsQuery.contains("t.recency = 1"))
+    }
 }

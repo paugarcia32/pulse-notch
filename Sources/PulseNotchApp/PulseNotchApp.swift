@@ -9,6 +9,7 @@ extension Notification.Name {
 
 @main
 struct PulseNotchApp: App {
+    @StateObject private var preferences = NotchPreferences()
     @StateObject private var calendarModel = CalendarFeatureModel(
         provider: EventKitCalendarProvider()
     )
@@ -22,35 +23,64 @@ struct PulseNotchApp: App {
             NotchSurface(
                 calendarModel: calendarModel,
                 codingAgentModel: codingAgentModel,
-                gitHubModel: gitHubModel
+                gitHubModel: gitHubModel,
+                preferences: preferences
             )
+            .task { preferences.applySystemAppearance() }
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
+        .defaultSize(width: 620, height: 360)
         .commands {
             CommandMenu("Pulse Notch") {
                 Button("Open Notch") {
                     NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
                 }
-                .keyboardShortcut("n", modifiers: [.command, .option])
+                .keyboardShortcut(preferences.shortcut(for: .openNotch).keyboardShortcut)
 
                 Divider()
 
-                Button("Show Calendar") {
-                    NotificationCenter.default.post(name: .pulseNotchShowCalendar, object: nil)
+                ForEach(Array(preferences.orderedVisiblePages.enumerated()), id: \.element) { index, page in
+                    Button("Show \(page.name)") {
+                        NotificationCenter.default.post(name: .pulseNotchShow(page), object: nil)
+                    }
+                    .keyboardShortcut(preferences.shortcut(for: .page(at: index)).keyboardShortcut)
                 }
-                .keyboardShortcut("1", modifiers: .command)
-
-                Button("Show Coding Agents") {
-                    NotificationCenter.default.post(name: .pulseNotchShowAgents, object: nil)
-                }
-                .keyboardShortcut("2", modifiers: .command)
-
-                Button("Show GitHub") {
-                    NotificationCenter.default.post(name: .pulseNotchShowGitHub, object: nil)
-                }
-                .keyboardShortcut("3", modifiers: .command)
             }
+        }
+
+        Settings {
+            PreferencesView(preferences: preferences)
+        }
+
+        MenuBarExtra(
+            "Pulse Notch",
+            systemImage: "waveform.path.ecg",
+            isInserted: Binding(
+                get: { !preferences.hideFromMenuBar },
+                set: { isInserted in
+                    let shouldHide = !isInserted
+                    guard preferences.hideFromMenuBar != shouldHide else { return }
+                    preferences.hideFromMenuBar = shouldHide
+                }
+            )
+        ) {
+            Button("Open Notch") {
+                NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
+            }
+            SettingsLink { Text("Settings…") }
+            Divider()
+            Button("Quit Pulse Notch") { NSApplication.shared.terminate(nil) }
+        }
+    }
+}
+
+private extension Notification.Name {
+    static func pulseNotchShow(_ page: NotchPage) -> Notification.Name {
+        switch page {
+        case .calendar: .pulseNotchShowCalendar
+        case .agents: .pulseNotchShowAgents
+        case .github: .pulseNotchShowGitHub
         }
     }
 }

@@ -62,6 +62,26 @@ struct FeatureModelTests {
             )
         }
     }
+
+    @Test
+    func pagePreferencesPersistOrderAndVisibility() {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = NotchPreferences(defaults: defaults)
+
+        preferences.setVisible(.agents, isVisible: false)
+        preferences.movePages(from: IndexSet(integer: 2), to: 0)
+        preferences.setShortcut(AppShortcut(key: "g", modifiers: [.command, .option]), for: .firstPage)
+
+        let restoredPreferences = NotchPreferences(defaults: defaults)
+        #expect(restoredPreferences.pageOrder == [.github, .calendar, .agents])
+        #expect(restoredPreferences.orderedVisiblePages == [.github, .calendar])
+        #expect(restoredPreferences.page(for: .firstPage) == .github)
+        #expect(restoredPreferences.shortcut(for: .firstPage).displayName == "⌥⌘G")
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
 }
 
 private struct CalendarProviderFake: CalendarEventProviding {

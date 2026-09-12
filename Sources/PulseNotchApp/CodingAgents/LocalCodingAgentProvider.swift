@@ -318,20 +318,9 @@ enum CodexSessionReader {
             return []
         }
 
-        let query = """
-        SELECT DISTINCT t.thread_id AS id,
-          (SELECT json_extract(i.item_json, '$.cwd')
-           FROM thread_items i
-           WHERE i.thread_id = t.thread_id
-             AND json_extract(i.item_json, '$.cwd') IS NOT NULL
-           ORDER BY i.rollout_ordinal DESC LIMIT 1) AS workingDirectory,
-          MIN(t.started_at) AS startedAt
-        FROM thread_turns t
-        WHERE t.status = 'inProgress';
-        """
         let output = try CommandOutput.read(
             executable: "/usr/bin/sqlite3",
-            arguments: ["-json", database.path, query]
+            arguments: ["-json", database.path, activeSessionsQuery]
         )
         let active = try JSONDecoder().decode(
             [ActiveSession].self,
@@ -347,6 +336,26 @@ enum CodexSessionReader {
             )
         }
     }
+
+    static let activeSessionsQuery = """
+        WITH latest_turns AS (
+          SELECT t.*,
+            ROW_NUMBER() OVER (
+              PARTITION BY t.thread_id
+              ORDER BY t.rollout_ordinal DESC
+            ) AS recency
+          FROM thread_turns t
+        )
+        SELECT t.thread_id AS id,
+          (SELECT json_extract(i.item_json, '$.cwd')
+           FROM thread_items i
+           WHERE i.thread_id = t.thread_id
+             AND json_extract(i.item_json, '$.cwd') IS NOT NULL
+           ORDER BY i.rollout_ordinal DESC LIMIT 1) AS workingDirectory,
+          t.started_at AS startedAt
+        FROM latest_turns t
+        WHERE t.recency = 1 AND t.status = 'inProgress';
+        """
 
 }
 
