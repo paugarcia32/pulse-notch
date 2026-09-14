@@ -8,41 +8,66 @@ struct GitHubPage: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("GitHub").font(.headline)
-            Divider()
-            switch model.state {
-            case .loading:
-                ProgressView().controlSize(.small)
-            case let .loaded(pullRequests):
-                content(pullRequests)
-            case .unavailable:
+        switch model.state {
+        case .loading:
+            placeholder { ProgressView().controlSize(.small) }
+        case let .loaded(pullRequests):
+            content(pullRequests)
+        case .unavailable:
+            placeholder {
                 Label("GitHub is unavailable — sign in with gh auth login", systemImage: "exclamationmark.triangle")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    @ViewBuilder
     private func content(_ pullRequests: [GitHubPullRequest]) -> some View {
-        if pullRequests.isEmpty {
-            Label("No open pull requests created by you", systemImage: "checkmark.circle")
-                .foregroundStyle(.secondary)
-        } else {
+        VStack(alignment: .leading, spacing: 14) {
+            header(pullRequests)
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 8) {
-                    ForEach(pullRequests) { pullRequest in row(pullRequest) }
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    if pullRequests.isEmpty {
+                        emptyState
+                    } else {
+                        ForEach(pullRequests) { pullRequest in row(pullRequest) }
+                    }
                     runners(model.actionSessions)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func header(_ pullRequests: [GitHubPullRequest]) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("GITHUB")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.pink)
+            Text(pullRequests.isEmpty ? "All caught up" : "\(pullRequests.count) open \(pullRequests.count == 1 ? "pull request" : "pull requests")")
+                .font(.title3.weight(.semibold))
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("No open pull requests").font(.title3.weight(.semibold))
+            Text("Your review queue is clear").font(.callout).foregroundStyle(.secondary)
+        }
+        .padding(.top, 8)
     }
 
     private func row(_ pullRequest: GitHubPullRequest) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 9) {
+            Capsule()
+                .fill(pullRequest.statusColor)
+                .frame(width: 3)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
+                Text(pullRequest.repository.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Text(pullRequest.title).font(.callout.weight(.semibold)).lineLimit(1)
                 HStack(spacing: 8) {
                     Text("#\(pullRequest.number)")
@@ -54,30 +79,25 @@ struct GitHubPage: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(pullRequest.commentCount) comments, \(pullRequest.passedCheckCount) checks passed")
             }
-            Spacer(minLength: 8)
-            Label(pullRequest.statusLabel.uppercased(), systemImage: pullRequest.statusImage)
-                .font(.caption2.weight(.bold))
+            Spacer(minLength: 4)
+            Image(systemName: pullRequest.statusImage)
+                .font(.callout.weight(.semibold))
                 .foregroundStyle(pullRequest.statusColor)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 4)
-                .background(pullRequest.statusColor.opacity(0.16), in: Capsule())
-                .overlay(Capsule().stroke(pullRequest.statusColor.opacity(0.35), lineWidth: 0.5))
             Button { openURL(pullRequest.url) } label: { Image(systemName: "arrow.up.right.square") }
                 .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
                 .accessibilityLabel("Open pull request \(pullRequest.title) in GitHub")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 10))
+        .padding(9)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
     private func runners(_ sessions: [GitHubActionSession]) -> some View {
         if !sessions.isEmpty {
-            Divider().padding(.vertical, 4)
-            Label("Runners", systemImage: "cpu")
-                .font(.caption.weight(.semibold))
+            Text("WORKFLOWS")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
                 .foregroundStyle(.secondary)
             ForEach(sessions) { session in
                 HStack(spacing: 10) {
@@ -91,11 +111,19 @@ struct GitHubPage: View {
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 10))
+                .padding(9)
+                .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
             }
         }
+    }
+
+    private func placeholder<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("GitHub").font(.headline)
+            Divider()
+            content()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

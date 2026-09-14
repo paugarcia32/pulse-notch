@@ -6,6 +6,8 @@ struct NotchSurface: View {
     @ObservedObject var codingAgentModel: CodingAgentFeatureModel
     @ObservedObject var gitHubModel: GitHubFeatureModel
     @ObservedObject var preferences: NotchPreferences
+    @ObservedObject var transientActivityModel: TransientNotchActivityModel
+    @StateObject private var systemControlMonitor = SystemControlMonitor()
     @State private var isExpanded = false
     @State private var selectedPage = NotchPage.calendar
     @State private var pageDragOffset: CGFloat = 0
@@ -69,6 +71,12 @@ struct NotchSurface: View {
         .onChange(of: preferences.orderedVisiblePages) { _, pages in
             if !pages.contains(selectedPage), let firstPage = pages.first { selectedPage = firstPage }
         }
+        .task { systemControlMonitor.start() }
+        .onDisappear { systemControlMonitor.stop() }
+        .onReceive(systemControlMonitor.$activity.compactMap { $0 }) { activity in
+            guard !isExpanded else { return }
+            transientActivityModel.show(activity)
+        }
     }
 
     private func notch(at date: Date) -> some View {
@@ -78,11 +86,15 @@ struct NotchSurface: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
-        .frame(width: isExpanded ? 500 : 190, height: isExpanded ? 250 : 42, alignment: .top)
+        .frame(width: isExpanded ? 500 : transientActivityModel.activity == nil ? 190 : 330, height: isExpanded ? 250 : 42, alignment: .top)
         .background(.black, in: RoundedRectangle(cornerRadius: 18))
         .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: isExpanded)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: transientActivityModel.activity)
         .onChange(of: isExpanded) { _, isOpen in
-            if isOpen { NotchHapticFeedback.performOpen() }
+            if isOpen {
+                transientActivityModel.dismiss()
+                NotchHapticFeedback.performOpen()
+            }
         }
         .onHover { hovering in
             isExpanded = hovering
@@ -98,24 +110,28 @@ struct NotchSurface: View {
 
     @ViewBuilder
     private func collapsedIndicators(at date: Date) -> some View {
-        let currentIndicators = indicators(at: date)
-        if case let .upcomingCalendarEvent(minutesUntilStart) = currentIndicators.first?.content {
-            CalendarCountdownIndicator(
-                minutesUntilStart: minutesUntilStart,
-                color: currentIndicators[0].color,
-                reduceMotion: reduceMotion
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(currentIndicators[0].accessibilityLabel)
+        if let activity = transientActivityModel.activity {
+            TransientNotchActivityView(activity: activity)
         } else {
-            HStack(spacing: 8) {
-                ForEach(currentIndicators) {
-                    NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion)
+            let currentIndicators = indicators(at: date)
+            if case let .upcomingCalendarEvent(minutesUntilStart) = currentIndicators.first?.content {
+                CalendarCountdownIndicator(
+                    minutesUntilStart: minutesUntilStart,
+                    color: currentIndicators[0].color,
+                    reduceMotion: reduceMotion
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(currentIndicators[0].accessibilityLabel)
+            } else {
+                HStack(spacing: 8) {
+                    ForEach(currentIndicators) {
+                        NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
     }
 

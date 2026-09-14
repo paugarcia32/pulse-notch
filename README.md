@@ -15,6 +15,7 @@ The repository currently contains the first executable product slice:
 - Calendar and coding-agent pages navigable with a two-finger horizontal swipe,
   also available with Command-1 and Command-2.
 - Animated running and recently-completed agent indicators in the collapsed notch.
+- Temporary collapsed-notch overlays for Bluetooth headphone routing, volume, and built-in display brightness changes.
 - Live Codex five-hour and weekly usage gauges on the coding-agent page.
 - Agent cards with project, Git branch, and elapsed-session context when available.
 - A GitHub page for your open and draft pull requests, with comments, passed checks,
@@ -52,6 +53,14 @@ For active sessions, Pulse Notch reads the working directory and Git branch loca
 when the agent exposes them. It does not read or show coding-agent prompts or thread
 titles. This metadata stays in memory; directory and branch lookups are cached for
 thirty seconds while the agent is running.
+
+Pulse Notch observes the current Core Audio output and its volume locally. When macOS
+routes output to a Bluetooth headset (including AirPods), it shows a headphone mark and,
+when macOS has cached it, the lowest AirPods earbud battery level. It obtains that level
+from the local `system_profiler` Bluetooth report without storing it. Volume changes show
+their current level. It also reads the built-in display brightness
+locally four times per second. These values stay in memory, require no permission, and
+temporarily replace other collapsed indicators; they never interrupt an expanded notch.
 
 The GitHub page uses the official `gh` CLI session you have already authenticated with
 (`gh auth login`). It reads up to 100 open pull requests authored by you, including

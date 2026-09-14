@@ -17,6 +17,7 @@ struct PulseNotchApp: App {
         provider: LocalCodingAgentProvider()
     )
     @StateObject private var gitHubModel = GitHubFeatureModel(provider: GitHubCLIProvider())
+    @StateObject private var transientActivityModel = TransientNotchActivityModel()
 
     var body: some Scene {
         WindowGroup {
@@ -24,7 +25,8 @@ struct PulseNotchApp: App {
                 calendarModel: calendarModel,
                 codingAgentModel: codingAgentModel,
                 gitHubModel: gitHubModel,
-                preferences: preferences
+                preferences: preferences,
+                transientActivityModel: transientActivityModel
             )
             .task { preferences.applySystemAppearance() }
         }
