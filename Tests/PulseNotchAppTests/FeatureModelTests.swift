@@ -74,6 +74,8 @@ struct FeatureModelTests {
         preferences.movePages(from: IndexSet(integer: 2), to: 0)
         preferences.setShortcut(AppShortcut(key: "g", modifiers: [.command, .option]), for: .firstPage)
         preferences.setCalendarReminderLeadTimeMinutes(5)
+        preferences.setPreferredDisplayID("42")
+        preferences.setExternalNotchStyle(.rectangle)
 
         let restoredPreferences = NotchPreferences(defaults: defaults)
         #expect(restoredPreferences.pageOrder == [.github, .calendar, .agents])
@@ -82,6 +84,8 @@ struct FeatureModelTests {
         #expect(restoredPreferences.shortcut(for: .firstPage).displayName == "⌥⌘G")
         #expect(restoredPreferences.calendarReminderLeadTimeMinutes == 5)
         #expect(restoredPreferences.calendarReminderLeadTime == 5 * 60)
+        #expect(restoredPreferences.preferredDisplayID == "42")
+        #expect(restoredPreferences.externalNotchStyle == .rectangle)
 
         defaults.removePersistentDomain(forName: suiteName)
     }

@@ -6,22 +6,17 @@ struct NotchSurface: View {
     @ObservedObject var codingAgentModel: CodingAgentFeatureModel
     @ObservedObject var gitHubModel: GitHubFeatureModel
     @ObservedObject var preferences: NotchPreferences
+    let isExternalDisplay: Bool
+    let onExpansionChanged: (Bool) -> Void
     @State private var isExpanded = false
     @State private var selectedPage = NotchPage.calendar
     @State private var pageDragOffset: CGFloat = 0
     @State private var isHoveringPageIndicator = false
+    @State private var hoverTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 24) {
-            TimelineView(.periodic(from: .now, by: 15)) { notch(at: $0.date) }
-            Text("Hover over the notch to preview its expanded state.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-        .padding(32)
-        .frame(width: 620, height: 360)
-        .background(.regularMaterial)
+        TimelineView(.periodic(from: .now, by: 15)) { notch(at: $0.date) }
         .task {
             while !Task.isCancelled {
                 await calendarModel.refresh()
@@ -54,6 +49,7 @@ struct NotchSurface: View {
             if isExpanded { gitHubModel.acknowledgeCompletedActions() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchOpen)) { _ in toggleNotch() }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchClose)) { _ in closeNotch() }
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowCalendar)) { _ in
             openNotch()
             selectPage(.calendar)
@@ -69,6 +65,7 @@ struct NotchSurface: View {
         .onChange(of: preferences.orderedVisiblePages) { _, pages in
             if !pages.contains(selectedPage), let firstPage = pages.first { selectedPage = firstPage }
         }
+        .onChange(of: isExpanded) { _, expanded in onExpansionChanged(expanded) }
     }
 
     private func notch(at date: Date) -> some View {
@@ -76,21 +73,15 @@ struct NotchSurface: View {
             if isExpanded { expandedContent(at: date) } else { collapsedIndicators(at: date) }
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .frame(width: isExpanded ? 500 : 190, height: isExpanded ? 250 : 42, alignment: .top)
-        .background(.black, in: RoundedRectangle(cornerRadius: 18))
+        .padding(.horizontal, isExpanded ? 18 : 12)
+        .padding(.vertical, isExpanded ? 14 : 0)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background { notchBackground }
         .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: isExpanded)
         .onChange(of: isExpanded) { _, isOpen in
             if isOpen { NotchHapticFeedback.performOpen() }
         }
-        .onHover { hovering in
-            isExpanded = hovering
-            if hovering {
-                codingAgentModel.acknowledgeCompletedSessions()
-                gitHubModel.acknowledgeCompletedActions()
-            }
-        }
+        .onHover(perform: handleHover)
         .onTapGesture { openNotch() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pulse Notch")
@@ -178,6 +169,21 @@ struct NotchSurface: View {
 
     private var indicatorSize: CGFloat { isHoveringPageIndicator ? 5 : 3 }
 
+    @ViewBuilder
+    private var notchBackground: some View {
+        if isExpanded {
+            AttachedNotchShape(bottomCornerRadius: 18).fill(.black)
+        } else if !isExternalDisplay || preferences.externalNotchStyle == .rectangle {
+            AttachedNotchShape(bottomCornerRadius: 8).fill(.black)
+        } else {
+            RoundedRectangle(cornerRadius: cornerRadius).fill(.black)
+        }
+    }
+
+    private var cornerRadius: CGFloat {
+        12
+    }
+
     private func indicators(at date: Date) -> [NotchIndicator] {
         let schedule: CalendarEventSchedule?
         if case let .loaded(loadedSchedule) = calendarModel.state {
@@ -210,6 +216,28 @@ struct NotchSurface: View {
         isExpanded ? (isExpanded = false) : openNotch()
     }
 
+    private func closeNotch() {
+        isExpanded = false
+    }
+
+    private func handleHover(_ hovering: Bool) {
+        hoverTask?.cancel()
+        if hovering {
+            guard !isExpanded else { return }
+            hoverTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(180))
+                guard !Task.isCancelled else { return }
+                openNotch()
+            }
+        } else if isExpanded {
+            hoverTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                closeNotch()
+            }
+        }
+    }
+
     private func selectPage(_ page: NotchPage) {
         guard preferences.orderedVisiblePages.contains(page) else { return }
         withAnimation(reduceMotion ? nil : .smooth(duration: 0.32)) {
@@ -230,4 +258,21 @@ struct NotchSurface: View {
     private var selectedPageIndex: Int { preferences.orderedVisiblePages.firstIndex(of: selectedPage) ?? 0 }
     private var nextPage: NotchPage { preferences.orderedVisiblePages[min(selectedPageIndex + 1, preferences.orderedVisiblePages.count - 1)] }
     private var previousPage: NotchPage { preferences.orderedVisiblePages[max(selectedPageIndex - 1, 0)] }
+}
+
+private struct AttachedNotchShape: Shape {
+    let bottomCornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let radius = min(bottomCornerRadius, rect.width / 2, rect.height)
+        return Path { path in
+            path.move(to: rect.origin)
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - radius))
+            path.addQuadCurve(to: CGPoint(x: rect.maxX - radius, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX + radius, y: rect.maxY))
+            path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - radius), control: CGPoint(x: rect.minX, y: rect.maxY))
+            path.closeSubpath()
+        }
+    }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PreferencesView: View {
     @ObservedObject var preferences: NotchPreferences
+    let displays: [NotchDisplayOption]
 
     var body: some View {
         TabView {
@@ -18,6 +19,23 @@ struct PreferencesView: View {
                 Section("Presence") {
                     Toggle("Show in Dock", isOn: showInDock)
                     Toggle("Show in Menu Bar", isOn: showInMenuBar)
+                }
+
+                Section("Display") {
+                    Picker("Show Pulse Notch on", selection: preferredDisplayID) {
+                        Text("Display under pointer").tag("pointer")
+                        ForEach(displays) { display in
+                            Text(display.name).tag(display.id)
+                        }
+                    }
+
+                    Picker("External display style", selection: externalNotchStyle) {
+                        Text(ExternalNotchStyle.capsule.name).tag(ExternalNotchStyle.capsule.rawValue)
+                        Text(ExternalNotchStyle.rectangle.name).tag(ExternalNotchStyle.rectangle.rawValue)
+                    }
+                    Text("This setting only affects displays without a physical notch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Calendar") {
@@ -78,6 +96,20 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.calendarReminderLeadTimeMinutes },
             set: { preferences.setCalendarReminderLeadTimeMinutes($0) }
+        )
+    }
+
+    private var preferredDisplayID: Binding<String> {
+        Binding(
+            get: { preferences.preferredDisplayID ?? "pointer" },
+            set: { preferences.setPreferredDisplayID($0 == "pointer" ? nil : $0) }
+        )
+    }
+
+    private var externalNotchStyle: Binding<String> {
+        Binding(
+            get: { preferences.externalNotchStyle.rawValue },
+            set: { preferences.setExternalNotchStyle(ExternalNotchStyle(rawValue: $0) ?? .capsule) }
         )
     }
 }

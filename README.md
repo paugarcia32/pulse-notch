@@ -6,7 +6,8 @@ media controls.
 
 The repository currently contains the first executable product slice:
 
-- A SwiftUI macOS preview of collapsed and expanded notch states.
+- A non-activating AppKit panel anchored to the active display's notch area, with
+  public-framework support for Spaces, full-screen apps, and display changes.
 - A selectable week showing every Calendar event for the chosen day.
 - An amber Calendar icon when the next event starts within ten minutes.
 - A Join action for Google Meet, Zoom, Teams, and Webex links.
@@ -97,7 +98,12 @@ swift test
 
 ## Current Scope
 
-This is an intentionally small foundation. The preview uses a regular app window
-while the domain model and interaction are established. A later milestone will
-introduce the non-activating AppKit panel, runtime display geometry, and
-multi-display behavior required by the real notch surface.
+This is an intentionally small foundation. Pulse Notch uses public AppKit APIs to
+anchor one non-activating surface to the selected display. It follows the physical
+notch dimensions when macOS exposes them and falls back to a compact centered
+surface on displays without a notch.
+
+In Settings > General > Display, choose a specific display or follow the display
+under the pointer. External displays can use a compact capsule or rectangular
+notch; the physical-notch appearance is always preserved on notched displays.
+Each external style uses the target display's actual menu-bar height.

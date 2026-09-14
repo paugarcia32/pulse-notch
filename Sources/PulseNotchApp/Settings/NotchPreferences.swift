@@ -39,6 +39,18 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum ExternalNotchStyle: String, CaseIterable {
+    case capsule
+    case rectangle
+
+    var name: String {
+        switch self {
+        case .capsule: "Compact capsule"
+        case .rectangle: "Rectangular notch"
+        }
+    }
+}
+
 @MainActor
 final class NotchPreferences: ObservableObject {
     @Published private(set) var pageOrder: [NotchPage]
@@ -54,6 +66,8 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var calendarReminderLeadTimeMinutes: Int
     @Published private(set) var shortcuts: [ShortcutAction: AppShortcut]
     @Published private(set) var startupError: String?
+    @Published private(set) var preferredDisplayID: String?
+    @Published private(set) var externalNotchStyle: ExternalNotchStyle
 
     private enum Keys {
         static let pageOrder = "settings.pageOrder"
@@ -63,6 +77,8 @@ final class NotchPreferences: ObservableObject {
         static let hideFromMenuBar = "settings.hideFromMenuBar"
         static let calendarReminderLeadTimeMinutes = "settings.calendarReminderLeadTimeMinutes"
         static let shortcuts = "settings.shortcuts"
+        static let preferredDisplayID = "settings.preferredDisplayID"
+        static let externalNotchStyle = "settings.externalNotchStyle"
     }
 
     private let defaults: UserDefaults
@@ -78,6 +94,8 @@ final class NotchPreferences: ObservableObject {
         hideFromMenuBar = defaults.bool(forKey: Keys.hideFromMenuBar)
         calendarReminderLeadTimeMinutes = min(max(defaults.object(forKey: Keys.calendarReminderLeadTimeMinutes) as? Int ?? 10, 1), 60)
         shortcuts = Self.shortcuts(from: defaults.data(forKey: Keys.shortcuts))
+        preferredDisplayID = defaults.string(forKey: Keys.preferredDisplayID)
+        externalNotchStyle = ExternalNotchStyle(rawValue: defaults.string(forKey: Keys.externalNotchStyle) ?? "") ?? .capsule
         startupError = nil
     }
 
@@ -122,6 +140,20 @@ final class NotchPreferences: ObservableObject {
         guard calendarReminderLeadTimeMinutes != value else { return }
         calendarReminderLeadTimeMinutes = value
         defaults.set(value, forKey: Keys.calendarReminderLeadTimeMinutes)
+    }
+
+    func setPreferredDisplayID(_ displayID: String?) {
+        guard preferredDisplayID != displayID else { return }
+        preferredDisplayID = displayID
+        defaults.set(displayID, forKey: Keys.preferredDisplayID)
+        NotificationCenter.default.post(name: .pulseNotchDisplayPreferencesChanged, object: nil)
+    }
+
+    func setExternalNotchStyle(_ style: ExternalNotchStyle) {
+        guard externalNotchStyle != style else { return }
+        externalNotchStyle = style
+        defaults.set(style.rawValue, forKey: Keys.externalNotchStyle)
+        NotificationCenter.default.post(name: .pulseNotchDisplayPreferencesChanged, object: nil)
     }
 
     func movePages(from offsets: IndexSet, to destination: Int) {
