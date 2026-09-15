@@ -102,6 +102,88 @@ struct FeatureModelTests {
     }
 
     @Test
+    func bluetoothHeadphonesModelShowsOnlyNewConnections() async {
+        let model = BluetoothHeadphonesFeatureModel(provider: BluetoothHeadphonesSequenceProvider(statuses: [
+            [BluetoothHeadphonesStatus(id: "existing")],
+            [BluetoothHeadphonesStatus(id: "existing"), BluetoothHeadphonesStatus(id: "new", batteryLevel: 72)]
+        ]))
+
+        #expect(await model.refresh() == nil)
+
+        #expect(await model.refresh() == BluetoothHeadphonesStatus(id: "new", batteryLevel: 72))
+    }
+
+    @Test
+    func bluetoothHeadphonesModelUpdatesANewConnectionWhenItsBatteryArrives() async {
+        let model = BluetoothHeadphonesFeatureModel(provider: BluetoothHeadphonesSequenceProvider(statuses: [
+            [],
+            [BluetoothHeadphonesStatus(id: "new")],
+            [BluetoothHeadphonesStatus(id: "new", batteryLevel: 72)]
+        ]))
+
+        let start = Date(timeIntervalSince1970: 0)
+        #expect(await model.refresh(at: start) == nil)
+        #expect(await model.refresh(at: start.addingTimeInterval(1)) == nil)
+
+        #expect(await model.refresh(at: start.addingTimeInterval(1.2)) == BluetoothHeadphonesStatus(id: "new", batteryLevel: 72))
+    }
+
+    @Test
+    func bluetoothHeadphonesModelShowsANeutralBatteryOnlyAfterTheWaitExpires() async {
+        let model = BluetoothHeadphonesFeatureModel(provider: BluetoothHeadphonesSequenceProvider(statuses: [
+            [],
+            [BluetoothHeadphonesStatus(id: "new")],
+            [BluetoothHeadphonesStatus(id: "new")]
+        ]))
+        let start = Date(timeIntervalSince1970: 0)
+
+        #expect(await model.refresh(at: start) == nil)
+        #expect(await model.refresh(at: start.addingTimeInterval(1)) == nil)
+        #expect(await model.refresh(at: start.addingTimeInterval(1.8)) == BluetoothHeadphonesStatus(id: "new"))
+    }
+
+    @Test
+    func bluetoothHeadphonesActivityUsesAHeadphonesAndBatteryPresentation() {
+        let activity = SystemActivityFeatureModel.Activity(
+            kind: .bluetoothHeadphones(batteryLevel: 72),
+            level: 72
+        )
+
+        #expect(activity.symbolName == "headphones")
+        #expect(activity.trailingSymbolName == "battery.75percent")
+        #expect(!activity.showsCircularLevel)
+    }
+
+    @Test
+    func bluetoothBatteryReaderParsesAccessoryPowerSourceLevels() {
+        let levels = BluetoothHeadphonesProvider.accessoryBatteryLevels(output: """
+        Now drawing from 'Battery Power'
+         - AirPods Pro (id=123) 72%; connected: yes
+         - WH-1000XM5 48%; connected: yes
+        """)
+
+        #expect(levels["airpodspro"] == 72)
+        #expect(levels["wh1000xm5"] == 48)
+    }
+
+    @Test
+    func bluetoothBatteryReaderMatchesSystemProfilerAddressBeforeName() {
+        let levels = BluetoothHeadphonesProvider.profilerBatteryLevels(root: [
+            "device_connected": [[
+                "AirPods": [
+                    "device_address": "AA-BB-CC-DD-EE-FF",
+                    "device_batteryLevelLeft": "72%",
+                    "device_batteryLevelRight": "70%",
+                    "device_batteryLevelCase": "48%"
+                ]
+            ]]
+        ])
+
+        #expect(levels.addresses["AABBCCDDEEFF"] == 72)
+        #expect(levels.names["airpods"] == 72)
+    }
+
+    @Test
     func downloadModelShowsDownloadsThatAppearAfterMonitoringStarts() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -151,6 +233,7 @@ struct FeatureModelTests {
         preferences.setShowChargingActivity(false)
         preferences.setShowVolumeActivity(false)
         preferences.setShowBrightnessActivity(false)
+        preferences.setShowBluetoothHeadphonesActivity(false)
         preferences.setShowDownloads(false)
         preferences.setDownloadsDirectoryURL(URL(fileURLWithPath: "/tmp/PulseNotchDownloads", isDirectory: true))
         preferences.setPreferredDisplayID("42")
@@ -171,6 +254,7 @@ struct FeatureModelTests {
         #expect(!restoredPreferences.showChargingActivity)
         #expect(!restoredPreferences.showVolumeActivity)
         #expect(!restoredPreferences.showBrightnessActivity)
+        #expect(!restoredPreferences.showBluetoothHeadphonesActivity)
         #expect(!restoredPreferences.showDownloads)
         #expect(restoredPreferences.downloadsDirectoryPath == "/tmp/PulseNotchDownloads")
         #expect(restoredPreferences.preferredDisplayID == "42")
@@ -292,6 +376,18 @@ private actor BrightnessSequenceProvider: DisplayBrightnessProviding {
     }
 
     func currentDisplayBrightness() async throws -> DisplayBrightnessStatus {
+        statuses.removeFirst()
+    }
+}
+
+private actor BluetoothHeadphonesSequenceProvider: BluetoothHeadphonesProviding {
+    private var statuses: [[BluetoothHeadphonesStatus]]
+
+    init(statuses: [[BluetoothHeadphonesStatus]]) {
+        self.statuses = statuses
+    }
+
+    func connectedHeadphones() async throws -> [BluetoothHeadphonesStatus] {
         statuses.removeFirst()
     }
 }

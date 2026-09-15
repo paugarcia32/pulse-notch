@@ -49,6 +49,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     let volumeModel = VolumeFeatureModel(provider: SystemVolumeProvider())
     let brightnessModel = BrightnessFeatureModel(provider: DisplayBrightnessProvider())
     let downloadModel = DownloadFeatureModel(provider: DownloadsDirectoryProvider())
+    let bluetoothHeadphonesModel = BluetoothHeadphonesFeatureModel(provider: BluetoothHeadphonesProvider())
     let systemActivityModel = SystemActivityFeatureModel()
 
     private var panel: NotchPanel?
@@ -141,6 +142,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             volumeModel: volumeModel,
             brightnessModel: brightnessModel,
             downloadModel: downloadModel,
+            bluetoothHeadphonesModel: bluetoothHeadphonesModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),
@@ -160,6 +162,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             volumeModel: volumeModel,
             brightnessModel: brightnessModel,
             downloadModel: downloadModel,
+            bluetoothHeadphonesModel: bluetoothHeadphonesModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),

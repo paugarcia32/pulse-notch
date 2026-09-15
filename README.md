@@ -19,6 +19,7 @@ The repository currently contains the first executable product slice:
 - Animated indicators for active browser downloads in a configurable folder.
 - A temporary charging activity with the current battery percentage when external power connects.
 - Temporary volume and display-brightness activities that replace collapsed indicators.
+- A temporary Bluetooth-headphones connection activity, with a battery glyph when headphones connect.
 - Live Codex five-hour and weekly usage gauges on the coding-agent page.
 - Agent cards with project, Git branch, and elapsed-session context when available.
 - A GitHub page for your open and draft pull requests, with comments, passed checks,
@@ -65,6 +66,17 @@ fallback for the built-in display. IOKit remains the first reader and the local
 CoreBrightness diagnostic handles Macs where IOKit does not expose that value.
 Their visibility and duration use the same Settings > General controls as
 charging. External displays without a compatible brightness control remain quiet.
+
+Bluetooth headphones are detected locally from the public IOBluetooth connection
+state. A new connection temporarily replaces collapsed indicators with headphones
+on the left and a battery glyph on the right; its visibility and duration are also
+configurable in Settings > General. Device names and addresses are never shown,
+persisted, or logged. macOS does not provide a generic public battery-level API for
+all Bluetooth headphones, so Pulse Notch matches the connected device against
+locally reported accessory battery levels from IOKit, `system_profiler`, and
+`pmset`. When neither source reports a value, it uses a neutral battery glyph
+rather than inventing a percentage. The Testing view includes a 72% example to
+verify the filled battery treatment.
 
 Downloads monitoring defaults to the user's Downloads folder and can be pointed at
 another folder in Settings. It observes browser temporary files locally and never

@@ -7,6 +7,7 @@ final class SystemActivityFeatureModel: ObservableObject {
         case charging
         case volume(isMuted: Bool)
         case brightness
+        case bluetoothHeadphones(batteryLevel: Int?)
     }
 
     struct Activity: Identifiable, Equatable {

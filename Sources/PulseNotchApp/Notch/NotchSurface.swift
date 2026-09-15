@@ -9,6 +9,7 @@ struct NotchSurface: View {
     @ObservedObject var volumeModel: VolumeFeatureModel
     @ObservedObject var brightnessModel: BrightnessFeatureModel
     @ObservedObject var downloadModel: DownloadFeatureModel
+    let bluetoothHeadphonesModel: BluetoothHeadphonesFeatureModel
     @ObservedObject var systemActivityModel: SystemActivityFeatureModel
     @ObservedObject var preferences: NotchPreferences
     let isExternalDisplay: Bool
@@ -64,6 +65,7 @@ struct NotchSurface: View {
         .onChange(of: preferences.showChargingActivity) { _, isShown in dismissSystemActivity(.charging, when: !isShown) }
         .onChange(of: preferences.showVolumeActivity) { _, isShown in dismissSystemActivity(.volume(isMuted: false), when: !isShown) }
         .onChange(of: preferences.showBrightnessActivity) { _, isShown in dismissSystemActivity(.brightness, when: !isShown) }
+        .onChange(of: preferences.showBluetoothHeadphonesActivity) { _, isShown in dismissSystemActivity(.bluetoothHeadphones(batteryLevel: nil), when: !isShown) }
         .onDisappear {
             systemActivityTask?.cancel()
             volumeModel.stopMonitoring()
@@ -78,6 +80,16 @@ struct NotchSurface: View {
             while !Task.isCancelled {
                 await calendarModel.refresh()
                 try? await Task.sleep(for: .seconds(30))
+            }
+        }
+        .task {
+            // Connection state is public through IOBluetooth. Polling avoids an
+            // Objective-C callback lifetime while keeping HUD latency below one second.
+            while !Task.isCancelled {
+                if let activity = await bluetoothHeadphonesModel.refresh() {
+                    handleBluetoothHeadphonesActivity(activity)
+                }
+                try? await Task.sleep(for: bluetoothHeadphonesModel.hasPendingBattery ? .milliseconds(100) : .seconds(1))
             }
         }
         .task(id: downloadsMonitoringID) {
@@ -175,6 +187,12 @@ struct NotchSurface: View {
         brightnessModel.consumeActivity()
     }
 
+    private func handleBluetoothHeadphonesActivity(_ activity: BluetoothHeadphonesStatus) {
+        if preferences.showBluetoothHeadphonesActivity {
+            systemActivityModel.present(kind: .bluetoothHeadphones(batteryLevel: activity.batteryLevel), level: activity.batteryLevel ?? 0)
+        }
+    }
+
     private func showTestingSystemActivity() {
         switch preferences.testingSystemActivity {
         case .charging where preferences.showChargingActivity:
@@ -183,7 +201,9 @@ struct NotchSurface: View {
             systemActivityModel.present(kind: .volume(isMuted: false), level: 64)
         case .brightness where preferences.showBrightnessActivity:
             systemActivityModel.present(kind: .brightness, level: 72)
-        case nil, .charging, .volume, .brightness:
+        case .bluetoothHeadphones where preferences.showBluetoothHeadphonesActivity:
+            systemActivityModel.present(kind: .bluetoothHeadphones(batteryLevel: 72), level: 72)
+        case nil, .charging, .volume, .brightness, .bluetoothHeadphones:
             break
         }
     }
@@ -284,7 +304,11 @@ struct NotchSurface: View {
 
     @ViewBuilder
     private func activityLevel(_ activity: SystemActivityFeatureModel.Activity) -> some View {
-        if activity.showsCircularLevel {
+        if let trailingSymbolName = activity.trailingSymbolName {
+            Image(systemName: trailingSymbolName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(activity.trailingColor)
+        } else if activity.showsCircularLevel {
             ActivityLevelRing(level: activity.level, color: activity.color, reduceMotion: reduceMotion)
         } else {
             Text("\(activity.level)%")

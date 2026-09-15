@@ -55,6 +55,7 @@ enum TestingSystemActivity: Equatable {
     case charging
     case volume
     case brightness
+    case bluetoothHeadphones
 }
 
 @MainActor
@@ -74,6 +75,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var showChargingActivity: Bool
     @Published private(set) var showVolumeActivity: Bool
     @Published private(set) var showBrightnessActivity: Bool
+    @Published private(set) var showBluetoothHeadphonesActivity: Bool
     @Published private(set) var showDownloads: Bool
     @Published private(set) var downloadsDirectoryPath: String
     @Published private(set) var shortcuts: [ShortcutAction: AppShortcut]
@@ -98,6 +100,7 @@ final class NotchPreferences: ObservableObject {
         static let showChargingActivity = "settings.showChargingActivity"
         static let showVolumeActivity = "settings.showVolumeActivity"
         static let showBrightnessActivity = "settings.showBrightnessActivity"
+        static let showBluetoothHeadphonesActivity = "settings.showBluetoothHeadphonesActivity"
         static let showDownloads = "settings.showDownloads"
         static let downloadsDirectoryPath = "settings.downloadsDirectoryPath"
         static let shortcuts = "settings.shortcuts"
@@ -126,6 +129,7 @@ final class NotchPreferences: ObservableObject {
         showChargingActivity = defaults.object(forKey: Keys.showChargingActivity) as? Bool ?? true
         showVolumeActivity = defaults.object(forKey: Keys.showVolumeActivity) as? Bool ?? true
         showBrightnessActivity = defaults.object(forKey: Keys.showBrightnessActivity) as? Bool ?? true
+        showBluetoothHeadphonesActivity = defaults.object(forKey: Keys.showBluetoothHeadphonesActivity) as? Bool ?? true
         showDownloads = defaults.object(forKey: Keys.showDownloads) as? Bool ?? true
         downloadsDirectoryPath = defaults.string(forKey: Keys.downloadsDirectoryPath)
             ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path
@@ -217,6 +221,12 @@ final class NotchPreferences: ObservableObject {
         guard showBrightnessActivity != isShown else { return }
         showBrightnessActivity = isShown
         defaults.set(isShown, forKey: Keys.showBrightnessActivity)
+    }
+
+    func setShowBluetoothHeadphonesActivity(_ isShown: Bool) {
+        guard showBluetoothHeadphonesActivity != isShown else { return }
+        showBluetoothHeadphonesActivity = isShown
+        defaults.set(isShown, forKey: Keys.showBluetoothHeadphonesActivity)
     }
 
     func setShowDownloads(_ isShown: Bool) {

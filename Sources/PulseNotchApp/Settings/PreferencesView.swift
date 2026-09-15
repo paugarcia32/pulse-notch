@@ -61,10 +61,11 @@ struct PreferencesView: View {
                     Toggle("Show charging activity", isOn: showChargingActivity)
                     Toggle("Show volume activity", isOn: showVolumeActivity)
                     Toggle("Show brightness activity", isOn: showBrightnessActivity)
+                    Toggle("Show Bluetooth headphones activity", isOn: showBluetoothHeadphonesActivity)
                     Stepper(value: transientSystemActivityDurationSeconds, in: 1...10) {
                         Text("Show for \(preferences.transientSystemActivityDurationSeconds) seconds")
                     }
-                    .disabled(!preferences.showChargingActivity)
+                    .disabled(!preferences.showChargingActivity && !preferences.showVolumeActivity && !preferences.showBrightnessActivity && !preferences.showBluetoothHeadphonesActivity)
                 }
 
                 Section("Downloads") {
@@ -155,6 +156,10 @@ struct PreferencesView: View {
                             preferences.triggerTestingSystemActivity(.brightness)
                         }
                         .disabled(!preferences.showBrightnessActivity)
+                        Button("Show Bluetooth headphones activity") {
+                            preferences.triggerTestingSystemActivity(.bluetoothHeadphones)
+                        }
+                        .disabled(!preferences.showBluetoothHeadphonesActivity)
                     }
                 }
                 .formStyle(.grouped)
@@ -204,6 +209,13 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.showBrightnessActivity },
             set: { preferences.setShowBrightnessActivity($0) }
+        )
+    }
+
+    private var showBluetoothHeadphonesActivity: Binding<Bool> {
+        Binding(
+            get: { preferences.showBluetoothHeadphonesActivity },
+            set: { preferences.setShowBluetoothHeadphonesActivity($0) }
         )
     }
 
