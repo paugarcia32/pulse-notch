@@ -102,6 +102,25 @@ struct FeatureModelTests {
     }
 
     @Test
+    func downloadModelShowsDownloadsThatAppearAfterMonitoringStarts() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let provider = DownloadSequenceProvider(snapshots: [
+            [DetectedDownload(id: "existing", byteCount: 100)],
+            [DetectedDownload(id: "existing", byteCount: 100), DetectedDownload(id: "new", byteCount: 0)]
+        ])
+        let model = DownloadFeatureModel(provider: provider)
+        await model.startMonitoring(directory: directory)
+        await model.refresh()
+
+        #expect(model.activeDownloads.map(\.id) == ["new"])
+        model.stopMonitoring()
+    }
+
+
+    @Test
     func moreEventsLabelIncludesTheRemainingEventCount() {
         #expect(CalendarPage.moreEventsTitle(remainingCount: 3) == "Show 3 more events")
     }
@@ -132,6 +151,8 @@ struct FeatureModelTests {
         preferences.setShowChargingActivity(false)
         preferences.setShowVolumeActivity(false)
         preferences.setShowBrightnessActivity(false)
+        preferences.setShowDownloads(false)
+        preferences.setDownloadsDirectoryURL(URL(fileURLWithPath: "/tmp/PulseNotchDownloads", isDirectory: true))
         preferences.setPreferredDisplayID("42")
         preferences.setExternalNotchStyle(.rectangle)
         preferences.setCollapsedIndicatorMaximumPerSide(4)
@@ -150,6 +171,8 @@ struct FeatureModelTests {
         #expect(!restoredPreferences.showChargingActivity)
         #expect(!restoredPreferences.showVolumeActivity)
         #expect(!restoredPreferences.showBrightnessActivity)
+        #expect(!restoredPreferences.showDownloads)
+        #expect(restoredPreferences.downloadsDirectoryPath == "/tmp/PulseNotchDownloads")
         #expect(restoredPreferences.preferredDisplayID == "42")
         #expect(restoredPreferences.externalNotchStyle == .rectangle)
         #expect(restoredPreferences.collapsedIndicatorMaximumPerSide == 4)
@@ -270,5 +293,17 @@ private actor BrightnessSequenceProvider: DisplayBrightnessProviding {
 
     func currentDisplayBrightness() async throws -> DisplayBrightnessStatus {
         statuses.removeFirst()
+    }
+}
+
+private actor DownloadSequenceProvider: DownloadsProviding {
+    private var snapshots: [[DetectedDownload]]
+
+    init(snapshots: [[DetectedDownload]]) {
+        self.snapshots = snapshots
+    }
+
+    func activeDownloads(in directory: URL) async throws -> [DetectedDownload] {
+        snapshots.removeFirst()
     }
 }

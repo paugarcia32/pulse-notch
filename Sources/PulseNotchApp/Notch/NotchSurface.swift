@@ -8,6 +8,7 @@ struct NotchSurface: View {
     @ObservedObject var batteryModel: BatteryFeatureModel
     @ObservedObject var volumeModel: VolumeFeatureModel
     @ObservedObject var brightnessModel: BrightnessFeatureModel
+    @ObservedObject var downloadModel: DownloadFeatureModel
     @ObservedObject var systemActivityModel: SystemActivityFeatureModel
     @ObservedObject var preferences: NotchPreferences
     let isExternalDisplay: Bool
@@ -67,6 +68,7 @@ struct NotchSurface: View {
             systemActivityTask?.cancel()
             volumeModel.stopMonitoring()
             brightnessModel.stopMonitoring()
+            downloadModel.stopMonitoring()
         }
     }
 
@@ -76,6 +78,20 @@ struct NotchSurface: View {
             while !Task.isCancelled {
                 await calendarModel.refresh()
                 try? await Task.sleep(for: .seconds(30))
+            }
+        }
+        .task(id: downloadsMonitoringID) {
+            guard preferences.showDownloads else {
+                downloadModel.stopMonitoring()
+                return
+            }
+            await downloadModel.startMonitoring(directory: preferences.downloadsDirectoryURL)
+            // ponytail: scan once per second. Browser downloads have no public
+            // system-wide activity API; use a file-system event source only if
+            // polling proves measurably too expensive.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                await downloadModel.refresh()
             }
         }
         .task { await volumeModel.startMonitoring() }
@@ -442,9 +458,14 @@ struct NotchSurface: View {
             schedule: schedule,
             sessions: sessions,
             actionSessions: gitHubModel.notificationActionSessions,
+            downloads: preferences.showDownloads ? downloadModel.activeDownloads : [],
             at: date,
             calendarReminderLeadTime: preferences.calendarReminderLeadTime
         ).filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
+    }
+
+    private var downloadsMonitoringID: String {
+        "\(preferences.showDownloads)-\(preferences.downloadsDirectoryPath)"
     }
 
     private func scheduleSystemActivityDismissal(_ activity: SystemActivityFeatureModel.Activity?) {

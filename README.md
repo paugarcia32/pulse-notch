@@ -16,6 +16,7 @@ The repository currently contains the first executable product slice:
 - Calendar and coding-agent pages navigable with a two-finger horizontal swipe,
   also available with Command-1 and Command-2.
 - Animated running and recently-completed agent indicators in the collapsed notch.
+- Animated indicators for active browser downloads in a configurable folder.
 - A temporary charging activity with the current battery percentage when external power connects.
 - Temporary volume and display-brightness activities that replace collapsed indicators.
 - Live Codex five-hour and weekly usage gauges on the coding-agent page.
@@ -64,6 +65,11 @@ fallback for the built-in display. IOKit remains the first reader and the local
 CoreBrightness diagnostic handles Macs where IOKit does not expose that value.
 Their visibility and duration use the same Settings > General controls as
 charging. External displays without a compatible brightness control remain quiet.
+
+Downloads monitoring defaults to the user's Downloads folder and can be pointed at
+another folder in Settings. It observes browser temporary files locally and never
+displays or persists download file names or paths. The feature can be disabled at
+any time.
 
 For active sessions, Pulse Notch reads the working directory and Git branch locally
 when the agent exposes them. It does not read or show coding-agent prompts or thread

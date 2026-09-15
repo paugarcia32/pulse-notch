@@ -74,6 +74,8 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var showChargingActivity: Bool
     @Published private(set) var showVolumeActivity: Bool
     @Published private(set) var showBrightnessActivity: Bool
+    @Published private(set) var showDownloads: Bool
+    @Published private(set) var downloadsDirectoryPath: String
     @Published private(set) var shortcuts: [ShortcutAction: AppShortcut]
     @Published private(set) var startupError: String?
     @Published private(set) var preferredDisplayID: String?
@@ -96,6 +98,8 @@ final class NotchPreferences: ObservableObject {
         static let showChargingActivity = "settings.showChargingActivity"
         static let showVolumeActivity = "settings.showVolumeActivity"
         static let showBrightnessActivity = "settings.showBrightnessActivity"
+        static let showDownloads = "settings.showDownloads"
+        static let downloadsDirectoryPath = "settings.downloadsDirectoryPath"
         static let shortcuts = "settings.shortcuts"
         static let preferredDisplayID = "settings.preferredDisplayID"
         static let externalNotchStyle = "settings.externalNotchStyle"
@@ -122,15 +126,23 @@ final class NotchPreferences: ObservableObject {
         showChargingActivity = defaults.object(forKey: Keys.showChargingActivity) as? Bool ?? true
         showVolumeActivity = defaults.object(forKey: Keys.showVolumeActivity) as? Bool ?? true
         showBrightnessActivity = defaults.object(forKey: Keys.showBrightnessActivity) as? Bool ?? true
+        showDownloads = defaults.object(forKey: Keys.showDownloads) as? Bool ?? true
+        downloadsDirectoryPath = defaults.string(forKey: Keys.downloadsDirectoryPath)
+            ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path
+            ?? "/Downloads"
         shortcuts = Self.shortcuts(from: defaults.data(forKey: Keys.shortcuts))
         preferredDisplayID = defaults.string(forKey: Keys.preferredDisplayID)
         externalNotchStyle = ExternalNotchStyle(rawValue: defaults.string(forKey: Keys.externalNotchStyle) ?? "") ?? .capsule
         collapsedIndicatorMaximumPerSide = Self.clampedCollapsedIndicatorMaximum(
             defaults.object(forKey: Keys.collapsedIndicatorMaximumPerSide) as? Int ?? 3
         )
-        visibleCollapsedIndicatorCategories = Self.collapsedIndicatorCategories(
+        var collapsedIndicatorCategories = Self.collapsedIndicatorCategories(
             from: defaults.stringArray(forKey: Keys.visibleCollapsedIndicatorCategories)
         )
+        if defaults.object(forKey: Keys.showDownloads) == nil {
+            collapsedIndicatorCategories.insert(.downloads)
+        }
+        visibleCollapsedIndicatorCategories = collapsedIndicatorCategories
         testingFeaturesEnabled = defaults.bool(forKey: Keys.testingFeaturesEnabled)
         testingSystemActivity = nil
         testingSystemActivityTrigger = nil
@@ -140,6 +152,7 @@ final class NotchPreferences: ObservableObject {
     var orderedVisiblePages: [NotchPage] { pageOrder.filter { visiblePages.contains($0) } }
     var calendarReminderLeadTime: TimeInterval { TimeInterval(calendarReminderLeadTimeMinutes * 60) }
     var transientSystemActivityDuration: Duration { .seconds(transientSystemActivityDurationSeconds) }
+    var downloadsDirectoryURL: URL { URL(fileURLWithPath: downloadsDirectoryPath, isDirectory: true) }
     var shortcutActions: [ShortcutAction] {
         [.openNotch] + orderedVisiblePages.indices.map(ShortcutAction.page(at:))
     }
@@ -204,6 +217,19 @@ final class NotchPreferences: ObservableObject {
         guard showBrightnessActivity != isShown else { return }
         showBrightnessActivity = isShown
         defaults.set(isShown, forKey: Keys.showBrightnessActivity)
+    }
+
+    func setShowDownloads(_ isShown: Bool) {
+        guard showDownloads != isShown else { return }
+        showDownloads = isShown
+        defaults.set(isShown, forKey: Keys.showDownloads)
+    }
+
+    func setDownloadsDirectoryURL(_ url: URL) {
+        let path = url.standardizedFileURL.path
+        guard downloadsDirectoryPath != path else { return }
+        downloadsDirectoryPath = path
+        defaults.set(path, forKey: Keys.downloadsDirectoryPath)
     }
 
     func setPreferredDisplayID(_ displayID: String?) {

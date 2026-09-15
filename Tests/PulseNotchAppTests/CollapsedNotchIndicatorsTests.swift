@@ -55,6 +55,24 @@ struct CollapsedNotchIndicatorsTests {
     }
 
     @Test
+    func showsOneAnimatedIndicatorForEachActiveDownload() {
+        let indicators = CollapsedNotchIndicators.make(
+            schedule: nil,
+            sessions: [],
+            actionSessions: [],
+            downloads: [
+                DetectedDownload(id: "first", byteCount: 100),
+                DetectedDownload(id: "second", byteCount: 200)
+            ],
+            at: Date(timeIntervalSince1970: 1_000),
+            calendarReminderLeadTime: 10 * 60
+        )
+
+        #expect(indicators.map(\.id) == ["download-first", "download-second"])
+        #expect(indicators.allSatisfy { $0.content == .runningDownload })
+    }
+
+    @Test
     func roundsCalendarCountdownUpToTheNextMinute() {
         let now = Date(timeIntervalSince1970: 1_000)
         let schedule = CalendarEventSchedule(events: [CalendarEvent(

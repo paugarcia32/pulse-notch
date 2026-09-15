@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct PreferencesView: View {
@@ -64,6 +65,26 @@ struct PreferencesView: View {
                         Text("Show for \(preferences.transientSystemActivityDurationSeconds) seconds")
                     }
                     .disabled(!preferences.showChargingActivity)
+                }
+
+                Section("Downloads") {
+                    Toggle("Show active downloads", isOn: showDownloads)
+                    LabeledContent("Watch folder") {
+                        HStack(spacing: 8) {
+                            Text(URL(fileURLWithPath: preferences.downloadsDirectoryPath).lastPathComponent)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Button("Choose…", action: chooseDownloadsDirectory)
+                        }
+                    }
+                    if preferences.downloadsDirectoryURL != defaultDownloadsDirectory {
+                        Button("Use Downloads folder") {
+                            preferences.setDownloadsDirectoryURL(defaultDownloadsDirectory)
+                        }
+                    }
+                    Text("Pulse Notch only detects temporary download files in this folder. File names are never displayed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Testing") {
@@ -184,6 +205,28 @@ struct PreferencesView: View {
             get: { preferences.showBrightnessActivity },
             set: { preferences.setShowBrightnessActivity($0) }
         )
+    }
+
+    private var showDownloads: Binding<Bool> {
+        Binding(
+            get: { preferences.showDownloads },
+            set: { preferences.setShowDownloads($0) }
+        )
+    }
+
+    private var defaultDownloadsDirectory: URL {
+        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: "/Downloads", isDirectory: true)
+    }
+
+    private func chooseDownloadsDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = preferences.downloadsDirectoryURL
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        preferences.setDownloadsDirectoryURL(url)
     }
 
     private var preferredDisplayID: Binding<String> {

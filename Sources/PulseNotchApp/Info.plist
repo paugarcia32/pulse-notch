@@ -18,7 +18,9 @@
     <string>0.1.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
-    <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>Pulse Notch uses calendar access to show your next event near the display notch.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Pulse Notch uses calendar access to show your next event near the display notch.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Pulse Notch watches temporary download files to show active downloads near the display notch. File names are never displayed.</string>
 </dict>
 </plist>

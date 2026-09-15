@@ -1,0 +1,44 @@
+import Combine
+import Foundation
+import PulseNotchCore
+
+@MainActor
+final class DownloadFeatureModel: ObservableObject {
+    @Published private(set) var activeDownloads: [DetectedDownload] = []
+
+    private let provider: any DownloadsProviding
+    private var directory: URL?
+    private var initialByteCounts: [String: Int64] = [:]
+
+    init(provider: any DownloadsProviding) {
+        self.provider = provider
+    }
+
+    func startMonitoring(directory: URL) async {
+        stopMonitoring()
+        self.directory = directory
+
+        if let initial = try? await provider.activeDownloads(in: directory) {
+            initialByteCounts = Dictionary(uniqueKeysWithValues: initial.map { ($0.id, $0.byteCount) })
+        }
+    }
+
+    func stopMonitoring() {
+        directory = nil
+        initialByteCounts.removeAll()
+        activeDownloads.removeAll()
+    }
+
+    func refresh() async {
+        guard let directory,
+              let downloads = try? await provider.activeDownloads(in: directory)
+        else { return }
+
+        let activeIDs = Set(downloads.map(\.id))
+        initialByteCounts = initialByteCounts.filter { activeIDs.contains($0.key) }
+        activeDownloads = downloads.filter { download in
+            guard let initialByteCount = initialByteCounts[download.id] else { return true }
+            return download.byteCount > initialByteCount
+        }
+    }
+}

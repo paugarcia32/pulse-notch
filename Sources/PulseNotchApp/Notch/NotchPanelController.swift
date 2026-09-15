@@ -48,6 +48,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     let batteryModel = BatteryFeatureModel(provider: IOKitBatteryProvider())
     let volumeModel = VolumeFeatureModel(provider: SystemVolumeProvider())
     let brightnessModel = BrightnessFeatureModel(provider: DisplayBrightnessProvider())
+    let downloadModel = DownloadFeatureModel(provider: DownloadsDirectoryProvider())
     let systemActivityModel = SystemActivityFeatureModel()
 
     private var panel: NotchPanel?
@@ -139,6 +140,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             batteryModel: batteryModel,
             volumeModel: volumeModel,
             brightnessModel: brightnessModel,
+            downloadModel: downloadModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),
@@ -157,6 +159,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             batteryModel: batteryModel,
             volumeModel: volumeModel,
             brightnessModel: brightnessModel,
+            downloadModel: downloadModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),

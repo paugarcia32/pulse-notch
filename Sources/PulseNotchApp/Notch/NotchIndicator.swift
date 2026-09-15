@@ -19,6 +19,7 @@ struct NotchIndicator: Identifiable {
         case upcomingCalendarEvent(minutesUntilStart: Int)
         case runningAgent(CodingAgentKind)
         case completedAgent(CodingAgentKind)
+        case runningDownload
         case githubActions(GitHubPullRequest.ActionStatus)
     }
 
@@ -31,6 +32,7 @@ struct NotchIndicator: Identifiable {
         case .upcomingCalendarEvent: .pink
         case let .runningAgent(kind): kind.notchColor
         case .completedAgent: .green
+        case .runningDownload: .blue
         case .githubActions(.running): .orange
         case .githubActions(.failed): .red
         case .githubActions: .green
@@ -42,6 +44,7 @@ struct NotchIndicator: Identifiable {
         case .upcomingCalendarEvent: .calendar
         case .githubActions: .githubActions
         case .runningAgent, .completedAgent: .codingAgents
+        case .runningDownload: .downloads
         }
     }
 
@@ -51,6 +54,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
     case calendar
     case githubActions
     case codingAgents
+    case downloads
 
     var id: String { rawValue }
 
@@ -59,6 +63,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
         case .calendar: "Calendar reminders"
         case .githubActions: "GitHub Actions"
         case .codingAgents: "Coding agents"
+        case .downloads: "Downloads"
         }
     }
 
@@ -72,6 +77,7 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
     case cursor
     case antigravity
     case opencode
+    case download
 
     var id: String { rawValue }
 
@@ -84,6 +90,7 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
         case .cursor: "Cursor agent"
         case .antigravity: "Antigravity agent"
         case .opencode: "OpenCode agent"
+        case .download: "Download"
         }
     }
 
@@ -102,6 +109,8 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
         case .cursor: return runningAgent(.cursor, instance: instance)
         case .antigravity: return runningAgent(.antigravity, instance: instance)
         case .opencode: return runningAgent(.opencode, instance: instance)
+        case .download:
+            return NotchIndicator(id: "download-\(instance)", content: .runningDownload, accessibilityLabel: "Download in progress")
         }
     }
 
@@ -115,6 +124,7 @@ enum CollapsedNotchIndicators {
         schedule: CalendarEventSchedule?,
         sessions: [CodingAgentSession],
         actionSessions: [GitHubActionSession],
+        downloads: [DetectedDownload] = [],
         at date: Date,
         calendarReminderLeadTime: TimeInterval
     ) -> [NotchIndicator] {
@@ -155,6 +165,14 @@ enum CollapsedNotchIndicators {
             )
         }
 
+        indicators.append(contentsOf: downloads.prefix(4).map { download in
+            NotchIndicator(
+                id: "download-\(download.id)",
+                content: .runningDownload,
+                accessibilityLabel: "Download in progress"
+            )
+        })
+
         indicators.append(contentsOf: sessions.prefix(4).map { session in
             let isRunning = session.status == .running
             return NotchIndicator(
@@ -190,6 +208,8 @@ struct NotchIndicatorView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(indicator.color)
                     .symbolEffect(.bounce, value: indicator.content)
+            case .runningDownload:
+                DownloadActivityIndicator(color: indicator.color, reduceMotion: reduceMotion)
             case let .githubActions(status):
                 GitHubActionIndicator(status: status, color: indicator.color, reduceMotion: reduceMotion)
             }
@@ -296,6 +316,30 @@ private struct AgentActivityOrbit: View {
                 .rotationEffect(.degrees(progress * 360))
         }
         .frame(width: 14, height: 14)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct DownloadActivityIndicator: View {
+    let color: Color
+    let reduceMotion: Bool
+
+    var body: some View {
+        ZStack {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(color)
+            if !reduceMotion {
+                TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                    Circle()
+                        .fill(color)
+                        .frame(width: 3, height: 3)
+                        .offset(y: -7)
+                        .rotationEffect(.degrees(context.date.timeIntervalSinceReferenceDate * 300))
+                }
+            }
+        }
+        .frame(width: 16, height: 16)
         .accessibilityHidden(true)
     }
 }
