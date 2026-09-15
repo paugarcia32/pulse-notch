@@ -119,9 +119,11 @@ struct NotchSurface: View {
             return false
         }
         let otherIndicators = indicators.filter { $0.id != calendarIndicator?.id }
-        let leftCount = calendarIndicator == nil ? 3 : 2
-        let leftIndicators = Array(otherIndicators.prefix(leftCount))
-        let rightIndicators = Array(otherIndicators.dropFirst(leftCount))
+        let indicatorCountPerSide = calendarIndicator == nil
+            ? preferences.collapsedIndicatorMaximumPerSide
+            : max(0, preferences.collapsedIndicatorMaximumPerSide - 1)
+        let leftIndicators = Array(otherIndicators.prefix(indicatorCountPerSide))
+        let rightIndicators = Array(otherIndicators.dropFirst(indicatorCountPerSide).prefix(indicatorCountPerSide))
         let leftWidth = collapsedSideWidth(itemCount: leftIndicators.count + (calendarIndicator == nil ? 0 : 1))
         let rightWidth = collapsedSideWidth(
             itemCount: rightIndicators.count,
@@ -251,7 +253,7 @@ struct NotchSurface: View {
     }
 
     private func indicators(at date: Date) -> [NotchIndicator] {
-        if !preferences.collapsedIndicatorPreviews.isEmpty {
+        if preferences.testingFeaturesEnabled, !preferences.collapsedIndicatorPreviews.isEmpty {
             return CollapsedIndicatorPreview.allCases
                 .filter { preferences.collapsedIndicatorPreviews.contains($0) }
                 .map(\.indicator)

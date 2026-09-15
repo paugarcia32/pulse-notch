@@ -43,6 +43,19 @@ struct PreferencesView: View {
                         Text("Show upcoming events \(preferences.calendarReminderLeadTimeMinutes) minutes before they start")
                     }
                 }
+
+                Section("Closed notch") {
+                    Stepper(value: collapsedIndicatorMaximumPerSide, in: 1...5) {
+                        Text("Maximum items per side: \(preferences.collapsedIndicatorMaximumPerSide)")
+                    }
+                    Text("More than 3 items per side is not recommended.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Testing") {
+                    Toggle("Enable testing features", isOn: testingFeaturesEnabled)
+                }
             }
             .formStyle(.grouped)
             .tabItem { Label("General", systemImage: "gear") }
@@ -81,18 +94,20 @@ struct PreferencesView: View {
             .listStyle(.inset)
             .tabItem { Label("Pages", systemImage: "rectangle.3.group") }
 
-            Form {
-                Section("Closed notch") {
-                    Text("Show sample indicators on the closed notch. They replace live indicators until turned off.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    ForEach(CollapsedIndicatorPreview.allCases) { preview in
-                        Toggle(preview.name, isOn: collapsedIndicatorPreview(preview))
+            if preferences.testingFeaturesEnabled {
+                Form {
+                    Section("Closed notch previews") {
+                        Text("Show sample indicators on the closed notch. They replace live indicators until turned off.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        ForEach(CollapsedIndicatorPreview.allCases) { preview in
+                            Toggle(preview.name, isOn: collapsedIndicatorPreview(preview))
+                        }
                     }
                 }
+                .formStyle(.grouped)
+                .tabItem { Label("Testing", systemImage: "testtube.2") }
             }
-            .formStyle(.grouped)
-            .tabItem { Label("Indicators", systemImage: "circle.grid.2x2") }
         }
         .frame(minWidth: 460, idealWidth: 500, minHeight: 340, idealHeight: 380)
     }
@@ -130,6 +145,20 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.collapsedIndicatorPreviews.contains(preview) },
             set: { preferences.setCollapsedIndicatorPreview(preview, isEnabled: $0) }
+        )
+    }
+
+    private var collapsedIndicatorMaximumPerSide: Binding<Int> {
+        Binding(
+            get: { preferences.collapsedIndicatorMaximumPerSide },
+            set: { preferences.setCollapsedIndicatorMaximumPerSide($0) }
+        )
+    }
+
+    private var testingFeaturesEnabled: Binding<Bool> {
+        Binding(
+            get: { preferences.testingFeaturesEnabled },
+            set: { preferences.setTestingFeaturesEnabled($0) }
         )
     }
 }

@@ -76,6 +76,8 @@ struct FeatureModelTests {
         preferences.setCalendarReminderLeadTimeMinutes(5)
         preferences.setPreferredDisplayID("42")
         preferences.setExternalNotchStyle(.rectangle)
+        preferences.setCollapsedIndicatorMaximumPerSide(4)
+        preferences.setTestingFeaturesEnabled(true)
 
         let restoredPreferences = NotchPreferences(defaults: defaults)
         #expect(restoredPreferences.pageOrder == [.github, .calendar, .agents])
@@ -86,6 +88,8 @@ struct FeatureModelTests {
         #expect(restoredPreferences.calendarReminderLeadTime == 5 * 60)
         #expect(restoredPreferences.preferredDisplayID == "42")
         #expect(restoredPreferences.externalNotchStyle == .rectangle)
+        #expect(restoredPreferences.collapsedIndicatorMaximumPerSide == 4)
+        #expect(restoredPreferences.testingFeaturesEnabled)
 
         defaults.removePersistentDomain(forName: suiteName)
     }
@@ -94,11 +98,18 @@ struct FeatureModelTests {
     func closedNotchIndicatorPreviewsCanBeEnabledAndDisabled() {
         let preferences = NotchPreferences(defaults: UserDefaults(suiteName: "PulseNotchTests.\(#function)")!)
 
+        preferences.setTestingFeaturesEnabled(true)
         preferences.setCollapsedIndicatorPreview(.calendar, isEnabled: true)
         preferences.setCollapsedIndicatorPreview(.githubActions, isEnabled: true)
         preferences.setCollapsedIndicatorPreview(.calendar, isEnabled: false)
+        preferences.setCollapsedIndicatorMaximumPerSide(9)
 
         #expect(preferences.collapsedIndicatorPreviews == [.githubActions])
+        #expect(preferences.collapsedIndicatorMaximumPerSide == 5)
+
+        preferences.setTestingFeaturesEnabled(false)
+
+        #expect(preferences.collapsedIndicatorPreviews.isEmpty)
     }
 }
 

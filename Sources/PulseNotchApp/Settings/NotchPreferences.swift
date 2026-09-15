@@ -69,6 +69,8 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var preferredDisplayID: String?
     @Published private(set) var externalNotchStyle: ExternalNotchStyle
     @Published private(set) var collapsedIndicatorPreviews: Set<CollapsedIndicatorPreview> = []
+    @Published private(set) var collapsedIndicatorMaximumPerSide: Int
+    @Published private(set) var testingFeaturesEnabled: Bool
 
     private enum Keys {
         static let pageOrder = "settings.pageOrder"
@@ -80,6 +82,8 @@ final class NotchPreferences: ObservableObject {
         static let shortcuts = "settings.shortcuts"
         static let preferredDisplayID = "settings.preferredDisplayID"
         static let externalNotchStyle = "settings.externalNotchStyle"
+        static let collapsedIndicatorMaximumPerSide = "settings.collapsedIndicatorMaximumPerSide"
+        static let testingFeaturesEnabled = "settings.testingFeaturesEnabled"
     }
 
     private let defaults: UserDefaults
@@ -97,6 +101,10 @@ final class NotchPreferences: ObservableObject {
         shortcuts = Self.shortcuts(from: defaults.data(forKey: Keys.shortcuts))
         preferredDisplayID = defaults.string(forKey: Keys.preferredDisplayID)
         externalNotchStyle = ExternalNotchStyle(rawValue: defaults.string(forKey: Keys.externalNotchStyle) ?? "") ?? .capsule
+        collapsedIndicatorMaximumPerSide = Self.clampedCollapsedIndicatorMaximum(
+            defaults.object(forKey: Keys.collapsedIndicatorMaximumPerSide) as? Int ?? 3
+        )
+        testingFeaturesEnabled = defaults.bool(forKey: Keys.testingFeaturesEnabled)
         startupError = nil
     }
 
@@ -158,7 +166,22 @@ final class NotchPreferences: ObservableObject {
     }
 
     func setCollapsedIndicatorPreview(_ preview: CollapsedIndicatorPreview, isEnabled: Bool) {
+        guard testingFeaturesEnabled else { return }
         if isEnabled { collapsedIndicatorPreviews.insert(preview) } else { collapsedIndicatorPreviews.remove(preview) }
+    }
+
+    func setTestingFeaturesEnabled(_ isEnabled: Bool) {
+        guard testingFeaturesEnabled != isEnabled else { return }
+        testingFeaturesEnabled = isEnabled
+        if !isEnabled { collapsedIndicatorPreviews.removeAll() }
+        defaults.set(isEnabled, forKey: Keys.testingFeaturesEnabled)
+    }
+
+    func setCollapsedIndicatorMaximumPerSide(_ maximum: Int) {
+        let value = Self.clampedCollapsedIndicatorMaximum(maximum)
+        guard collapsedIndicatorMaximumPerSide != value else { return }
+        collapsedIndicatorMaximumPerSide = value
+        defaults.set(value, forKey: Keys.collapsedIndicatorMaximumPerSide)
     }
 
     func movePages(from offsets: IndexSet, to destination: Int) {
@@ -202,6 +225,10 @@ final class NotchPreferences: ObservableObject {
 
     private static func validPages(from storedPages: [String]?) -> [NotchPage] {
         storedPages?.compactMap(NotchPage.init(rawValue:)) ?? []
+    }
+
+    private static func clampedCollapsedIndicatorMaximum(_ maximum: Int) -> Int {
+        min(max(maximum, 1), 5)
     }
 
     private static func shortcuts(from data: Data?) -> [ShortcutAction: AppShortcut] {
