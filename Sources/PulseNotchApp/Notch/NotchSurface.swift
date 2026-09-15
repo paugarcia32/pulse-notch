@@ -6,6 +6,9 @@ struct NotchSurface: View {
     @ObservedObject var codingAgentModel: CodingAgentFeatureModel
     @ObservedObject var gitHubModel: GitHubFeatureModel
     @ObservedObject var batteryModel: BatteryFeatureModel
+    @ObservedObject var volumeModel: VolumeFeatureModel
+    @ObservedObject var brightnessModel: BrightnessFeatureModel
+    @ObservedObject var systemActivityModel: SystemActivityFeatureModel
     @ObservedObject var preferences: NotchPreferences
     let isExternalDisplay: Bool
     let physicalNotchSize: CGSize?
@@ -15,15 +18,75 @@ struct NotchSurface: View {
     @State private var pageDragOffset: CGFloat = 0
     @State private var isHoveringPageIndicator = false
     @State private var hoverTask: Task<Void, Never>?
-    @State private var chargingActivityTask: Task<Void, Never>?
+    @State private var systemActivityTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 15)) { notch(at: $0.date) }
+        activitySurface
+    }
+
+    private var navigationSurface: some View {
+        refreshingSurface
+        .onChange(of: codingAgentModel.state) { _, _ in
+            acknowledgeCompletedActivity()
+        }
+        .onChange(of: gitHubModel.actionSessions) { _, _ in
+            acknowledgeCompletedActivity()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchOpen)) { _ in toggleNotch() }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchClose)) { _ in closeNotch() }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowCalendar)) { _ in
+            openNotch()
+            selectPage(.calendar)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowAgents)) { _ in
+            openNotch()
+            selectPage(.agents)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowGitHub)) { _ in
+            openNotch()
+            selectPage(.github)
+        }
+        .onChange(of: preferences.orderedVisiblePages) { _, pages in handleVisiblePagesChange(pages) }
+        .onChange(of: isExpanded) { _, expanded in onExpansionChanged(expanded) }
+    }
+
+    private var activitySurface: some View {
+        navigationSurface
+        .onChange(of: batteryModel.chargingActivity) { _, activity in handleChargingActivity(activity) }
+        .onChange(of: volumeModel.activity) { _, activity in handleVolumeActivity(activity) }
+        .onChange(of: brightnessModel.activity) { _, activity in handleBrightnessActivity(activity) }
+        .onChange(of: preferences.testingSystemActivityTrigger) { _, _ in
+            showTestingSystemActivity()
+        }
+        .onChange(of: systemActivityModel.activity) { _, activity in scheduleSystemActivityDismissal(activity) }
+        .onChange(of: preferences.showChargingActivity) { _, isShown in dismissSystemActivity(.charging, when: !isShown) }
+        .onChange(of: preferences.showVolumeActivity) { _, isShown in dismissSystemActivity(.volume(isMuted: false), when: !isShown) }
+        .onChange(of: preferences.showBrightnessActivity) { _, isShown in dismissSystemActivity(.brightness, when: !isShown) }
+        .onDisappear {
+            systemActivityTask?.cancel()
+            volumeModel.stopMonitoring()
+            brightnessModel.stopMonitoring()
+        }
+    }
+
+    private var refreshingSurface: some View {
+        surface
         .task {
             while !Task.isCancelled {
                 await calendarModel.refresh()
                 try? await Task.sleep(for: .seconds(30))
+            }
+        }
+        .task { await volumeModel.startMonitoring() }
+        .task {
+            await brightnessModel.startMonitoring()
+            // ponytail: CoreBrightness has no public observation API. This
+            // keeps unsupported systems responsive while notifications cover
+            // the usual immediate path.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                await brightnessModel.refresh()
             }
         }
         .task {
@@ -52,46 +115,61 @@ struct NotchSurface: View {
                 try? await Task.sleep(for: .seconds(60))
             }
         }
-        .onChange(of: codingAgentModel.state) { _, _ in
-            if isExpanded { codingAgentModel.acknowledgeCompletedSessions() }
+    }
+
+    private var surface: some View {
+        TimelineView(.periodic(from: .now, by: 15)) { context in
+            notch(at: context.date)
         }
-        .onChange(of: gitHubModel.actionSessions) { _, _ in
-            if isExpanded { gitHubModel.acknowledgeCompletedActions() }
+    }
+
+    private func handleChargingActivity(_ activity: BatteryFeatureModel.ChargingActivity?) {
+        guard let activity else { return }
+        if preferences.showChargingActivity {
+            systemActivityModel.present(kind: .charging, level: activity.chargeLevel)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchOpen)) { _ in toggleNotch() }
-        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchClose)) { _ in closeNotch() }
-        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowCalendar)) { _ in
-            openNotch()
-            selectPage(.calendar)
+        batteryModel.dismissChargingActivity(id: activity.id)
+    }
+
+    private func handleVisiblePagesChange(_ pages: [NotchPage]) {
+        if !pages.contains(selectedPage), let firstPage = pages.first {
+            selectedPage = firstPage
         }
-        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowAgents)) { _ in
-            openNotch()
-            selectPage(.agents)
+    }
+
+    private func acknowledgeCompletedActivity() {
+        guard isExpanded else { return }
+        codingAgentModel.acknowledgeCompletedSessions()
+        gitHubModel.acknowledgeCompletedActions()
+    }
+
+    private func handleVolumeActivity(_ activity: SystemVolumeStatus?) {
+        guard let activity else { return }
+        if preferences.showVolumeActivity {
+            systemActivityModel.present(kind: .volume(isMuted: activity.isMuted), level: activity.level)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowGitHub)) { _ in
-            openNotch()
-            selectPage(.github)
+        volumeModel.consumeActivity()
+    }
+
+    private func handleBrightnessActivity(_ activity: DisplayBrightnessStatus?) {
+        guard let activity else { return }
+        if preferences.showBrightnessActivity {
+            systemActivityModel.present(kind: .brightness, level: activity.level)
         }
-        .onChange(of: preferences.orderedVisiblePages) { _, pages in
-            if !pages.contains(selectedPage), let firstPage = pages.first { selectedPage = firstPage }
+        brightnessModel.consumeActivity()
+    }
+
+    private func showTestingSystemActivity() {
+        switch preferences.testingSystemActivity {
+        case .charging where preferences.showChargingActivity:
+            systemActivityModel.present(kind: .charging, level: 72)
+        case .volume where preferences.showVolumeActivity:
+            systemActivityModel.present(kind: .volume(isMuted: false), level: 64)
+        case .brightness where preferences.showBrightnessActivity:
+            systemActivityModel.present(kind: .brightness, level: 72)
+        case nil, .charging, .volume, .brightness:
+            break
         }
-        .onChange(of: isExpanded) { _, expanded in onExpansionChanged(expanded) }
-        .onChange(of: batteryModel.chargingActivity) { _, activity in
-            guard preferences.showChargingActivity else {
-                if let activity { batteryModel.dismissChargingActivity(id: activity.id) }
-                return
-            }
-            scheduleChargingActivityDismissal(activity)
-        }
-        .onChange(of: preferences.testingChargingActivityTrigger) { _, trigger in
-            guard trigger > 0, preferences.showChargingActivity else { return }
-            batteryModel.showChargingActivity(chargeLevel: 72)
-        }
-        .onChange(of: preferences.showChargingActivity) { _, isShown in
-            guard !isShown, let activity = batteryModel.chargingActivity else { return }
-            batteryModel.dismissChargingActivity(id: activity.id)
-        }
-        .onDisappear { chargingActivityTask?.cancel() }
     }
 
     private func notch(at date: Date) -> some View {
@@ -104,7 +182,7 @@ struct NotchSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background { notchBackground }
         .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: isExpanded)
-        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: batteryModel.chargingActivity)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: systemActivityModel.activity)
         .onChange(of: isExpanded) { _, isOpen in
             if isOpen { NotchHapticFeedback.performOpen() }
         }
@@ -116,8 +194,8 @@ struct NotchSurface: View {
 
     @ViewBuilder
     private func collapsedIndicators(at date: Date) -> some View {
-        if preferences.showChargingActivity, let activity = batteryModel.chargingActivity {
-            chargingActivity(activity)
+        if let activity = systemActivityModel.activity {
+            systemActivity(activity)
                 .transition(
                     .asymmetric(
                         insertion: .opacity
@@ -154,42 +232,49 @@ struct NotchSurface: View {
     }
 
     @ViewBuilder
-    private func chargingActivity(_ activity: BatteryFeatureModel.ChargingActivity) -> some View {
+    private func systemActivity(_ activity: SystemActivityFeatureModel.Activity) -> some View {
         if let physicalNotchSize {
             HStack(spacing: 0) {
-                Image(systemName: "battery.100percent.bolt")
+                Image(systemName: activity.symbolName)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.green)
-                    .frame(width: 40, height: physicalNotchSize.height, alignment: .trailing)
-                    .padding(.trailing, 8)
+                    .foregroundStyle(activity.color)
+                    .frame(width: systemActivitySideWidth, height: physicalNotchSize.height)
 
                 Color.clear
                     .frame(width: physicalNotchSize.width, height: physicalNotchSize.height)
                     .accessibilityHidden(true)
 
-                Text("\(activity.chargeLevel)%")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.green)
-                    .frame(width: 46, height: physicalNotchSize.height, alignment: .trailing)
-                    .padding(.leading, 8)
-                    .padding(.trailing, 10)
+                activityLevel(activity)
+                    .frame(width: systemActivitySideWidth, height: physicalNotchSize.height)
             }
             .background { AttachedNotchShape(bottomCornerRadius: 8).fill(.black) }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: physicalNotchSize.width + 2 * systemActivitySideWidth, height: physicalNotchSize.height)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Battery connected, \(activity.chargeLevel) percent")
+            .accessibilityLabel(activity.accessibilityLabel)
         } else {
             HStack(spacing: 8) {
-                Image(systemName: "battery.100percent.bolt")
-                Text("\(activity.chargeLevel)%")
-                    .monospacedDigit()
+                Image(systemName: activity.symbolName)
+                activityLevel(activity)
             }
             .font(.system(size: 14, weight: .semibold, design: .rounded))
-            .foregroundStyle(.green)
+            .foregroundStyle(activity.color)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Battery connected, \(activity.chargeLevel) percent")
+            .accessibilityLabel(activity.accessibilityLabel)
+        }
+    }
+
+    private var systemActivitySideWidth: CGFloat { 38 }
+
+    @ViewBuilder
+    private func activityLevel(_ activity: SystemActivityFeatureModel.Activity) -> some View {
+        if activity.showsCircularLevel {
+            ActivityLevelRing(level: activity.level, color: activity.color, reduceMotion: reduceMotion)
+        } else {
+            Text("\(activity.level)%")
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(activity.color)
         }
     }
 
@@ -362,14 +447,19 @@ struct NotchSurface: View {
         ).filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
     }
 
-    private func scheduleChargingActivityDismissal(_ activity: BatteryFeatureModel.ChargingActivity?) {
-        chargingActivityTask?.cancel()
+    private func scheduleSystemActivityDismissal(_ activity: SystemActivityFeatureModel.Activity?) {
+        systemActivityTask?.cancel()
         guard let activity else { return }
-        chargingActivityTask = Task { @MainActor in
+        systemActivityTask = Task { @MainActor in
             try? await Task.sleep(for: preferences.transientSystemActivityDuration)
             guard !Task.isCancelled else { return }
-            batteryModel.dismissChargingActivity(id: activity.id)
+            systemActivityModel.dismiss(id: activity.id)
         }
+    }
+
+    private func dismissSystemActivity(_ kind: SystemActivityFeatureModel.Kind, when condition: Bool) {
+        guard condition, let activity = systemActivityModel.activity, activity.kind.matches(kind) else { return }
+        systemActivityModel.dismiss(id: activity.id)
     }
 
     private func openNotch() {

@@ -46,6 +46,9 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     let codingAgentModel = CodingAgentFeatureModel(provider: LocalCodingAgentProvider())
     let gitHubModel = GitHubFeatureModel(provider: GitHubCLIProvider())
     let batteryModel = BatteryFeatureModel(provider: IOKitBatteryProvider())
+    let volumeModel = VolumeFeatureModel(provider: SystemVolumeProvider())
+    let brightnessModel = BrightnessFeatureModel(provider: DisplayBrightnessProvider())
+    let systemActivityModel = SystemActivityFeatureModel()
 
     private var panel: NotchPanel?
     private var localEventMonitor: Any?
@@ -134,6 +137,9 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             codingAgentModel: codingAgentModel,
             gitHubModel: gitHubModel,
             batteryModel: batteryModel,
+            volumeModel: volumeModel,
+            brightnessModel: brightnessModel,
+            systemActivityModel: systemActivityModel,
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),
             physicalNotchSize: size.physicalNotchSize,
@@ -149,6 +155,9 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             codingAgentModel: codingAgentModel,
             gitHubModel: gitHubModel,
             batteryModel: batteryModel,
+            volumeModel: volumeModel,
+            brightnessModel: brightnessModel,
+            systemActivityModel: systemActivityModel,
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),
             physicalNotchSize: size.physicalNotchSize,
@@ -258,7 +267,9 @@ private final class NotchPanel: NSPanel {
         )
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        // The black SwiftUI surface supplies the physical notch edge. A panel
+        // shadow adds a light halo in Dark Mode around this borderless window.
+        hasShadow = false
         level = .statusBar
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         hidesOnDeactivate = false

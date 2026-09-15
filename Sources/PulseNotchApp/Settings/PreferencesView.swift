@@ -58,6 +58,8 @@ struct PreferencesView: View {
 
                 Section("Temporary system activities") {
                     Toggle("Show charging activity", isOn: showChargingActivity)
+                    Toggle("Show volume activity", isOn: showVolumeActivity)
+                    Toggle("Show brightness activity", isOn: showBrightnessActivity)
                     Stepper(value: transientSystemActivityDurationSeconds, in: 1...10) {
                         Text("Show for \(preferences.transientSystemActivityDurationSeconds) seconds")
                     }
@@ -120,10 +122,18 @@ struct PreferencesView: View {
 
                     Section("Priority activities") {
                         Button("Show charging activity") {
-                            preferences.triggerTestingChargingActivity()
+                            preferences.triggerTestingSystemActivity(.charging)
                         }
                         .disabled(!preferences.showChargingActivity)
                         .accessibilityHint("Temporarily replaces the closed notch previews")
+                        Button("Show volume activity") {
+                            preferences.triggerTestingSystemActivity(.volume)
+                        }
+                        .disabled(!preferences.showVolumeActivity)
+                        Button("Show brightness activity") {
+                            preferences.triggerTestingSystemActivity(.brightness)
+                        }
+                        .disabled(!preferences.showBrightnessActivity)
                     }
                 }
                 .formStyle(.grouped)
@@ -159,6 +169,20 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.showChargingActivity },
             set: { preferences.setShowChargingActivity($0) }
+        )
+    }
+
+    private var showVolumeActivity: Binding<Bool> {
+        Binding(
+            get: { preferences.showVolumeActivity },
+            set: { preferences.setShowVolumeActivity($0) }
+        )
+    }
+
+    private var showBrightnessActivity: Binding<Bool> {
+        Binding(
+            get: { preferences.showBrightnessActivity },
+            set: { preferences.setShowBrightnessActivity($0) }
         )
     }
 

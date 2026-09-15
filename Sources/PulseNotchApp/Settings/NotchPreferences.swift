@@ -51,6 +51,12 @@ enum ExternalNotchStyle: String, CaseIterable {
     }
 }
 
+enum TestingSystemActivity: Equatable {
+    case charging
+    case volume
+    case brightness
+}
+
 @MainActor
 final class NotchPreferences: ObservableObject {
     @Published private(set) var pageOrder: [NotchPage]
@@ -66,6 +72,8 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var calendarReminderLeadTimeMinutes: Int
     @Published private(set) var transientSystemActivityDurationSeconds: Int
     @Published private(set) var showChargingActivity: Bool
+    @Published private(set) var showVolumeActivity: Bool
+    @Published private(set) var showBrightnessActivity: Bool
     @Published private(set) var shortcuts: [ShortcutAction: AppShortcut]
     @Published private(set) var startupError: String?
     @Published private(set) var preferredDisplayID: String?
@@ -74,7 +82,8 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var collapsedIndicatorMaximumPerSide: Int
     @Published private(set) var visibleCollapsedIndicatorCategories: Set<CollapsedNotchIndicatorCategory>
     @Published private(set) var testingFeaturesEnabled: Bool
-    @Published private(set) var testingChargingActivityTrigger = 0
+    @Published private(set) var testingSystemActivity: TestingSystemActivity?
+    @Published private(set) var testingSystemActivityTrigger: UUID?
 
     private enum Keys {
         static let pageOrder = "settings.pageOrder"
@@ -85,6 +94,8 @@ final class NotchPreferences: ObservableObject {
         static let calendarReminderLeadTimeMinutes = "settings.calendarReminderLeadTimeMinutes"
         static let transientSystemActivityDurationSeconds = "settings.transientSystemActivityDurationSeconds"
         static let showChargingActivity = "settings.showChargingActivity"
+        static let showVolumeActivity = "settings.showVolumeActivity"
+        static let showBrightnessActivity = "settings.showBrightnessActivity"
         static let shortcuts = "settings.shortcuts"
         static let preferredDisplayID = "settings.preferredDisplayID"
         static let externalNotchStyle = "settings.externalNotchStyle"
@@ -109,6 +120,8 @@ final class NotchPreferences: ObservableObject {
             defaults.object(forKey: Keys.transientSystemActivityDurationSeconds) as? Int ?? 3
         )
         showChargingActivity = defaults.object(forKey: Keys.showChargingActivity) as? Bool ?? true
+        showVolumeActivity = defaults.object(forKey: Keys.showVolumeActivity) as? Bool ?? true
+        showBrightnessActivity = defaults.object(forKey: Keys.showBrightnessActivity) as? Bool ?? true
         shortcuts = Self.shortcuts(from: defaults.data(forKey: Keys.shortcuts))
         preferredDisplayID = defaults.string(forKey: Keys.preferredDisplayID)
         externalNotchStyle = ExternalNotchStyle(rawValue: defaults.string(forKey: Keys.externalNotchStyle) ?? "") ?? .capsule
@@ -119,6 +132,8 @@ final class NotchPreferences: ObservableObject {
             from: defaults.stringArray(forKey: Keys.visibleCollapsedIndicatorCategories)
         )
         testingFeaturesEnabled = defaults.bool(forKey: Keys.testingFeaturesEnabled)
+        testingSystemActivity = nil
+        testingSystemActivityTrigger = nil
         startupError = nil
     }
 
@@ -179,6 +194,18 @@ final class NotchPreferences: ObservableObject {
         defaults.set(isShown, forKey: Keys.showChargingActivity)
     }
 
+    func setShowVolumeActivity(_ isShown: Bool) {
+        guard showVolumeActivity != isShown else { return }
+        showVolumeActivity = isShown
+        defaults.set(isShown, forKey: Keys.showVolumeActivity)
+    }
+
+    func setShowBrightnessActivity(_ isShown: Bool) {
+        guard showBrightnessActivity != isShown else { return }
+        showBrightnessActivity = isShown
+        defaults.set(isShown, forKey: Keys.showBrightnessActivity)
+    }
+
     func setPreferredDisplayID(_ displayID: String?) {
         guard preferredDisplayID != displayID else { return }
         preferredDisplayID = displayID
@@ -209,9 +236,10 @@ final class NotchPreferences: ObservableObject {
         collapsedIndicatorPreviewCounts[preview] = min(max(count, 0), preview.maximumPreviewCount)
     }
 
-    func triggerTestingChargingActivity() {
+    func triggerTestingSystemActivity(_ activity: TestingSystemActivity) {
         guard testingFeaturesEnabled else { return }
-        testingChargingActivityTrigger += 1
+        testingSystemActivity = activity
+        testingSystemActivityTrigger = UUID()
     }
 
     func setCollapsedIndicatorMaximumPerSide(_ maximum: Int) {

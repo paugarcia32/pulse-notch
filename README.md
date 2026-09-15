@@ -17,6 +17,7 @@ The repository currently contains the first executable product slice:
   also available with Command-1 and Command-2.
 - Animated running and recently-completed agent indicators in the collapsed notch.
 - A temporary charging activity with the current battery percentage when external power connects.
+- Temporary volume and display-brightness activities that replace collapsed indicators.
 - Live Codex five-hour and weekly usage gauges on the coding-agent page.
 - Agent cards with project, Git branch, and elapsed-session context when available.
 - A GitHub page for your open and draft pull requests, with comments, passed checks,
@@ -55,6 +56,14 @@ per second. Connecting external power temporarily replaces collapsed indicators 
 a charging icon and percentage; its duration and visibility are configurable in
 Settings > General. Battery state is kept only in memory and needs
 no permission.
+
+Volume changes use a local Core Audio listener, so the activity follows each key
+press rather than waiting for a polling interval. Display brightness observes
+CoreBrightness changes when macOS publishes them, with a short local polling
+fallback for the built-in display. IOKit remains the first reader and the local
+CoreBrightness diagnostic handles Macs where IOKit does not expose that value.
+Their visibility and duration use the same Settings > General controls as
+charging. External displays without a compatible brightness control remain quiet.
 
 For active sessions, Pulse Notch reads the working directory and Git branch locally
 when the agent exposes them. It does not read or show coding-agent prompts or thread

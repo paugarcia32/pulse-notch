@@ -72,6 +72,36 @@ struct FeatureModelTests {
     }
 
     @Test
+    func volumeModelShowsAnActivityWhenVolumeChanges() async {
+        let provider = VolumeSequenceProvider(statuses: [
+            SystemVolumeStatus(level: 40, isMuted: false),
+            SystemVolumeStatus(level: 52, isMuted: false)
+        ])
+        let model = VolumeFeatureModel(provider: provider)
+
+        await model.refresh()
+        #expect(model.activity == nil)
+
+        await model.refresh()
+        #expect(model.activity == SystemVolumeStatus(level: 52, isMuted: false))
+    }
+
+    @Test
+    func brightnessModelShowsAnActivityWhenBrightnessChanges() async {
+        let provider = BrightnessSequenceProvider(statuses: [
+            DisplayBrightnessStatus(level: 40),
+            DisplayBrightnessStatus(level: 52)
+        ])
+        let model = BrightnessFeatureModel(provider: provider)
+
+        await model.refresh()
+        #expect(model.activity == nil)
+
+        await model.refresh()
+        #expect(model.activity == DisplayBrightnessStatus(level: 52))
+    }
+
+    @Test
     func moreEventsLabelIncludesTheRemainingEventCount() {
         #expect(CalendarPage.moreEventsTitle(remainingCount: 3) == "Show 3 more events")
     }
@@ -100,12 +130,14 @@ struct FeatureModelTests {
         preferences.setCalendarReminderLeadTimeMinutes(5)
         preferences.setTransientSystemActivityDurationSeconds(6)
         preferences.setShowChargingActivity(false)
+        preferences.setShowVolumeActivity(false)
+        preferences.setShowBrightnessActivity(false)
         preferences.setPreferredDisplayID("42")
         preferences.setExternalNotchStyle(.rectangle)
         preferences.setCollapsedIndicatorMaximumPerSide(4)
         preferences.setCollapsedIndicatorCategory(.githubActions, isVisible: false)
         preferences.setTestingFeaturesEnabled(true)
-        preferences.triggerTestingChargingActivity()
+        preferences.triggerTestingSystemActivity(.volume)
 
         let restoredPreferences = NotchPreferences(defaults: defaults)
         #expect(restoredPreferences.pageOrder == [.github, .calendar, .agents])
@@ -116,6 +148,8 @@ struct FeatureModelTests {
         #expect(restoredPreferences.calendarReminderLeadTime == 5 * 60)
         #expect(restoredPreferences.transientSystemActivityDurationSeconds == 6)
         #expect(!restoredPreferences.showChargingActivity)
+        #expect(!restoredPreferences.showVolumeActivity)
+        #expect(!restoredPreferences.showBrightnessActivity)
         #expect(restoredPreferences.preferredDisplayID == "42")
         #expect(restoredPreferences.externalNotchStyle == .rectangle)
         #expect(restoredPreferences.collapsedIndicatorMaximumPerSide == 4)
@@ -123,7 +157,8 @@ struct FeatureModelTests {
         #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.calendar))
         #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
         #expect(restoredPreferences.testingFeaturesEnabled)
-        #expect(preferences.testingChargingActivityTrigger == 1)
+        #expect(preferences.testingSystemActivity == .volume)
+        #expect(preferences.testingSystemActivityTrigger != nil)
 
         defaults.removePersistentDomain(forName: suiteName)
     }
@@ -210,6 +245,30 @@ private actor BatterySequenceProvider: BatteryStatusProviding {
     }
 
     func currentBatteryStatus() async throws -> BatteryStatus {
+        statuses.removeFirst()
+    }
+}
+
+private actor VolumeSequenceProvider: SystemVolumeProviding {
+    private var statuses: [SystemVolumeStatus]
+
+    init(statuses: [SystemVolumeStatus]) {
+        self.statuses = statuses
+    }
+
+    func currentVolumeStatus() async throws -> SystemVolumeStatus {
+        statuses.removeFirst()
+    }
+}
+
+private actor BrightnessSequenceProvider: DisplayBrightnessProviding {
+    private var statuses: [DisplayBrightnessStatus]
+
+    init(statuses: [DisplayBrightnessStatus]) {
+        self.statuses = statuses
+    }
+
+    func currentDisplayBrightness() async throws -> DisplayBrightnessStatus {
         statuses.removeFirst()
     }
 }
