@@ -68,6 +68,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var startupError: String?
     @Published private(set) var preferredDisplayID: String?
     @Published private(set) var externalNotchStyle: ExternalNotchStyle
+    @Published private(set) var collapsedIndicatorPreviews: Set<CollapsedIndicatorPreview> = []
 
     private enum Keys {
         static let pageOrder = "settings.pageOrder"
@@ -154,6 +155,10 @@ final class NotchPreferences: ObservableObject {
         externalNotchStyle = style
         defaults.set(style.rawValue, forKey: Keys.externalNotchStyle)
         NotificationCenter.default.post(name: .pulseNotchDisplayPreferencesChanged, object: nil)
+    }
+
+    func setCollapsedIndicatorPreview(_ preview: CollapsedIndicatorPreview, isEnabled: Bool) {
+        if isEnabled { collapsedIndicatorPreviews.insert(preview) } else { collapsedIndicatorPreviews.remove(preview) }
     }
 
     func movePages(from offsets: IndexSet, to destination: Int) {

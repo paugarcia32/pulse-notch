@@ -39,6 +39,48 @@ struct NotchIndicator: Identifiable {
 
 }
 
+enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
+    case calendar
+    case githubActions
+    case codex
+    case claude
+    case cursor
+    case antigravity
+    case opencode
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .calendar: "Calendar countdown"
+        case .githubActions: "GitHub Actions"
+        case .codex: "Codex agent"
+        case .claude: "Claude agent"
+        case .cursor: "Cursor agent"
+        case .antigravity: "Antigravity agent"
+        case .opencode: "OpenCode agent"
+        }
+    }
+
+    var indicator: NotchIndicator {
+        switch self {
+        case .calendar:
+            return NotchIndicator(id: rawValue, content: .upcomingCalendarEvent(minutesUntilStart: 31), accessibilityLabel: "Next calendar event starts in 31 minutes")
+        case .githubActions:
+            return NotchIndicator(id: rawValue, content: .githubActions(.running), accessibilityLabel: "GitHub Actions running")
+        case .codex: return runningAgent(.codex)
+        case .claude: return runningAgent(.claude)
+        case .cursor: return runningAgent(.cursor)
+        case .antigravity: return runningAgent(.antigravity)
+        case .opencode: return runningAgent(.opencode)
+        }
+    }
+
+    private func runningAgent(_ kind: CodingAgentKind) -> NotchIndicator {
+        NotchIndicator(id: rawValue, content: .runningAgent(kind), accessibilityLabel: "\(kind.displayName) agent running")
+    }
+}
+
 enum CollapsedNotchIndicators {
     static func make(
         schedule: CalendarEventSchedule?,
@@ -134,19 +176,16 @@ struct CalendarCountdownIndicator: View {
 
     var body: some View {
         HStack {
-            CalendarCountdownMark(color: color)
+            CalendarCountdownIcon(color: color)
             Spacer(minLength: 0)
-            Text("\(minutesUntilStart)m")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .contentTransition(reduceMotion ? .identity : .numericText())
-                .monospacedDigit()
+            CalendarCountdownValue(minutesUntilStart: minutesUntilStart, reduceMotion: reduceMotion)
         }
         .foregroundStyle(color)
         .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: minutesUntilStart)
     }
 }
 
-private struct CalendarCountdownMark: View {
+struct CalendarCountdownIcon: View {
     let color: Color
 
     var body: some View {
@@ -161,6 +200,20 @@ private struct CalendarCountdownMark: View {
                 .offset(x: 2, y: 2)
         }
         .frame(height: 17)
+        .foregroundStyle(color)
+    }
+}
+
+struct CalendarCountdownValue: View {
+    let minutesUntilStart: Int
+    let reduceMotion: Bool
+
+    var body: some View {
+        Text("\(minutesUntilStart)m")
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .contentTransition(reduceMotion ? .identity : .numericText())
+            .monospacedDigit()
+            .fixedSize(horizontal: true, vertical: false)
     }
 }
 

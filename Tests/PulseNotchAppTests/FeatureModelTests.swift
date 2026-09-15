@@ -89,6 +89,17 @@ struct FeatureModelTests {
 
         defaults.removePersistentDomain(forName: suiteName)
     }
+
+    @Test
+    func closedNotchIndicatorPreviewsCanBeEnabledAndDisabled() {
+        let preferences = NotchPreferences(defaults: UserDefaults(suiteName: "PulseNotchTests.\(#function)")!)
+
+        preferences.setCollapsedIndicatorPreview(.calendar, isEnabled: true)
+        preferences.setCollapsedIndicatorPreview(.githubActions, isEnabled: true)
+        preferences.setCollapsedIndicatorPreview(.calendar, isEnabled: false)
+
+        #expect(preferences.collapsedIndicatorPreviews == [.githubActions])
+    }
 }
 
 private struct CalendarProviderFake: CalendarEventProviding {

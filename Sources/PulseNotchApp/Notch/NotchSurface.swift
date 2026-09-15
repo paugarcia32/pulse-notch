@@ -7,6 +7,7 @@ struct NotchSurface: View {
     @ObservedObject var gitHubModel: GitHubFeatureModel
     @ObservedObject var preferences: NotchPreferences
     let isExternalDisplay: Bool
+    let physicalNotchSize: CGSize?
     let onExpansionChanged: (Bool) -> Void
     @State private var isExpanded = false
     @State private var selectedPage = NotchPage.calendar
@@ -90,7 +91,9 @@ struct NotchSurface: View {
     @ViewBuilder
     private func collapsedIndicators(at date: Date) -> some View {
         let currentIndicators = indicators(at: date)
-        if case let .upcomingCalendarEvent(minutesUntilStart) = currentIndicators.first?.content {
+        if let physicalNotchSize {
+            physicalNotchIndicators(currentIndicators, notchSize: physicalNotchSize)
+        } else if case let .upcomingCalendarEvent(minutesUntilStart) = currentIndicators.first?.content {
             CalendarCountdownIndicator(
                 minutesUntilStart: minutesUntilStart,
                 color: currentIndicators[0].color,
@@ -110,6 +113,64 @@ struct NotchSurface: View {
         }
     }
 
+    private func physicalNotchIndicators(_ indicators: [NotchIndicator], notchSize: CGSize) -> some View {
+        let calendarIndicator = indicators.first { indicator in
+            if case .upcomingCalendarEvent = indicator.content { return true }
+            return false
+        }
+        let otherIndicators = indicators.filter { $0.id != calendarIndicator?.id }
+        let leftCount = calendarIndicator == nil ? 3 : 2
+        let leftIndicators = Array(otherIndicators.prefix(leftCount))
+        let rightIndicators = Array(otherIndicators.dropFirst(leftCount))
+        let leftWidth = collapsedSideWidth(itemCount: leftIndicators.count + (calendarIndicator == nil ? 0 : 1))
+        let rightWidth = collapsedSideWidth(
+            itemCount: rightIndicators.count,
+            includesCalendarCountdown: calendarIndicator != nil
+        )
+
+        return HStack(spacing: 0) {
+            HStack(spacing: 8) {
+                ForEach(leftIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
+                if let calendarIndicator {
+                    CalendarCountdownIcon(color: calendarIndicator.color)
+                        .accessibilityLabel(calendarIndicator.accessibilityLabel)
+                }
+            }
+            .padding(.leading, NotchSurfaceSize.collapsedIndicatorOuterPadding)
+            .padding(.trailing, NotchSurfaceSize.physicalNotchContentSpacing)
+            .frame(width: leftWidth, height: notchSize.height, alignment: .trailing)
+
+            Color.clear
+                .frame(width: notchSize.width, height: notchSize.height)
+                .accessibilityHidden(true)
+
+            HStack(spacing: 8) {
+                if let calendarIndicator, case let .upcomingCalendarEvent(minutesUntilStart) = calendarIndicator.content {
+                    CalendarCountdownValue(minutesUntilStart: minutesUntilStart, reduceMotion: reduceMotion)
+                        .foregroundStyle(calendarIndicator.color)
+                        .accessibilityHidden(true)
+                }
+                ForEach(rightIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
+            }
+            .padding(.leading, NotchSurfaceSize.physicalNotchContentSpacing)
+            .padding(.trailing, NotchSurfaceSize.collapsedIndicatorOuterPadding)
+            .frame(width: rightWidth, height: notchSize.height, alignment: .leading)
+        }
+        .background { AttachedNotchShape(bottomCornerRadius: 8).fill(.black) }
+        .offset(x: (rightWidth - leftWidth) / 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func collapsedSideWidth(itemCount: Int, includesCalendarCountdown: Bool = false) -> CGFloat {
+        guard itemCount > 0 || includesCalendarCountdown else { return 0 }
+        let contentWidth = CGFloat(itemCount) * 16
+            + (includesCalendarCountdown ? 28 : 0)
+            + CGFloat(max(itemCount - 1 + (includesCalendarCountdown && itemCount > 0 ? 1 : 0), 0)) * 8
+        return contentWidth
+            + NotchSurfaceSize.collapsedIndicatorOuterPadding
+            + NotchSurfaceSize.physicalNotchContentSpacing
+    }
+
     private func expandedContent(at date: Date) -> some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
@@ -122,7 +183,10 @@ struct NotchSurface: View {
             .offset(x: -CGFloat(selectedPageIndex) * geometry.size.width + pageDragOffset)
         }
         .clipped()
-        .overlay(alignment: .topTrailing) { pageIndicator().offset(y: -3) }
+        .padding(.top, physicalNotchSize?.height ?? 0)
+        .overlay(alignment: .topTrailing) {
+            pageIndicator().offset(y: (physicalNotchSize?.height ?? 0) - 3)
+        }
         .contentShape(Rectangle())
         .background {
             TrackpadSwipeDetector { selectPage($0 == .left ? nextPage : previousPage) }
@@ -173,6 +237,8 @@ struct NotchSurface: View {
     private var notchBackground: some View {
         if isExpanded {
             AttachedNotchShape(bottomCornerRadius: 18).fill(.black)
+        } else if physicalNotchSize != nil {
+            Color.clear
         } else if !isExternalDisplay || preferences.externalNotchStyle == .rectangle {
             AttachedNotchShape(bottomCornerRadius: 8).fill(.black)
         } else {
@@ -185,6 +251,11 @@ struct NotchSurface: View {
     }
 
     private func indicators(at date: Date) -> [NotchIndicator] {
+        if !preferences.collapsedIndicatorPreviews.isEmpty {
+            return CollapsedIndicatorPreview.allCases
+                .filter { preferences.collapsedIndicatorPreviews.contains($0) }
+                .map(\.indicator)
+        }
         let schedule: CalendarEventSchedule?
         if case let .loaded(loadedSchedule) = calendarModel.state {
             schedule = loadedSchedule

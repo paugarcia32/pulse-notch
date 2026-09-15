@@ -2,8 +2,13 @@ import AppKit
 import SwiftUI
 
 struct NotchSurfaceSize: Equatable {
+    static let collapsedIndicatorLaneWidth: CGFloat = 108
+    static let physicalNotchContentSpacing: CGFloat = 2
+    static let collapsedIndicatorOuterPadding: CGFloat = 10
+
     let collapsed: CGSize
     let expanded: CGSize
+    let physicalNotchSize: CGSize?
 
     init(
         notchWidth: CGFloat?,
@@ -12,8 +17,13 @@ struct NotchSurfaceSize: Equatable {
         externalStyle: ExternalNotchStyle
     ) {
         if let notchWidth, let notchHeight {
-            collapsed = CGSize(width: max(notchWidth - 6, 120), height: max(notchHeight, 28))
+            physicalNotchSize = CGSize(width: notchWidth, height: notchHeight)
+            collapsed = CGSize(
+                width: notchWidth + 2 * Self.collapsedIndicatorLaneWidth,
+                height: max(notchHeight, 28)
+            )
         } else {
+            physicalNotchSize = nil
             let height = externalTopBarHeight
             switch externalStyle {
             case .capsule: collapsed = CGSize(width: 140, height: height)
@@ -117,24 +127,28 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     }
 
     private func notchSurface(for screen: NSScreen) -> NotchSurface {
-        NotchSurface(
+        let size = geometry(for: screen)
+        return NotchSurface(
             calendarModel: calendarModel,
             codingAgentModel: codingAgentModel,
             gitHubModel: gitHubModel,
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),
+            physicalNotchSize: size.physicalNotchSize,
             onExpansionChanged: setExpanded
         )
     }
 
     private func updateSurface(for screen: NSScreen) {
         guard let hostingView = panel?.contentView as? NSHostingView<NotchSurface> else { return }
+        let size = geometry(for: screen)
         hostingView.rootView = NotchSurface(
             calendarModel: calendarModel,
             codingAgentModel: codingAgentModel,
             gitHubModel: gitHubModel,
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),
+            physicalNotchSize: size.physicalNotchSize,
             onExpansionChanged: setExpanded
         )
     }

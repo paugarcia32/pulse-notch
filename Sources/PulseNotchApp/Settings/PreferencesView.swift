@@ -80,6 +80,19 @@ struct PreferencesView: View {
             }
             .listStyle(.inset)
             .tabItem { Label("Pages", systemImage: "rectangle.3.group") }
+
+            Form {
+                Section("Closed notch") {
+                    Text("Show sample indicators on the closed notch. They replace live indicators until turned off.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(CollapsedIndicatorPreview.allCases) { preview in
+                        Toggle(preview.name, isOn: collapsedIndicatorPreview(preview))
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .tabItem { Label("Indicators", systemImage: "circle.grid.2x2") }
         }
         .frame(minWidth: 460, idealWidth: 500, minHeight: 340, idealHeight: 380)
     }
@@ -110,6 +123,13 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.externalNotchStyle.rawValue },
             set: { preferences.setExternalNotchStyle(ExternalNotchStyle(rawValue: $0) ?? .capsule) }
+        )
+    }
+
+    private func collapsedIndicatorPreview(_ preview: CollapsedIndicatorPreview) -> Binding<Bool> {
+        Binding(
+            get: { preferences.collapsedIndicatorPreviews.contains(preview) },
+            set: { preferences.setCollapsedIndicatorPreview(preview, isEnabled: $0) }
         )
     }
 }
