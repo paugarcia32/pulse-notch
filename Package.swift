@@ -37,6 +37,7 @@ let package = Package(
             exclude: ["Info.plist"],
             resources: [.process("Resources")],
             linkerSettings: [
+                .linkedFramework("IOKit"),
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",
                     "-Xlinker", "__TEXT",

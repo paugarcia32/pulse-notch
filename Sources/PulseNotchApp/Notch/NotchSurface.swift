@@ -5,6 +5,7 @@ struct NotchSurface: View {
     @ObservedObject var calendarModel: CalendarFeatureModel
     @ObservedObject var codingAgentModel: CodingAgentFeatureModel
     @ObservedObject var gitHubModel: GitHubFeatureModel
+    @ObservedObject var batteryModel: BatteryFeatureModel
     @ObservedObject var preferences: NotchPreferences
     let isExternalDisplay: Bool
     let physicalNotchSize: CGSize?
@@ -14,6 +15,7 @@ struct NotchSurface: View {
     @State private var pageDragOffset: CGFloat = 0
     @State private var isHoveringPageIndicator = false
     @State private var hoverTask: Task<Void, Never>?
+    @State private var chargingActivityTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -34,6 +36,13 @@ struct NotchSurface: View {
             while !Task.isCancelled {
                 await codingAgentModel.refresh()
                 try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        .task {
+            // ponytail: one-second polling is enough for system HUD timing; use IOKit notifications only if it proves insufficient.
+            while !Task.isCancelled {
+                await batteryModel.refresh()
+                try? await Task.sleep(for: .seconds(1))
             }
         }
         .task(id: isExpanded && selectedPage == .agents) {
@@ -67,6 +76,22 @@ struct NotchSurface: View {
             if !pages.contains(selectedPage), let firstPage = pages.first { selectedPage = firstPage }
         }
         .onChange(of: isExpanded) { _, expanded in onExpansionChanged(expanded) }
+        .onChange(of: batteryModel.chargingActivity) { _, activity in
+            guard preferences.showChargingActivity else {
+                if let activity { batteryModel.dismissChargingActivity(id: activity.id) }
+                return
+            }
+            scheduleChargingActivityDismissal(activity)
+        }
+        .onChange(of: preferences.testingChargingActivityTrigger) { _, trigger in
+            guard trigger > 0, preferences.showChargingActivity else { return }
+            batteryModel.showChargingActivity(chargeLevel: 72)
+        }
+        .onChange(of: preferences.showChargingActivity) { _, isShown in
+            guard !isShown, let activity = batteryModel.chargingActivity else { return }
+            batteryModel.dismissChargingActivity(id: activity.id)
+        }
+        .onDisappear { chargingActivityTask?.cancel() }
     }
 
     private func notch(at date: Date) -> some View {
@@ -79,6 +104,7 @@ struct NotchSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background { notchBackground }
         .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: isExpanded)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: batteryModel.chargingActivity)
         .onChange(of: isExpanded) { _, isOpen in
             if isOpen { NotchHapticFeedback.performOpen() }
         }
@@ -90,26 +116,80 @@ struct NotchSurface: View {
 
     @ViewBuilder
     private func collapsedIndicators(at date: Date) -> some View {
-        let currentIndicators = indicators(at: date)
+        if preferences.showChargingActivity, let activity = batteryModel.chargingActivity {
+            chargingActivity(activity)
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity
+                            .combined(with: .scale(scale: 0.98))
+                            .animation(.smooth(duration: 0.35)),
+                        removal: .opacity
+                            .combined(with: .scale(scale: 0.995))
+                            .animation(.easeOut(duration: 0.28))
+                    )
+                )
+        } else {
+            let currentIndicators = indicators(at: date)
+            if let physicalNotchSize {
+                physicalNotchIndicators(currentIndicators, notchSize: physicalNotchSize)
+            } else if case let .upcomingCalendarEvent(minutesUntilStart) = currentIndicators.first?.content {
+                CalendarCountdownIndicator(
+                    minutesUntilStart: minutesUntilStart,
+                    color: currentIndicators[0].color,
+                    reduceMotion: reduceMotion
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(currentIndicators[0].accessibilityLabel)
+            } else {
+                HStack(spacing: 8) {
+                    ForEach(currentIndicators) {
+                        NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func chargingActivity(_ activity: BatteryFeatureModel.ChargingActivity) -> some View {
         if let physicalNotchSize {
-            physicalNotchIndicators(currentIndicators, notchSize: physicalNotchSize)
-        } else if case let .upcomingCalendarEvent(minutesUntilStart) = currentIndicators.first?.content {
-            CalendarCountdownIndicator(
-                minutesUntilStart: minutesUntilStart,
-                color: currentIndicators[0].color,
-                reduceMotion: reduceMotion
-            )
+            HStack(spacing: 0) {
+                Image(systemName: "battery.100percent.bolt")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.green)
+                    .frame(width: 40, height: physicalNotchSize.height, alignment: .trailing)
+                    .padding(.trailing, 8)
+
+                Color.clear
+                    .frame(width: physicalNotchSize.width, height: physicalNotchSize.height)
+                    .accessibilityHidden(true)
+
+                Text("\(activity.chargeLevel)%")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.green)
+                    .frame(width: 46, height: physicalNotchSize.height, alignment: .trailing)
+                    .padding(.leading, 8)
+                    .padding(.trailing, 10)
+            }
+            .background { AttachedNotchShape(bottomCornerRadius: 8).fill(.black) }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(currentIndicators[0].accessibilityLabel)
+            .accessibilityLabel("Battery connected, \(activity.chargeLevel) percent")
         } else {
             HStack(spacing: 8) {
-                ForEach(currentIndicators) {
-                    NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion)
-                }
-                Spacer(minLength: 0)
+                Image(systemName: "battery.100percent.bolt")
+                Text("\(activity.chargeLevel)%")
+                    .monospacedDigit()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .foregroundStyle(.green)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Battery connected, \(activity.chargeLevel) percent")
         }
     }
 
@@ -280,6 +360,16 @@ struct NotchSurface: View {
             at: date,
             calendarReminderLeadTime: preferences.calendarReminderLeadTime
         ).filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
+    }
+
+    private func scheduleChargingActivityDismissal(_ activity: BatteryFeatureModel.ChargingActivity?) {
+        chargingActivityTask?.cancel()
+        guard let activity else { return }
+        chargingActivityTask = Task { @MainActor in
+            try? await Task.sleep(for: preferences.transientSystemActivityDuration)
+            guard !Task.isCancelled else { return }
+            batteryModel.dismissChargingActivity(id: activity.id)
+        }
     }
 
     private func openNotch() {

@@ -16,6 +16,7 @@ The repository currently contains the first executable product slice:
 - Calendar and coding-agent pages navigable with a two-finger horizontal swipe,
   also available with Command-1 and Command-2.
 - Animated running and recently-completed agent indicators in the collapsed notch.
+- A temporary charging activity with the current battery percentage when external power connects.
 - Live Codex five-hour and weekly usage gauges on the coding-agent page.
 - Agent cards with project, Git branch, and elapsed-session context when available.
 - A GitHub page for your open and draft pull requests, with comments, passed checks,
@@ -48,6 +49,12 @@ visible for five minutes, while their collapsed notification is cleared as soon 
 the notch opens. Cursor's standalone `cursor-agent` CLI is supported; Cursor editor
 chats cannot currently be distinguished reliably from the editor's background
 processes.
+
+Pulse Notch reads the internal battery's charge and power-source state locally once
+per second. Connecting external power temporarily replaces collapsed indicators with
+a charging icon and percentage; its duration and visibility are configurable in
+Settings > General. Battery state is kept only in memory and needs
+no permission.
 
 For active sessions, Pulse Notch reads the working directory and Git branch locally
 when the agent exposes them. It does not read or show coding-agent prompts or thread

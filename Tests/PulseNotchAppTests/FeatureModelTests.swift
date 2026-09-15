@@ -48,6 +48,30 @@ struct FeatureModelTests {
     }
 
     @Test
+    func batteryModelReportsProviderFailure() async {
+        let model = BatteryFeatureModel(provider: BatteryProviderFake(fails: true))
+
+        await model.refresh()
+
+        #expect(model.state == .unavailable)
+    }
+
+    @Test
+    func batteryModelShowsAnActivityWhenPowerIsConnected() async {
+        let provider = BatterySequenceProvider(statuses: [
+            BatteryStatus(chargeLevel: 58, isCharging: false, isConnectedToPower: false),
+            BatteryStatus(chargeLevel: 58, isCharging: true, isConnectedToPower: true)
+        ])
+        let model = BatteryFeatureModel(provider: provider)
+
+        await model.refresh()
+        #expect(model.chargingActivity == nil)
+
+        await model.refresh()
+        #expect(model.chargingActivity?.chargeLevel == 58)
+    }
+
+    @Test
     func moreEventsLabelIncludesTheRemainingEventCount() {
         #expect(CalendarPage.moreEventsTitle(remainingCount: 3) == "Show 3 more events")
     }
@@ -74,11 +98,14 @@ struct FeatureModelTests {
         preferences.movePages(from: IndexSet(integer: 2), to: 0)
         preferences.setShortcut(AppShortcut(key: "g", modifiers: [.command, .option]), for: .firstPage)
         preferences.setCalendarReminderLeadTimeMinutes(5)
+        preferences.setTransientSystemActivityDurationSeconds(6)
+        preferences.setShowChargingActivity(false)
         preferences.setPreferredDisplayID("42")
         preferences.setExternalNotchStyle(.rectangle)
         preferences.setCollapsedIndicatorMaximumPerSide(4)
         preferences.setCollapsedIndicatorCategory(.githubActions, isVisible: false)
         preferences.setTestingFeaturesEnabled(true)
+        preferences.triggerTestingChargingActivity()
 
         let restoredPreferences = NotchPreferences(defaults: defaults)
         #expect(restoredPreferences.pageOrder == [.github, .calendar, .agents])
@@ -87,6 +114,8 @@ struct FeatureModelTests {
         #expect(restoredPreferences.shortcut(for: .firstPage).displayName == "⌥⌘G")
         #expect(restoredPreferences.calendarReminderLeadTimeMinutes == 5)
         #expect(restoredPreferences.calendarReminderLeadTime == 5 * 60)
+        #expect(restoredPreferences.transientSystemActivityDurationSeconds == 6)
+        #expect(!restoredPreferences.showChargingActivity)
         #expect(restoredPreferences.preferredDisplayID == "42")
         #expect(restoredPreferences.externalNotchStyle == .rectangle)
         #expect(restoredPreferences.collapsedIndicatorMaximumPerSide == 4)
@@ -94,6 +123,7 @@ struct FeatureModelTests {
         #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.calendar))
         #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
         #expect(restoredPreferences.testingFeaturesEnabled)
+        #expect(preferences.testingChargingActivityTrigger == 1)
 
         defaults.removePersistentDomain(forName: suiteName)
     }
@@ -160,5 +190,26 @@ private struct GitHubProviderFake: GitHubPullRequestProviding {
     func pullRequests() async throws -> [GitHubPullRequest] {
         if fails { throw CocoaError(.fileReadUnknown) }
         return []
+    }
+}
+
+private struct BatteryProviderFake: BatteryStatusProviding {
+    let fails: Bool
+
+    func currentBatteryStatus() async throws -> BatteryStatus {
+        if fails { throw BatteryStatusProviderError.unavailable }
+        return BatteryStatus(chargeLevel: 50, isCharging: false, isConnectedToPower: false)
+    }
+}
+
+private actor BatterySequenceProvider: BatteryStatusProviding {
+    private var statuses: [BatteryStatus]
+
+    init(statuses: [BatteryStatus]) {
+        self.statuses = statuses
+    }
+
+    func currentBatteryStatus() async throws -> BatteryStatus {
+        statuses.removeFirst()
     }
 }

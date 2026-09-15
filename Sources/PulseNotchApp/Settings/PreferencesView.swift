@@ -56,6 +56,14 @@ struct PreferencesView: View {
                     }
                 }
 
+                Section("Temporary system activities") {
+                    Toggle("Show charging activity", isOn: showChargingActivity)
+                    Stepper(value: transientSystemActivityDurationSeconds, in: 1...10) {
+                        Text("Show for \(preferences.transientSystemActivityDurationSeconds) seconds")
+                    }
+                    .disabled(!preferences.showChargingActivity)
+                }
+
                 Section("Testing") {
                     Toggle("Enable testing features", isOn: testingFeaturesEnabled)
                 }
@@ -100,7 +108,7 @@ struct PreferencesView: View {
             if preferences.testingFeaturesEnabled {
                 Form {
                     Section("Closed notch previews") {
-                        Text("Choose how many sample indicators to show. They replace live indicators until turned off.")
+                        Text("Choose sample indicators, then trigger a priority activity to verify that it replaces them temporarily.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         ForEach(CollapsedIndicatorPreview.allCases) { preview in
@@ -108,6 +116,14 @@ struct PreferencesView: View {
                                 Text("\(preview.name): \(preferences.collapsedIndicatorPreviewCount(preview))")
                             }
                         }
+                    }
+
+                    Section("Priority activities") {
+                        Button("Show charging activity") {
+                            preferences.triggerTestingChargingActivity()
+                        }
+                        .disabled(!preferences.showChargingActivity)
+                        .accessibilityHint("Temporarily replaces the closed notch previews")
                     }
                 }
                 .formStyle(.grouped)
@@ -129,6 +145,20 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.calendarReminderLeadTimeMinutes },
             set: { preferences.setCalendarReminderLeadTimeMinutes($0) }
+        )
+    }
+
+    private var transientSystemActivityDurationSeconds: Binding<Int> {
+        Binding(
+            get: { preferences.transientSystemActivityDurationSeconds },
+            set: { preferences.setTransientSystemActivityDurationSeconds($0) }
+        )
+    }
+
+    private var showChargingActivity: Binding<Bool> {
+        Binding(
+            get: { preferences.showChargingActivity },
+            set: { preferences.setShowChargingActivity($0) }
         )
     }
 

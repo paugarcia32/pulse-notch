@@ -45,6 +45,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     let calendarModel = CalendarFeatureModel(provider: EventKitCalendarProvider())
     let codingAgentModel = CodingAgentFeatureModel(provider: LocalCodingAgentProvider())
     let gitHubModel = GitHubFeatureModel(provider: GitHubCLIProvider())
+    let batteryModel = BatteryFeatureModel(provider: IOKitBatteryProvider())
 
     private var panel: NotchPanel?
     private var localEventMonitor: Any?
@@ -132,6 +133,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             calendarModel: calendarModel,
             codingAgentModel: codingAgentModel,
             gitHubModel: gitHubModel,
+            batteryModel: batteryModel,
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),
             physicalNotchSize: size.physicalNotchSize,
@@ -146,6 +148,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             calendarModel: calendarModel,
             codingAgentModel: codingAgentModel,
             gitHubModel: gitHubModel,
+            batteryModel: batteryModel,
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),
             physicalNotchSize: size.physicalNotchSize,
