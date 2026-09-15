@@ -275,7 +275,7 @@ struct NotchSurface: View {
             actionSessions: gitHubModel.notificationActionSessions,
             at: date,
             calendarReminderLeadTime: preferences.calendarReminderLeadTime
-        )
+        ).filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
     }
 
     private func openNotch() {

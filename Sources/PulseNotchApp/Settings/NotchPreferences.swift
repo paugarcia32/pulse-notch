@@ -70,6 +70,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var externalNotchStyle: ExternalNotchStyle
     @Published private(set) var collapsedIndicatorPreviews: Set<CollapsedIndicatorPreview> = []
     @Published private(set) var collapsedIndicatorMaximumPerSide: Int
+    @Published private(set) var visibleCollapsedIndicatorCategories: Set<CollapsedNotchIndicatorCategory>
     @Published private(set) var testingFeaturesEnabled: Bool
 
     private enum Keys {
@@ -83,6 +84,7 @@ final class NotchPreferences: ObservableObject {
         static let preferredDisplayID = "settings.preferredDisplayID"
         static let externalNotchStyle = "settings.externalNotchStyle"
         static let collapsedIndicatorMaximumPerSide = "settings.collapsedIndicatorMaximumPerSide"
+        static let visibleCollapsedIndicatorCategories = "settings.visibleCollapsedIndicatorCategories"
         static let testingFeaturesEnabled = "settings.testingFeaturesEnabled"
     }
 
@@ -103,6 +105,9 @@ final class NotchPreferences: ObservableObject {
         externalNotchStyle = ExternalNotchStyle(rawValue: defaults.string(forKey: Keys.externalNotchStyle) ?? "") ?? .capsule
         collapsedIndicatorMaximumPerSide = Self.clampedCollapsedIndicatorMaximum(
             defaults.object(forKey: Keys.collapsedIndicatorMaximumPerSide) as? Int ?? 3
+        )
+        visibleCollapsedIndicatorCategories = Self.collapsedIndicatorCategories(
+            from: defaults.stringArray(forKey: Keys.visibleCollapsedIndicatorCategories)
         )
         testingFeaturesEnabled = defaults.bool(forKey: Keys.testingFeaturesEnabled)
         startupError = nil
@@ -184,6 +189,19 @@ final class NotchPreferences: ObservableObject {
         defaults.set(value, forKey: Keys.collapsedIndicatorMaximumPerSide)
     }
 
+    func isCollapsedIndicatorCategoryVisible(_ category: CollapsedNotchIndicatorCategory) -> Bool {
+        visibleCollapsedIndicatorCategories.contains(category)
+    }
+
+    func setCollapsedIndicatorCategory(_ category: CollapsedNotchIndicatorCategory, isVisible: Bool) {
+        if isVisible {
+            visibleCollapsedIndicatorCategories.insert(category)
+        } else {
+            visibleCollapsedIndicatorCategories.remove(category)
+        }
+        defaults.set(visibleCollapsedIndicatorCategories.map(\.rawValue), forKey: Keys.visibleCollapsedIndicatorCategories)
+    }
+
     func movePages(from offsets: IndexSet, to destination: Int) {
         pageOrder.move(fromOffsets: offsets, toOffset: destination)
         defaults.set(pageOrder.map(\.rawValue), forKey: Keys.pageOrder)
@@ -225,6 +243,13 @@ final class NotchPreferences: ObservableObject {
 
     private static func validPages(from storedPages: [String]?) -> [NotchPage] {
         storedPages?.compactMap(NotchPage.init(rawValue:)) ?? []
+    }
+
+    private static func collapsedIndicatorCategories(
+        from storedCategories: [String]?
+    ) -> Set<CollapsedNotchIndicatorCategory> {
+        guard let storedCategories else { return Set(CollapsedNotchIndicatorCategory.allCases) }
+        return Set(storedCategories.compactMap(CollapsedNotchIndicatorCategory.init(rawValue:)))
     }
 
     private static func clampedCollapsedIndicatorMaximum(_ maximum: Int) -> Int {

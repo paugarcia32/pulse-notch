@@ -37,6 +37,30 @@ struct NotchIndicator: Identifiable {
         }
     }
 
+    var category: CollapsedNotchIndicatorCategory {
+        switch content {
+        case .upcomingCalendarEvent: .calendar
+        case .githubActions: .githubActions
+        case .runningAgent, .completedAgent: .codingAgents
+        }
+    }
+
+}
+
+enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
+    case calendar
+    case githubActions
+    case codingAgents
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .calendar: "Calendar reminders"
+        case .githubActions: "GitHub Actions"
+        case .codingAgents: "Coding agents"
+        }
+    }
 }
 
 enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {

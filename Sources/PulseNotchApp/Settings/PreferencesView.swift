@@ -51,6 +51,9 @@ struct PreferencesView: View {
                     Text("More than 3 items per side is not recommended.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    ForEach(CollapsedNotchIndicatorCategory.allCases) { category in
+                        Toggle(category.name, isOn: collapsedIndicatorCategory(category))
+                    }
                 }
 
                 Section("Testing") {
@@ -152,6 +155,13 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.collapsedIndicatorMaximumPerSide },
             set: { preferences.setCollapsedIndicatorMaximumPerSide($0) }
+        )
+    }
+
+    private func collapsedIndicatorCategory(_ category: CollapsedNotchIndicatorCategory) -> Binding<Bool> {
+        Binding(
+            get: { preferences.isCollapsedIndicatorCategoryVisible(category) },
+            set: { preferences.setCollapsedIndicatorCategory(category, isVisible: $0) }
         )
     }
 

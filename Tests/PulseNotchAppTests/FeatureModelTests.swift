@@ -77,6 +77,7 @@ struct FeatureModelTests {
         preferences.setPreferredDisplayID("42")
         preferences.setExternalNotchStyle(.rectangle)
         preferences.setCollapsedIndicatorMaximumPerSide(4)
+        preferences.setCollapsedIndicatorCategory(.githubActions, isVisible: false)
         preferences.setTestingFeaturesEnabled(true)
 
         let restoredPreferences = NotchPreferences(defaults: defaults)
@@ -89,6 +90,9 @@ struct FeatureModelTests {
         #expect(restoredPreferences.preferredDisplayID == "42")
         #expect(restoredPreferences.externalNotchStyle == .rectangle)
         #expect(restoredPreferences.collapsedIndicatorMaximumPerSide == 4)
+        #expect(!restoredPreferences.isCollapsedIndicatorCategoryVisible(.githubActions))
+        #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.calendar))
+        #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
         #expect(restoredPreferences.testingFeaturesEnabled)
 
         defaults.removePersistentDomain(forName: suiteName)
