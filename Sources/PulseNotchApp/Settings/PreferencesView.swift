@@ -100,11 +100,13 @@ struct PreferencesView: View {
             if preferences.testingFeaturesEnabled {
                 Form {
                     Section("Closed notch previews") {
-                        Text("Show sample indicators on the closed notch. They replace live indicators until turned off.")
+                        Text("Choose how many sample indicators to show. They replace live indicators until turned off.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         ForEach(CollapsedIndicatorPreview.allCases) { preview in
-                            Toggle(preview.name, isOn: collapsedIndicatorPreview(preview))
+                            Stepper(value: collapsedIndicatorPreviewCount(preview), in: 0...preview.maximumPreviewCount) {
+                                Text("\(preview.name): \(preferences.collapsedIndicatorPreviewCount(preview))")
+                            }
                         }
                     }
                 }
@@ -144,10 +146,10 @@ struct PreferencesView: View {
         )
     }
 
-    private func collapsedIndicatorPreview(_ preview: CollapsedIndicatorPreview) -> Binding<Bool> {
+    private func collapsedIndicatorPreviewCount(_ preview: CollapsedIndicatorPreview) -> Binding<Int> {
         Binding(
-            get: { preferences.collapsedIndicatorPreviews.contains(preview) },
-            set: { preferences.setCollapsedIndicatorPreview(preview, isEnabled: $0) }
+            get: { preferences.collapsedIndicatorPreviewCount(preview) },
+            set: { preferences.setCollapsedIndicatorPreviewCount($0, for: preview) }
         )
     }
 
@@ -171,6 +173,7 @@ struct PreferencesView: View {
             set: { preferences.setTestingFeaturesEnabled($0) }
         )
     }
+
 }
 
 private struct PagePreferenceRow: View {

@@ -61,6 +61,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
         case .codingAgents: "Coding agents"
         }
     }
+
 }
 
 enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
@@ -86,22 +87,26 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
         }
     }
 
-    var indicator: NotchIndicator {
+    var maximumPreviewCount: Int {
+        self == .calendar ? 1 : 5
+    }
+
+    func indicator(instance: Int) -> NotchIndicator {
         switch self {
         case .calendar:
-            return NotchIndicator(id: rawValue, content: .upcomingCalendarEvent(minutesUntilStart: 31), accessibilityLabel: "Next calendar event starts in 31 minutes")
+            return NotchIndicator(id: "\(rawValue)-\(instance)", content: .upcomingCalendarEvent(minutesUntilStart: 31), accessibilityLabel: "Next calendar event starts in 31 minutes")
         case .githubActions:
-            return NotchIndicator(id: rawValue, content: .githubActions(.running), accessibilityLabel: "GitHub Actions running")
-        case .codex: return runningAgent(.codex)
-        case .claude: return runningAgent(.claude)
-        case .cursor: return runningAgent(.cursor)
-        case .antigravity: return runningAgent(.antigravity)
-        case .opencode: return runningAgent(.opencode)
+            return NotchIndicator(id: "\(rawValue)-\(instance)", content: .githubActions(.running), accessibilityLabel: "GitHub Actions running")
+        case .codex: return runningAgent(.codex, instance: instance)
+        case .claude: return runningAgent(.claude, instance: instance)
+        case .cursor: return runningAgent(.cursor, instance: instance)
+        case .antigravity: return runningAgent(.antigravity, instance: instance)
+        case .opencode: return runningAgent(.opencode, instance: instance)
         }
     }
 
-    private func runningAgent(_ kind: CodingAgentKind) -> NotchIndicator {
-        NotchIndicator(id: rawValue, content: .runningAgent(kind), accessibilityLabel: "\(kind.displayName) agent running")
+    private func runningAgent(_ kind: CodingAgentKind, instance: Int) -> NotchIndicator {
+        NotchIndicator(id: "\(rawValue)-\(instance)", content: .runningAgent(kind), accessibilityLabel: "\(kind.displayName) agent running")
     }
 }
 

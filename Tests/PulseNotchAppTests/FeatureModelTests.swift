@@ -103,17 +103,19 @@ struct FeatureModelTests {
         let preferences = NotchPreferences(defaults: UserDefaults(suiteName: "PulseNotchTests.\(#function)")!)
 
         preferences.setTestingFeaturesEnabled(true)
-        preferences.setCollapsedIndicatorPreview(.calendar, isEnabled: true)
-        preferences.setCollapsedIndicatorPreview(.githubActions, isEnabled: true)
-        preferences.setCollapsedIndicatorPreview(.calendar, isEnabled: false)
+        preferences.setCollapsedIndicatorPreviewCount(2, for: .calendar)
+        preferences.setCollapsedIndicatorPreviewCount(3, for: .githubActions)
         preferences.setCollapsedIndicatorMaximumPerSide(9)
+        preferences.setCollapsedIndicatorPreviewCount(9, for: .codex)
 
-        #expect(preferences.collapsedIndicatorPreviews == [.githubActions])
+        #expect(preferences.collapsedIndicatorPreviewCount(.calendar) == 1)
+        #expect(preferences.collapsedIndicatorPreviewCount(.githubActions) == 3)
+        #expect(preferences.collapsedIndicatorPreviewCount(.codex) == 5)
         #expect(preferences.collapsedIndicatorMaximumPerSide == 5)
 
         preferences.setTestingFeaturesEnabled(false)
 
-        #expect(preferences.collapsedIndicatorPreviews.isEmpty)
+        #expect(preferences.collapsedIndicatorPreviewCounts.isEmpty)
     }
 }
 

@@ -253,10 +253,14 @@ struct NotchSurface: View {
     }
 
     private func indicators(at date: Date) -> [NotchIndicator] {
-        if preferences.testingFeaturesEnabled, !preferences.collapsedIndicatorPreviews.isEmpty {
-            return CollapsedIndicatorPreview.allCases
-                .filter { preferences.collapsedIndicatorPreviews.contains($0) }
-                .map(\.indicator)
+        if preferences.testingFeaturesEnabled {
+            let previews = CollapsedIndicatorPreview.allCases
+                .flatMap { preview in
+                    (0..<preferences.collapsedIndicatorPreviewCount(preview)).map {
+                        preview.indicator(instance: $0)
+                    }
+                }
+            if !previews.isEmpty { return previews }
         }
         let schedule: CalendarEventSchedule?
         if case let .loaded(loadedSchedule) = calendarModel.state {

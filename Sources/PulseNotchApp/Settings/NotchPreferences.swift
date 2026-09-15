@@ -68,7 +68,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var startupError: String?
     @Published private(set) var preferredDisplayID: String?
     @Published private(set) var externalNotchStyle: ExternalNotchStyle
-    @Published private(set) var collapsedIndicatorPreviews: Set<CollapsedIndicatorPreview> = []
+    @Published private(set) var collapsedIndicatorPreviewCounts: [CollapsedIndicatorPreview: Int] = [:]
     @Published private(set) var collapsedIndicatorMaximumPerSide: Int
     @Published private(set) var visibleCollapsedIndicatorCategories: Set<CollapsedNotchIndicatorCategory>
     @Published private(set) var testingFeaturesEnabled: Bool
@@ -170,16 +170,20 @@ final class NotchPreferences: ObservableObject {
         NotificationCenter.default.post(name: .pulseNotchDisplayPreferencesChanged, object: nil)
     }
 
-    func setCollapsedIndicatorPreview(_ preview: CollapsedIndicatorPreview, isEnabled: Bool) {
-        guard testingFeaturesEnabled else { return }
-        if isEnabled { collapsedIndicatorPreviews.insert(preview) } else { collapsedIndicatorPreviews.remove(preview) }
+    func collapsedIndicatorPreviewCount(_ preview: CollapsedIndicatorPreview) -> Int {
+        collapsedIndicatorPreviewCounts[preview, default: 0]
     }
 
     func setTestingFeaturesEnabled(_ isEnabled: Bool) {
         guard testingFeaturesEnabled != isEnabled else { return }
         testingFeaturesEnabled = isEnabled
-        if !isEnabled { collapsedIndicatorPreviews.removeAll() }
+        if !isEnabled { collapsedIndicatorPreviewCounts.removeAll() }
         defaults.set(isEnabled, forKey: Keys.testingFeaturesEnabled)
+    }
+
+    func setCollapsedIndicatorPreviewCount(_ count: Int, for preview: CollapsedIndicatorPreview) {
+        guard testingFeaturesEnabled else { return }
+        collapsedIndicatorPreviewCounts[preview] = min(max(count, 0), preview.maximumPreviewCount)
     }
 
     func setCollapsedIndicatorMaximumPerSide(_ maximum: Int) {
