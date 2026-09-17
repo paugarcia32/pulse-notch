@@ -202,7 +202,7 @@ private struct MonthGrid: View {
             Text(day, format: .dateTime.day())
                 .font(.system(size: 11, weight: isSelected ? .bold : .medium, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(isSelected ? .white : (isToday ? .pink : .primary))
+                .foregroundStyle(isSelected ? .white : (isToday ? .pink : .secondary))
                 .frame(width: 20, height: 20)
                 .background(isSelected ? Color.pink : .clear, in: Circle())
         }
@@ -225,4 +225,5 @@ private struct MonthGrid: View {
         return Array(repeating: nil, count: leadingDays)
             + (0..<dayCount).compactMap { calendar.date(byAdding: .day, value: $0, to: month.start) }
     }
+
 }

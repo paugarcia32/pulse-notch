@@ -387,10 +387,19 @@ private struct GitHubActionIndicator: View {
     }
 
     private func symbol(rotation: Double) -> some View {
-        Image(systemName: status == .running ? "arrow.triangle.2.circlepath" : "xmark.octagon.fill")
+        Image(systemName: symbolName)
             .font(.system(size: 13, weight: .bold))
             .foregroundStyle(color)
             .rotationEffect(.degrees(rotation))
             .accessibilityHidden(true)
+    }
+
+    private var symbolName: String {
+        switch status {
+        case .running: "arrow.triangle.2.circlepath"
+        case .failed: "xmark.octagon.fill"
+        case .succeeded: "checkmark.circle.fill"
+        case .none: "minus.circle"
+        }
     }
 }
