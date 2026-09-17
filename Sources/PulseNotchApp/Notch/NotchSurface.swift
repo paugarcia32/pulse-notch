@@ -9,6 +9,7 @@ struct NotchSurface: View {
     @ObservedObject var volumeModel: VolumeFeatureModel
     @ObservedObject var brightnessModel: BrightnessFeatureModel
     @ObservedObject var downloadModel: DownloadFeatureModel
+    @ObservedObject var mediaPlaybackModel: MediaPlaybackFeatureModel
     let bluetoothHeadphonesModel: BluetoothHeadphonesFeatureModel
     @ObservedObject var systemActivityModel: SystemActivityFeatureModel
     @ObservedObject var preferences: NotchPreferences
@@ -48,6 +49,10 @@ struct NotchSurface: View {
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowGitHub)) { _ in
             openNotch()
             selectPage(.github)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowMedia)) { _ in
+            openNotch()
+            selectPage(.media)
         }
         .onChange(of: preferences.orderedVisiblePages) { _, pages in handleVisiblePagesChange(pages) }
         .onChange(of: isExpanded) { _, expanded in onExpansionChanged(expanded) }
@@ -133,6 +138,12 @@ struct NotchSurface: View {
             // ponytail: one-second polling is enough for system HUD timing; use IOKit notifications only if it proves insufficient.
             while !Task.isCancelled {
                 await batteryModel.refresh()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                await mediaPlaybackModel.refresh()
                 try? await Task.sleep(for: .seconds(1))
             }
         }
@@ -255,6 +266,16 @@ struct NotchSurface: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(currentIndicators[0].accessibilityLabel)
+            } else if case let .mediaPlayback(playback) = currentIndicators.first?.content {
+                HStack(spacing: 10) {
+                    MediaArtworkView(data: playback.artworkData, size: 22)
+                    Spacer(minLength: 0)
+                    MediaEqualizer(isPlaying: playback.isPlaying, reduceMotion: reduceMotion)
+                        .foregroundStyle(currentIndicators[0].color)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(currentIndicators[0].accessibilityLabel)
             } else {
                 HStack(spacing: 8) {
                     ForEach(currentIndicators) {
@@ -319,28 +340,54 @@ struct NotchSurface: View {
     }
 
     private func physicalNotchIndicators(_ indicators: [NotchIndicator], notchSize: CGSize) -> some View {
+        let mediaIndicator = indicators.first { indicator in
+            if case .mediaPlayback = indicator.content { return true }
+            return false
+        }
         let calendarIndicator = indicators.first { indicator in
             if case .upcomingCalendarEvent = indicator.content { return true }
             return false
         }
-        let otherIndicators = indicators.filter { $0.id != calendarIndicator?.id }
-        let indicatorCountPerSide = calendarIndicator == nil
+        let primaryIndicator = mediaIndicator ?? calendarIndicator
+        let otherIndicators = indicators.filter {
+            $0.id != primaryIndicator?.id && $0.id != calendarIndicator?.id
+        }
+        let indicatorCountPerSide = primaryIndicator == nil
             ? preferences.collapsedIndicatorMaximumPerSide
             : max(0, preferences.collapsedIndicatorMaximumPerSide - 1)
         let leftIndicators = Array(otherIndicators.prefix(indicatorCountPerSide))
         let rightIndicators = Array(otherIndicators.dropFirst(indicatorCountPerSide).prefix(indicatorCountPerSide))
-        let leftWidth = collapsedSideWidth(itemCount: leftIndicators.count + (calendarIndicator == nil ? 0 : 1))
+        // A paired indicator occupies the same slot on both sides of the notch.
+        let pairedContentWidth: CGFloat = mediaIndicator != nil && calendarIndicator != nil ? 50 : 0
+        let leftWidth = collapsedSideWidth(
+            itemCount: leftIndicators.count,
+            additionalContentWidth: pairedContentWidth > 0 ? pairedContentWidth : mediaIndicator == nil
+                ? (calendarIndicator == nil ? 0 : 16)
+                : 22
+        )
         let rightWidth = collapsedSideWidth(
             itemCount: rightIndicators.count,
-            includesCalendarCountdown: calendarIndicator != nil
+            additionalContentWidth: pairedContentWidth > 0 ? pairedContentWidth : mediaIndicator == nil
+                ? (calendarIndicator == nil ? 0 : 28)
+                : 16
         )
 
         return HStack(spacing: 0) {
             HStack(spacing: 8) {
-                ForEach(leftIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
-                if let calendarIndicator {
+                if let mediaIndicator, case let .mediaPlayback(playback) = mediaIndicator.content {
+                    MediaArtworkView(data: playback.artworkData, size: 22)
+                        .accessibilityLabel(mediaIndicator.accessibilityLabel)
+                    if let calendarIndicator {
+                        CalendarCountdownIcon(color: calendarIndicator.color)
+                        .accessibilityLabel(calendarIndicator.accessibilityLabel)
+                    }
+                    ForEach(leftIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
+                } else if let calendarIndicator {
+                    ForEach(leftIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
                     CalendarCountdownIcon(color: calendarIndicator.color)
                         .accessibilityLabel(calendarIndicator.accessibilityLabel)
+                } else {
+                    ForEach(leftIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
                 }
             }
             .padding(.leading, NotchSurfaceSize.collapsedIndicatorOuterPadding)
@@ -357,6 +404,11 @@ struct NotchSurface: View {
                         .foregroundStyle(calendarIndicator.color)
                         .accessibilityHidden(true)
                 }
+                if let mediaIndicator, case let .mediaPlayback(playback) = mediaIndicator.content {
+                    MediaEqualizer(isPlaying: playback.isPlaying, reduceMotion: reduceMotion)
+                        .foregroundStyle(mediaIndicator.color)
+                        .accessibilityHidden(true)
+                }
                 ForEach(rightIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
             }
             .padding(.leading, NotchSurfaceSize.physicalNotchContentSpacing)
@@ -368,11 +420,11 @@ struct NotchSurface: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func collapsedSideWidth(itemCount: Int, includesCalendarCountdown: Bool = false) -> CGFloat {
-        guard itemCount > 0 || includesCalendarCountdown else { return 0 }
+    private func collapsedSideWidth(itemCount: Int, additionalContentWidth: CGFloat = 0) -> CGFloat {
+        guard itemCount > 0 || additionalContentWidth > 0 else { return 0 }
         let contentWidth = CGFloat(itemCount) * 16
-            + (includesCalendarCountdown ? 28 : 0)
-            + CGFloat(max(itemCount - 1 + (includesCalendarCountdown && itemCount > 0 ? 1 : 0), 0)) * 8
+            + additionalContentWidth
+            + CGFloat(max(itemCount - 1 + (additionalContentWidth > 0 && itemCount > 0 ? 1 : 0), 0)) * 8
         return contentWidth
             + NotchSurfaceSize.collapsedIndicatorOuterPadding
             + NotchSurfaceSize.physicalNotchContentSpacing
@@ -483,6 +535,7 @@ struct NotchSurface: View {
             sessions: sessions,
             actionSessions: gitHubModel.notificationActionSessions,
             downloads: preferences.showDownloads ? downloadModel.activeDownloads : [],
+            mediaPlayback: mediaPlaybackModel.playback,
             at: date,
             calendarReminderLeadTime: preferences.calendarReminderLeadTime
         ).filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
@@ -554,6 +607,7 @@ struct NotchSurface: View {
         case .calendar: CalendarPage(model: calendarModel, date: date)
         case .agents: CodingAgentsPage(model: codingAgentModel, date: date)
         case .github: GitHubPage(model: gitHubModel, date: date)
+        case .media: MediaPlaybackPage(model: mediaPlaybackModel)
         }
     }
 

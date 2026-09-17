@@ -11,6 +11,7 @@ executable_path="$contents_path/MacOS/PulseNotch"
 claude_bridge_path="$contents_path/MacOS/PulseNotchClaudeBridge"
 resource_bundle_name="PulseNotch_PulseNotchApp.bundle"
 info_plist_path="$repository_root/Sources/PulseNotchApp/Info.plist"
+media_remote_adapter_path="$repository_root/Vendor/MediaRemoteAdapter"
 launch_services_register="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 should_open=true
 should_reset_calendar_access=false
@@ -52,6 +53,11 @@ install -m 644 "$info_plist_path" "$contents_path/Info.plist"
 if [[ -d "$binary_directory/$resource_bundle_name" ]]; then
     mkdir -p "$contents_path/Resources"
     ditto "$binary_directory/$resource_bundle_name" "$contents_path/Resources/$resource_bundle_name"
+fi
+
+if [[ -d "$media_remote_adapter_path" ]]; then
+    mkdir -p "$contents_path/Resources"
+    ditto "$media_remote_adapter_path" "$contents_path/Resources/MediaRemoteAdapter"
 fi
 
 codesign \

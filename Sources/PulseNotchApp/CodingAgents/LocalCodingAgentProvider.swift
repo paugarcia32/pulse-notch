@@ -142,17 +142,29 @@ enum CommandOutput {
     static func read(
         executable: String,
         arguments: [String],
+        standardInput: String? = nil,
         timeout: TimeInterval = 5
     ) throws -> String {
         let process = Process()
         let output = Pipe()
+        let input = standardInput.map { _ in Pipe() }
 
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
+        process.standardInput = input
 
         try process.run()
+        if let standardInput {
+            input?.fileHandleForWriting.write(Data(standardInput.utf8))
+            do {
+                try input?.fileHandleForWriting.close()
+            } catch {
+                process.terminate()
+                throw error
+            }
+        }
         let timeoutState = CommandTimeoutState(process: process)
         let timeoutWork = DispatchWorkItem { timeoutState.terminateProcess() }
         DispatchQueue.global().asyncAfter(

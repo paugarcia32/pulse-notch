@@ -21,6 +21,7 @@ struct NotchIndicator: Identifiable {
         case completedAgent(CodingAgentKind)
         case runningDownload
         case githubActions(GitHubPullRequest.ActionStatus)
+        case mediaPlayback(MediaPlaybackStatus)
     }
 
     let id: String
@@ -36,6 +37,7 @@ struct NotchIndicator: Identifiable {
         case .githubActions(.running): .orange
         case .githubActions(.failed): .red
         case .githubActions: .green
+        case .mediaPlayback: .purple
         }
     }
 
@@ -45,6 +47,7 @@ struct NotchIndicator: Identifiable {
         case .githubActions: .githubActions
         case .runningAgent, .completedAgent: .codingAgents
         case .runningDownload: .downloads
+        case .mediaPlayback: .mediaPlayback
         }
     }
 
@@ -55,6 +58,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
     case githubActions
     case codingAgents
     case downloads
+    case mediaPlayback
 
     var id: String { rawValue }
 
@@ -64,6 +68,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
         case .githubActions: "GitHub Actions"
         case .codingAgents: "Coding agents"
         case .downloads: "Downloads"
+        case .mediaPlayback: "Media playback"
         }
     }
 
@@ -78,6 +83,7 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
     case antigravity
     case opencode
     case download
+    case mediaPlayback
 
     var id: String { rawValue }
 
@@ -91,6 +97,7 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
         case .antigravity: "Antigravity agent"
         case .opencode: "OpenCode agent"
         case .download: "Download"
+        case .mediaPlayback: "Media playback"
         }
     }
 
@@ -111,6 +118,12 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
         case .opencode: return runningAgent(.opencode, instance: instance)
         case .download:
             return NotchIndicator(id: "download-\(instance)", content: .runningDownload, accessibilityLabel: "Download in progress")
+        case .mediaPlayback:
+            return NotchIndicator(
+                id: "media-playback",
+                content: .mediaPlayback(.init(id: "preview", title: "Sample track", artist: "Pulse Notch", duration: 180, elapsedTime: 42, isPlaying: true)),
+                accessibilityLabel: "Sample track playing"
+            )
         }
     }
 
@@ -125,10 +138,21 @@ enum CollapsedNotchIndicators {
         sessions: [CodingAgentSession],
         actionSessions: [GitHubActionSession],
         downloads: [DetectedDownload] = [],
+        mediaPlayback: MediaPlaybackStatus? = nil,
         at date: Date,
         calendarReminderLeadTime: TimeInterval
     ) -> [NotchIndicator] {
         var indicators: [NotchIndicator] = []
+
+        if let mediaPlayback, mediaPlayback.isPlaying {
+            indicators.append(
+                NotchIndicator(
+                    id: "media-\(mediaPlayback.id)",
+                    content: .mediaPlayback(mediaPlayback),
+                    accessibilityLabel: "\(mediaPlayback.title)\(mediaPlayback.artist.isEmpty ? "" : " by \(mediaPlayback.artist)")\(mediaPlayback.isPlaying ? " playing" : " paused")"
+                )
+            )
+        }
 
         if let event = schedule?.next(after: date), event.startsSoon(
             relativeTo: date,
@@ -212,6 +236,9 @@ struct NotchIndicatorView: View {
                 DownloadActivityIndicator(color: indicator.color, reduceMotion: reduceMotion)
             case let .githubActions(status):
                 GitHubActionIndicator(status: status, color: indicator.color, reduceMotion: reduceMotion)
+            case let .mediaPlayback(playback):
+                MediaEqualizer(isPlaying: playback.isPlaying, reduceMotion: reduceMotion)
+                    .foregroundStyle(indicator.color)
             }
         }
             .accessibilityLabel(indicator.accessibilityLabel)

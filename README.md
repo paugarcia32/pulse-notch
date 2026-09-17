@@ -20,6 +20,7 @@ The repository currently contains the first executable product slice:
 - A temporary charging activity with the current battery percentage when external power connects.
 - Temporary volume and display-brightness activities that replace collapsed indicators.
 - A temporary Bluetooth-headphones connection activity, with a battery glyph when headphones connect.
+- A configurable Media page with artwork, transport controls, and a compact artwork/equalizer indicator.
 - Live Codex five-hour and weekly usage gauges on the coding-agent page.
 - Agent cards with project, Git branch, and elapsed-session context when available.
 - A GitHub page for your open and draft pull requests, with comments, passed checks,
@@ -82,6 +83,13 @@ Downloads monitoring defaults to the user's Downloads folder and can be pointed 
 another folder in Settings. It observes browser temporary files locally and never
 displays or persists download file names or paths. The feature can be disabled at
 any time.
+
+Media playback reads the active system Now Playing item locally, including Spotify and
+browser players such as YouTube when they publish a system media session. It keeps its
+title, artist, artwork, and progress in memory only. The compact indicator can be disabled
+in Settings > General and the whole Media page can be disabled in Settings > Pages.
+macOS has no public API for reading another app's Now Playing item, so the local
+bridge is optional at runtime; when it is unavailable, the page shows an empty state.
 
 For active sessions, Pulse Notch reads the working directory and Git branch locally
 when the agent exposes them. It does not read or show coding-agent prompts or thread

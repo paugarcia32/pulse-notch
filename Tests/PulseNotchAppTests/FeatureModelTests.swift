@@ -102,6 +102,90 @@ struct FeatureModelTests {
     }
 
     @Test
+    func mediaPlaybackModelShowsTheActiveSystemItem() async {
+        let playback = MediaPlaybackStatus(
+            id: "track",
+            title: "Track",
+            artist: "Artist",
+            duration: 180,
+            elapsedTime: 20,
+            isPlaying: true
+        )
+        let model = MediaPlaybackFeatureModel(provider: MediaPlaybackProviderFake(playback: playback))
+
+        await model.refresh()
+
+        #expect(model.playback == playback)
+    }
+
+    @Test
+    func mediaPlaybackModelAdvancesTheElapsedTimeBetweenRefreshes() async {
+        let playback = MediaPlaybackStatus(
+            id: "track",
+            title: "Track",
+            artist: "Artist",
+            duration: 180,
+            elapsedTime: 20,
+            isPlaying: true
+        )
+        let model = MediaPlaybackFeatureModel(provider: MediaPlaybackProviderFake(playback: playback))
+        let referenceDate = Date(timeIntervalSinceReferenceDate: 1_000)
+
+        await model.refresh(at: referenceDate)
+
+        #expect(model.elapsedTime(at: referenceDate.addingTimeInterval(3)) == 23)
+    }
+
+    @Test
+    func mediaPlaybackModelUpdatesPlayPauseBeforeTheNextPoll() async {
+        let playback = MediaPlaybackStatus(
+            id: "track", title: "Track", artist: "Artist", duration: 180, elapsedTime: 20, isPlaying: true
+        )
+        let provider = MediaPlaybackCommandProvider(playback: playback)
+        let model = MediaPlaybackFeatureModel(provider: provider)
+
+        await model.refresh()
+        await model.send(.togglePlayPause)
+
+        #expect(provider.commands == [.togglePlayPause])
+        #expect(model.playback?.isPlaying == false)
+    }
+
+    @Test
+    func mediaPlaybackReaderDecodesTheSystemNowPlayingPayload() throws {
+        let playback = try MediaRemotePlaybackProvider.playback(from: """
+        {"uniqueIdentifier":"spotify:track:1","title":"Track","artist":"Artist","duration":180,"elapsedTime":20,"playbackRate":1,"isPlaying":true,"artworkData":"AQID"}
+        """)
+
+        #expect(playback == MediaPlaybackStatus(
+            id: "spotify:track:1",
+            title: "Track",
+            artist: "Artist",
+            duration: 180,
+            elapsedTime: 20,
+            isPlaying: true,
+            artworkData: Data([1, 2, 3])
+        ))
+    }
+
+    @Test
+    func mediaPlaybackAdapterReaderDecodesArtworkAndPlayingState() throws {
+        let playback = try MediaRemoteAdapterPlaybackProvider.playback(from: """
+        {"uniqueIdentifier":"spotify:track:1","title":"Track","artist":"Artist","duration":180,"elapsedTime":20,"playing":true,"artworkData":"AQID"}
+        """)
+
+        #expect(playback == MediaPlaybackStatus(
+            id: "spotify:track:1",
+            title: "Track",
+            artist: "Artist",
+            duration: 180,
+            elapsedTime: 20,
+            isPlaying: true,
+            artworkData: Data([1, 2, 3])
+        ))
+    }
+
+    @Test
     func bluetoothHeadphonesModelShowsOnlyNewConnections() async {
         let model = BluetoothHeadphonesFeatureModel(provider: BluetoothHeadphonesSequenceProvider(statuses: [
             [BluetoothHeadphonesStatus(id: "existing")],
@@ -244,8 +328,8 @@ struct FeatureModelTests {
         preferences.triggerTestingSystemActivity(.volume)
 
         let restoredPreferences = NotchPreferences(defaults: defaults)
-        #expect(restoredPreferences.pageOrder == [.github, .calendar, .agents])
-        #expect(restoredPreferences.orderedVisiblePages == [.github, .calendar])
+        #expect(restoredPreferences.pageOrder == [.github, .calendar, .agents, .media])
+        #expect(restoredPreferences.orderedVisiblePages == [.github, .calendar, .media])
         #expect(restoredPreferences.page(for: .firstPage) == .github)
         #expect(restoredPreferences.shortcut(for: .firstPage).displayName == "⌥⌘G")
         #expect(restoredPreferences.calendarReminderLeadTimeMinutes == 5)
@@ -377,6 +461,39 @@ private actor BrightnessSequenceProvider: DisplayBrightnessProviding {
 
     func currentDisplayBrightness() async throws -> DisplayBrightnessStatus {
         statuses.removeFirst()
+    }
+}
+
+private struct MediaPlaybackProviderFake: MediaPlaybackProviding {
+    let playback: MediaPlaybackStatus?
+
+    func currentPlayback() async throws -> MediaPlaybackStatus? { playback }
+    func send(_ command: MediaPlaybackCommand) async throws {}
+}
+
+@MainActor
+private final class MediaPlaybackCommandProvider: MediaPlaybackProviding, @unchecked Sendable {
+    private var playback: MediaPlaybackStatus
+    private(set) var commands: [MediaPlaybackCommand] = []
+
+    init(playback: MediaPlaybackStatus) {
+        self.playback = playback
+    }
+
+    func currentPlayback() async throws -> MediaPlaybackStatus? { playback }
+
+    func send(_ command: MediaPlaybackCommand) async throws {
+        commands.append(command)
+        if command == .togglePlayPause {
+            playback = MediaPlaybackStatus(
+                id: playback.id,
+                title: playback.title,
+                artist: playback.artist,
+                duration: playback.duration,
+                elapsedTime: playback.elapsedTime,
+                isPlaying: !playback.isPlaying
+            )
+        }
     }
 }
 

@@ -73,6 +73,61 @@ struct CollapsedNotchIndicatorsTests {
     }
 
     @Test
+    func prioritizesMediaPlaybackAndIncludesItsCompactIndicator() {
+        let playback = MediaPlaybackStatus(
+            id: "track",
+            title: "Track",
+            artist: "Artist",
+            duration: 180,
+            elapsedTime: 20,
+            isPlaying: true
+        )
+
+        let indicators = CollapsedNotchIndicators.make(
+            schedule: nil,
+            sessions: [],
+            actionSessions: [],
+            mediaPlayback: playback,
+            at: Date(timeIntervalSince1970: 1_000),
+            calendarReminderLeadTime: 10 * 60
+        )
+
+        #expect(indicators.first?.content == .mediaPlayback(playback))
+        #expect(indicators.first?.category == .mediaPlayback)
+    }
+
+    @Test
+    func placesMediaBeforeTheUpcomingCalendarIndicator() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let indicators = CollapsedNotchIndicators.make(
+            schedule: CalendarEventSchedule(events: [CalendarEvent(
+                id: "event", title: "Planning", startsAt: now.addingTimeInterval(60), endsAt: now.addingTimeInterval(3_600)
+            )]),
+            sessions: [],
+            actionSessions: [],
+            mediaPlayback: .init(id: "track", title: "Track", artist: "Artist", duration: 180, elapsedTime: 20, isPlaying: true),
+            at: now,
+            calendarReminderLeadTime: 10 * 60
+        )
+
+        #expect(indicators.map(\.id).prefix(2) == ["media-track", "calendar-event"])
+    }
+
+    @Test
+    func hidesPausedMediaPlaybackFromTheClosedNotch() {
+        let indicators = CollapsedNotchIndicators.make(
+            schedule: nil,
+            sessions: [],
+            actionSessions: [],
+            mediaPlayback: .init(id: "track", title: "Track", artist: "Artist", duration: 180, elapsedTime: 20, isPlaying: false),
+            at: Date(timeIntervalSince1970: 1_000),
+            calendarReminderLeadTime: 10 * 60
+        )
+
+        #expect(indicators.isEmpty)
+    }
+
+    @Test
     func roundsCalendarCountdownUpToTheNextMinute() {
         let now = Date(timeIntervalSince1970: 1_000)
         let schedule = CalendarEventSchedule(events: [CalendarEvent(

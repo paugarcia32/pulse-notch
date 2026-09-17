@@ -6,6 +6,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
     case calendar
     case agents
     case github
+    case media
 
     var id: String { rawValue }
 
@@ -14,6 +15,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
         case .calendar: "Calendar"
         case .agents: "Coding Agents"
         case .github: "GitHub"
+        case .media: "Media"
         }
     }
 
@@ -22,6 +24,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
         case .calendar: "calendar"
         case .agents: "terminal"
         case .github: "chevron.left.forwardslash.chevron.right"
+        case .media: "play.rectangle"
         }
     }
 }
@@ -31,11 +34,12 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
     case firstPage
     case secondPage
     case thirdPage
+    case fourthPage
 
     var id: String { rawValue }
 
     static func page(at index: Int) -> ShortcutAction {
-        [firstPage, secondPage, thirdPage][index]
+        [firstPage, secondPage, thirdPage, fourthPage][index]
     }
 }
 
@@ -92,6 +96,7 @@ final class NotchPreferences: ObservableObject {
     private enum Keys {
         static let pageOrder = "settings.pageOrder"
         static let visiblePages = "settings.visiblePages"
+        static let mediaPageIntroduced = "settings.mediaPageIntroduced"
         static let openAtLogin = "settings.openAtLogin"
         static let hideFromDock = "settings.hideFromDock"
         static let hideFromMenuBar = "settings.hideFromMenuBar"
@@ -108,6 +113,7 @@ final class NotchPreferences: ObservableObject {
         static let externalNotchStyle = "settings.externalNotchStyle"
         static let collapsedIndicatorMaximumPerSide = "settings.collapsedIndicatorMaximumPerSide"
         static let visibleCollapsedIndicatorCategories = "settings.visibleCollapsedIndicatorCategories"
+        static let mediaCollapsedIndicatorIntroduced = "settings.mediaCollapsedIndicatorIntroduced"
         static let testingFeaturesEnabled = "settings.testingFeaturesEnabled"
     }
 
@@ -117,7 +123,12 @@ final class NotchPreferences: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         pageOrder = Self.pages(from: defaults.stringArray(forKey: Keys.pageOrder))
-        let storedVisiblePages = Self.validPages(from: defaults.stringArray(forKey: Keys.visiblePages))
+        let persistedVisiblePages = defaults.stringArray(forKey: Keys.visiblePages)
+        var storedVisiblePages = Self.validPages(from: persistedVisiblePages)
+        if persistedVisiblePages != nil, defaults.object(forKey: Keys.mediaPageIntroduced) == nil {
+            storedVisiblePages.append(.media)
+        }
+        defaults.set(true, forKey: Keys.mediaPageIntroduced)
         visiblePages = storedVisiblePages.isEmpty ? Set(NotchPage.allCases) : Set(storedVisiblePages)
         openAtLogin = defaults.bool(forKey: Keys.openAtLogin)
         hideFromDock = defaults.bool(forKey: Keys.hideFromDock)
@@ -145,6 +156,10 @@ final class NotchPreferences: ObservableObject {
         )
         if defaults.object(forKey: Keys.showDownloads) == nil {
             collapsedIndicatorCategories.insert(.downloads)
+        }
+        if defaults.object(forKey: Keys.mediaCollapsedIndicatorIntroduced) == nil {
+            collapsedIndicatorCategories.insert(.mediaPlayback)
+            defaults.set(true, forKey: Keys.mediaCollapsedIndicatorIntroduced)
         }
         visibleCollapsedIndicatorCategories = collapsedIndicatorCategories
         testingFeaturesEnabled = defaults.bool(forKey: Keys.testingFeaturesEnabled)
@@ -178,6 +193,7 @@ final class NotchPreferences: ObservableObject {
         case .firstPage: orderedVisiblePages[safe: 0]
         case .secondPage: orderedVisiblePages[safe: 1]
         case .thirdPage: orderedVisiblePages[safe: 2]
+        case .fourthPage: orderedVisiblePages[safe: 3]
         }
     }
 
@@ -332,9 +348,8 @@ final class NotchPreferences: ObservableObject {
 
     private static func pages(from storedPages: [String]?) -> [NotchPage] {
         let stored = validPages(from: storedPages)
-        return stored.count == NotchPage.allCases.count && Set(stored).count == stored.count
-            ? stored
-            : NotchPage.allCases
+        guard !stored.isEmpty else { return NotchPage.allCases }
+        return stored + NotchPage.allCases.filter { !stored.contains($0) }
     }
 
     private static func validPages(from storedPages: [String]?) -> [NotchPage] {
@@ -367,7 +382,8 @@ final class NotchPreferences: ObservableObject {
         .openNotch: AppShortcut(key: "n", modifiers: [.command, .option]),
         .firstPage: AppShortcut(key: "1", modifiers: [.command]),
         .secondPage: AppShortcut(key: "2", modifiers: [.command]),
-        .thirdPage: AppShortcut(key: "3", modifiers: [.command])
+        .thirdPage: AppShortcut(key: "3", modifiers: [.command]),
+        .fourthPage: AppShortcut(key: "4", modifiers: [.command])
     ]
 }
 

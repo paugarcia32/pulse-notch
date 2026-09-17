@@ -1,4 +1,5 @@
 import AppKit
+import PulseNotchCore
 import SwiftUI
 
 struct NotchSurfaceSize: Equatable {
@@ -49,10 +50,17 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     let volumeModel = VolumeFeatureModel(provider: SystemVolumeProvider())
     let brightnessModel = BrightnessFeatureModel(provider: DisplayBrightnessProvider())
     let downloadModel = DownloadFeatureModel(provider: DownloadsDirectoryProvider())
+    let mediaPlaybackModel = MediaPlaybackFeatureModel(provider: makeMediaPlaybackProvider())
     let bluetoothHeadphonesModel = BluetoothHeadphonesFeatureModel(provider: BluetoothHeadphonesProvider())
     let systemActivityModel = SystemActivityFeatureModel()
 
     private var panel: NotchPanel?
+
+    private static func makeMediaPlaybackProvider() -> any MediaPlaybackProviding {
+        if let provider = MediaRemoteAdapterPlaybackProvider() { return provider }
+        if let provider = MediaRemotePlaybackProvider() { return provider }
+        return UnavailableMediaPlaybackProvider()
+    }
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
     private var preferenceObserver: NSObjectProtocol?
@@ -142,6 +150,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             volumeModel: volumeModel,
             brightnessModel: brightnessModel,
             downloadModel: downloadModel,
+            mediaPlaybackModel: mediaPlaybackModel,
             bluetoothHeadphonesModel: bluetoothHeadphonesModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
@@ -162,6 +171,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             volumeModel: volumeModel,
             brightnessModel: brightnessModel,
             downloadModel: downloadModel,
+            mediaPlaybackModel: mediaPlaybackModel,
             bluetoothHeadphonesModel: bluetoothHeadphonesModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
