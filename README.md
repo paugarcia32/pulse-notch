@@ -93,6 +93,12 @@ disabling the page also hides the indicator and stops playback polling. macOS ha
 public API for reading another app's Now Playing item, so the local bridge is optional
 at runtime; when it is unavailable, the page shows an empty state.
 
+Settings > Pages can enable dynamic pages. In that mode, configured pages keep their
+order but appear only when relevant: Calendar has a current or upcoming event today,
+an agent is running, GitHub has an open pull request or running Action, or media is
+playing or was paused within the last five minutes. When disabled, every configured
+page remains available as usual.
+
 For active sessions, Pulse Notch reads the working directory and Git branch locally
 when the agent exposes them. It does not read or show coding-agent prompts or thread
 titles. This metadata stays in memory; directory and branch lookups are cached for

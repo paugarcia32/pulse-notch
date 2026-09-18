@@ -66,6 +66,7 @@ enum TestingSystemActivity: Equatable {
 final class NotchPreferences: ObservableObject {
     @Published private(set) var pageOrder: [NotchPage]
     @Published private(set) var visiblePages: Set<NotchPage>
+    @Published private(set) var dynamicPagesEnabled: Bool
     @Published var openAtLogin: Bool {
         didSet {
             guard !isSynchronizingOpenAtLogin else { return }
@@ -96,6 +97,7 @@ final class NotchPreferences: ObservableObject {
     private enum Keys {
         static let pageOrder = "settings.pageOrder"
         static let visiblePages = "settings.visiblePages"
+        static let dynamicPagesEnabled = "settings.dynamicPagesEnabled"
         static let mediaPageIntroduced = "settings.mediaPageIntroduced"
         static let openAtLogin = "settings.openAtLogin"
         static let hideFromDock = "settings.hideFromDock"
@@ -130,6 +132,7 @@ final class NotchPreferences: ObservableObject {
         }
         defaults.set(true, forKey: Keys.mediaPageIntroduced)
         visiblePages = storedVisiblePages.isEmpty ? Set(NotchPage.allCases) : Set(storedVisiblePages)
+        dynamicPagesEnabled = defaults.bool(forKey: Keys.dynamicPagesEnabled)
         openAtLogin = defaults.bool(forKey: Keys.openAtLogin)
         hideFromDock = defaults.bool(forKey: Keys.hideFromDock)
         hideFromMenuBar = defaults.bool(forKey: Keys.hideFromMenuBar)
@@ -205,6 +208,12 @@ final class NotchPreferences: ObservableObject {
         guard isVisible || visiblePages.count > 1 else { return }
         if isVisible { visiblePages.insert(page) } else { visiblePages.remove(page) }
         defaults.set(pageOrder.filter { visiblePages.contains($0) }.map(\.rawValue), forKey: Keys.visiblePages)
+    }
+
+    func setDynamicPagesEnabled(_ isEnabled: Bool) {
+        guard dynamicPagesEnabled != isEnabled else { return }
+        dynamicPagesEnabled = isEnabled
+        defaults.set(isEnabled, forKey: Keys.dynamicPagesEnabled)
     }
 
     func setCalendarReminderLeadTimeMinutes(_ minutes: Int) {

@@ -112,6 +112,13 @@ struct PreferencesView: View {
 
             List {
                 Section {
+                    Toggle("Show pages only when active", isOn: dynamicPagesEnabled)
+                } footer: {
+                    Text("When enabled, pages appear only while they have relevant activity. Media remains visible for five minutes after pausing.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Section {
                     ForEach(Array(preferences.pageOrder.enumerated()), id: \.element.id) { index, page in
                         PagePreferenceRow(
                             page: page,
@@ -280,6 +287,13 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.testingFeaturesEnabled },
             set: { preferences.setTestingFeaturesEnabled($0) }
+        )
+    }
+
+    private var dynamicPagesEnabled: Binding<Bool> {
+        Binding(
+            get: { preferences.dynamicPagesEnabled },
+            set: { preferences.setDynamicPagesEnabled($0) }
         )
     }
 

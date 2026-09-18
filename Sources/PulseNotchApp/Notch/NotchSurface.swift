@@ -54,7 +54,12 @@ struct NotchSurface: View {
             openNotch()
             selectPage(.media)
         }
-        .onChange(of: preferences.orderedVisiblePages) { _, pages in handleVisiblePagesChange(pages) }
+        .onChange(of: preferences.orderedVisiblePages) { _, _ in
+            handleVisiblePagesChange(displayedPages(at: .now))
+        }
+        .onChange(of: preferences.dynamicPagesEnabled) { _, _ in
+            handleVisiblePagesChange(displayedPages(at: .now))
+        }
         .onChange(of: isExpanded) { _, expanded in onExpansionChanged(expanded) }
     }
 
@@ -162,7 +167,9 @@ struct NotchSurface: View {
 
     private var surface: some View {
         TimelineView(.periodic(from: .now, by: 15)) { context in
-            notch(at: context.date)
+            let pages = displayedPages(at: context.date)
+            notch(at: context.date, pages: pages)
+                .onChange(of: pages) { _, pages in handleVisiblePagesChange(pages) }
         }
     }
 
@@ -177,6 +184,7 @@ struct NotchSurface: View {
     private func handleVisiblePagesChange(_ pages: [NotchPage]) {
         if !pages.contains(selectedPage), let firstPage = pages.first {
             selectedPage = firstPage
+            pageDragOffset = 0
         }
     }
 
@@ -223,9 +231,9 @@ struct NotchSurface: View {
         }
     }
 
-    private func notch(at date: Date) -> some View {
+    private func notch(at date: Date, pages: [NotchPage]) -> some View {
         Group {
-            if isExpanded { expandedContent(at: date) } else { collapsedIndicators(at: date) }
+            if isExpanded { expandedContent(at: date, pages: pages) } else { collapsedIndicators(at: date) }
         }
         .foregroundStyle(.white)
         .padding(.horizontal, isExpanded ? 18 : 12)
@@ -434,25 +442,38 @@ struct NotchSurface: View {
             + NotchSurfaceSize.physicalNotchContentSpacing
     }
 
-    private func expandedContent(at date: Date) -> some View {
-        GeometryReader { geometry in
-            HStack(spacing: 0) {
-                ForEach(preferences.orderedVisiblePages) { page in
-                    pageContent(page, at: date)
-                        .frame(width: geometry.size.width)
-                        .accessibilityHidden(selectedPage != page)
+    private func expandedContent(at date: Date, pages: [NotchPage]) -> some View {
+        Group {
+            if pages.isEmpty {
+                Label("No active pages", systemImage: "checkmark.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityHint("Pages will appear when new activity starts")
+            } else {
+                GeometryReader { geometry in
+                    HStack(spacing: 0) {
+                        ForEach(pages) { page in
+                            pageContent(page, at: date)
+                                .frame(width: geometry.size.width)
+                                .accessibilityHidden(selectedPage != page)
+                        }
+                    }
+                    .offset(x: -CGFloat(selectedPageIndex(in: pages)) * geometry.size.width + pageDragOffset)
                 }
             }
-            .offset(x: -CGFloat(selectedPageIndex) * geometry.size.width + pageDragOffset)
         }
+        .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: pages)
         .clipped()
         .padding(.top, physicalNotchSize?.height ?? 0)
         .overlay(alignment: .topTrailing) {
-            pageIndicator().offset(y: (physicalNotchSize?.height ?? 0) - 3)
+            pageIndicator(pages: pages).offset(y: (physicalNotchSize?.height ?? 0) - 3)
         }
         .contentShape(Rectangle())
         .background {
-            TrackpadSwipeDetector { selectPage($0 == .left ? nextPage : previousPage) }
+            TrackpadSwipeDetector {
+                selectPage($0 == .left ? nextPage(in: pages) : previousPage(in: pages), in: pages)
+            }
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 12)
@@ -462,18 +483,18 @@ struct NotchSurface: View {
                 }
                 .onEnded {
                     guard abs($0.translation.width) > abs($0.translation.height) else {
-                        selectPage(selectedPage)
+                        selectPage(selectedPage, in: pages)
                         return
                     }
-                    selectPage($0.translation.width < 0 ? nextPage : previousPage)
+                    selectPage($0.translation.width < 0 ? nextPage(in: pages) : previousPage(in: pages), in: pages)
                 }
         )
     }
 
-    private func pageIndicator() -> some View {
+    private func pageIndicator(pages: [NotchPage]) -> some View {
         HStack(spacing: -3) {
-            ForEach(preferences.orderedVisiblePages) { page in
-                Button { selectPage(page) } label: {
+            ForEach(pages) { page in
+                Button { selectPage(page, in: pages) } label: {
                     Circle()
                         .fill(page == selectedPage ? .white : .white.opacity(0.35))
                         .frame(
@@ -599,8 +620,9 @@ struct NotchSurface: View {
         }
     }
 
-    private func selectPage(_ page: NotchPage) {
-        guard preferences.orderedVisiblePages.contains(page) else { return }
+    private func selectPage(_ page: NotchPage, in pages: [NotchPage]? = nil) {
+        let pages = pages ?? displayedPages(at: .now)
+        guard pages.contains(page) else { return }
         withAnimation(reduceMotion ? nil : .smooth(duration: 0.32)) {
             selectedPage = page
             pageDragOffset = 0
@@ -617,9 +639,48 @@ struct NotchSurface: View {
         }
     }
 
-    private var selectedPageIndex: Int { preferences.orderedVisiblePages.firstIndex(of: selectedPage) ?? 0 }
-    private var nextPage: NotchPage { wrappingPage(in: preferences.orderedVisiblePages, from: selectedPage, offset: 1) ?? selectedPage }
-    private var previousPage: NotchPage { wrappingPage(in: preferences.orderedVisiblePages, from: selectedPage, offset: -1) ?? selectedPage }
+    private func displayedPages(at date: Date) -> [NotchPage] {
+        DynamicPageActivity(
+            calendar: calendarHasActivity(at: date),
+            agents: agentsHaveActivity,
+            github: gitHubHasActivity,
+            media: mediaPlaybackModel.isPageActive(at: date)
+        ).visiblePages(
+            from: preferences.orderedVisiblePages,
+            isEnabled: preferences.dynamicPagesEnabled
+        )
+    }
+
+    private func calendarHasActivity(at date: Date) -> Bool {
+        guard case let .loaded(schedule) = calendarModel.state else { return false }
+        return !schedule.currentAndUpcoming(on: date, relativeTo: date).isEmpty
+    }
+
+    private var agentsHaveActivity: Bool {
+        guard case let .loaded(sessions) = codingAgentModel.state else { return false }
+        return sessions.contains { $0.status == .running }
+    }
+
+    private var gitHubHasActivity: Bool {
+        let hasOpenPullRequests = if case let .loaded(pullRequests) = gitHubModel.state {
+            !pullRequests.isEmpty
+        } else {
+            false
+        }
+        return hasOpenPullRequests || gitHubModel.actionSessions.contains { $0.status == .running }
+    }
+
+    private func selectedPageIndex(in pages: [NotchPage]) -> Int {
+        pages.firstIndex(of: selectedPage) ?? 0
+    }
+
+    private func nextPage(in pages: [NotchPage]) -> NotchPage {
+        wrappingPage(in: pages, from: selectedPage, offset: 1) ?? selectedPage
+    }
+
+    private func previousPage(in pages: [NotchPage]) -> NotchPage {
+        wrappingPage(in: pages, from: selectedPage, offset: -1) ?? selectedPage
+    }
 }
 
 func wrappingPage(in pages: [NotchPage], from selectedPage: NotchPage, offset: Int) -> NotchPage? {

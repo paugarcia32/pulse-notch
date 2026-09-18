@@ -119,6 +119,25 @@ struct FeatureModelTests {
     }
 
     @Test
+    func pausedMediaPageExpiresAfterFiveMinutes() async {
+        let playback = MediaPlaybackStatus(
+            id: "track",
+            title: "Track",
+            artist: "Artist",
+            duration: 180,
+            elapsedTime: 20,
+            isPlaying: false
+        )
+        let model = MediaPlaybackFeatureModel(provider: MediaPlaybackProviderFake(playback: playback))
+        let pausedAt = Date(timeIntervalSinceReferenceDate: 1_000)
+
+        await model.refresh(at: pausedAt)
+
+        #expect(model.isPageActive(at: pausedAt.addingTimeInterval(5 * 60)))
+        #expect(!model.isPageActive(at: pausedAt.addingTimeInterval(5 * 60 + 1)))
+    }
+
+    @Test
     func mediaPlaybackModelAdvancesTheElapsedTimeBetweenRefreshes() async {
         let playback = MediaPlaybackStatus(
             id: "track",
@@ -149,6 +168,7 @@ struct FeatureModelTests {
 
         #expect(provider.commands == [.togglePlayPause])
         #expect(model.playback?.isPlaying == false)
+        #expect(model.isPageActive(at: .now))
     }
 
     @Test
@@ -310,6 +330,7 @@ struct FeatureModelTests {
         let preferences = NotchPreferences(defaults: defaults)
 
         preferences.setVisible(.agents, isVisible: false)
+        preferences.setDynamicPagesEnabled(true)
         preferences.movePages(from: IndexSet(integer: 2), to: 0)
         preferences.setShortcut(AppShortcut(key: "g", modifiers: [.command, .option]), for: .firstPage)
         preferences.setCalendarReminderLeadTimeMinutes(5)
@@ -330,6 +351,7 @@ struct FeatureModelTests {
         let restoredPreferences = NotchPreferences(defaults: defaults)
         #expect(restoredPreferences.pageOrder == [.github, .calendar, .agents, .media])
         #expect(restoredPreferences.orderedVisiblePages == [.github, .calendar, .media])
+        #expect(restoredPreferences.dynamicPagesEnabled)
         #expect(restoredPreferences.page(for: .firstPage) == .github)
         #expect(restoredPreferences.shortcut(for: .firstPage).displayName == "⌥⌘G")
         #expect(restoredPreferences.calendarReminderLeadTimeMinutes == 5)
