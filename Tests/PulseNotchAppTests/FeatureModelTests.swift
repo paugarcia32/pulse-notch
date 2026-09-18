@@ -429,6 +429,29 @@ struct FeatureModelTests {
 
         #expect(preferences.collapsedIndicatorPreviewCounts.isEmpty)
     }
+
+    @Test
+    func closedNotchColorsPersistAndCanBeRestoredToDefaults() {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = NotchPreferences(defaults: defaults)
+
+        preferences.setCollapsedIndicatorColor(.yellow, for: .calendar)
+
+        let restoredPreferences = NotchPreferences(defaults: defaults)
+        #expect(restoredPreferences.hasCustomCollapsedIndicatorColors)
+        #expect(restoredPreferences.customCollapsedIndicatorColor(for: .calendar) != nil)
+        #expect(restoredPreferences.customCollapsedIndicatorColor(for: .downloads) == nil)
+
+        restoredPreferences.resetCollapsedIndicatorColors()
+
+        let defaultPreferences = NotchPreferences(defaults: defaults)
+        #expect(!defaultPreferences.hasCustomCollapsedIndicatorColors)
+        #expect(defaultPreferences.customCollapsedIndicatorColor(for: .calendar) == nil)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
 }
 
 private struct CalendarProviderFake: CalendarEventProviding {

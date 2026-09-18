@@ -276,7 +276,7 @@ struct NotchSurface: View {
             } else if case let .upcomingCalendarEvent(minutesUntilStart) = currentIndicators.first?.content {
                 CalendarCountdownIndicator(
                     minutesUntilStart: minutesUntilStart,
-                    color: currentIndicators[0].color,
+                    color: collapsedIndicatorColor(for: currentIndicators[0]),
                     reduceMotion: reduceMotion
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -287,7 +287,7 @@ struct NotchSurface: View {
                     MediaArtworkView(data: playback.artworkData, size: 22)
                     Spacer(minLength: 0)
                     MediaEqualizer(isPlaying: playback.isPlaying, reduceMotion: reduceMotion)
-                        .foregroundStyle(currentIndicators[0].color)
+                        .foregroundStyle(collapsedIndicatorColor(for: currentIndicators[0]))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityElement(children: .ignore)
@@ -295,7 +295,11 @@ struct NotchSurface: View {
             } else {
                 HStack(spacing: 8) {
                     ForEach(currentIndicators.prefix(5)) {
-                        NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion)
+                        NotchIndicatorView(
+                            indicator: $0,
+                            reduceMotion: reduceMotion,
+                            colorOverride: collapsedIndicatorColorOverride(for: $0)
+                        )
                     }
                     Spacer(minLength: 0)
                 }
@@ -401,21 +405,25 @@ struct NotchSurface: View {
         if let indicator {
             switch (indicator.content, side) {
             case (.upcomingCalendarEvent, .left):
-                CalendarCountdownIcon(color: indicator.color)
+                CalendarCountdownIcon(color: collapsedIndicatorColor(for: indicator))
                     .accessibilityLabel(indicator.accessibilityLabel)
             case let (.upcomingCalendarEvent(minutesUntilStart), .right):
                 CalendarCountdownValue(minutesUntilStart: minutesUntilStart, reduceMotion: reduceMotion)
-                    .foregroundStyle(indicator.color)
+                    .foregroundStyle(collapsedIndicatorColor(for: indicator))
                     .accessibilityHidden(true)
             case let (.mediaPlayback(playback), .left):
                 MediaArtworkView(data: playback.artworkData, size: 22)
                     .accessibilityLabel(indicator.accessibilityLabel)
             case let (.mediaPlayback(playback), .right):
                 MediaEqualizer(isPlaying: playback.isPlaying, reduceMotion: reduceMotion)
-                    .foregroundStyle(indicator.color)
+                    .foregroundStyle(collapsedIndicatorColor(for: indicator))
                     .accessibilityHidden(true)
             default:
-                NotchIndicatorView(indicator: indicator, reduceMotion: reduceMotion)
+                NotchIndicatorView(
+                    indicator: indicator,
+                    reduceMotion: reduceMotion,
+                    colorOverride: collapsedIndicatorColorOverride(for: indicator)
+                )
             }
         } else {
             Color.clear.accessibilityHidden(true)
@@ -428,6 +436,15 @@ struct NotchSurface: View {
             + CGFloat(levels.count - 1) * 8
             + NotchSurfaceSize.collapsedIndicatorOuterPadding
             + NotchSurfaceSize.physicalNotchContentSpacing
+    }
+
+    private func collapsedIndicatorColor(for indicator: NotchIndicator) -> Color {
+        collapsedIndicatorColorOverride(for: indicator) ?? indicator.color
+    }
+
+    private func collapsedIndicatorColorOverride(for indicator: NotchIndicator) -> Color? {
+        guard indicator.supportsCustomColor else { return nil }
+        return preferences.customCollapsedIndicatorColor(for: indicator.category)
     }
 
     private func expandedContent(at date: Date, pages: [NotchPage]) -> some View {

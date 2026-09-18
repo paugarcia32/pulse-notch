@@ -66,6 +66,21 @@ enum TestingSystemActivity: Equatable {
     case bluetoothHeadphones
 }
 
+private struct CollapsedIndicatorColor: Codable {
+    let red: Double
+    let green: Double
+    let blue: Double
+
+    init?(_ color: Color) {
+        guard let color = NSColor(color).usingColorSpace(.sRGB) else { return nil }
+        red = color.redComponent
+        green = color.greenComponent
+        blue = color.blueComponent
+    }
+
+    var color: Color { Color(red: red, green: green, blue: blue) }
+}
+
 @MainActor
 final class NotchPreferences: ObservableObject {
     @Published private(set) var pageOrder: [NotchPage]
@@ -95,6 +110,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var collapsedIndicatorPreviewCounts: [CollapsedIndicatorPreview: Int] = [:]
     @Published private(set) var collapsedIndicatorMaximumPerSide: Int
     @Published private(set) var collapsedIndicatorPriorityOrder: [CollapsedNotchIndicatorCategory]
+    @Published private var collapsedIndicatorColors: [CollapsedNotchIndicatorCategory: CollapsedIndicatorColor]
     @Published private(set) var visibleCollapsedIndicatorCategories: Set<CollapsedNotchIndicatorCategory>
     @Published private(set) var testingFeaturesEnabled: Bool
     @Published private(set) var testingSystemActivity: TestingSystemActivity?
@@ -123,6 +139,7 @@ final class NotchPreferences: ObservableObject {
         static let externalNotchStyle = "settings.externalNotchStyle"
         static let collapsedIndicatorMaximumPerSide = "settings.collapsedIndicatorMaximumPerSide"
         static let collapsedIndicatorPriorityOrder = "settings.collapsedIndicatorPriorityOrder"
+        static let collapsedIndicatorColors = "settings.collapsedIndicatorColors"
         static let visibleCollapsedIndicatorCategories = "settings.visibleCollapsedIndicatorCategories"
         static let mediaCollapsedIndicatorIntroduced = "settings.mediaCollapsedIndicatorIntroduced"
         static let testingFeaturesEnabled = "settings.testingFeaturesEnabled"
@@ -171,6 +188,9 @@ final class NotchPreferences: ObservableObject {
         collapsedIndicatorPriorityOrder = Self.collapsedIndicatorPriorities(
             from: defaults.stringArray(forKey: Keys.collapsedIndicatorPriorityOrder)
         )
+        collapsedIndicatorColors = defaults.data(forKey: Keys.collapsedIndicatorColors)
+            .flatMap { try? JSONDecoder().decode([CollapsedNotchIndicatorCategory: CollapsedIndicatorColor].self, from: $0) }
+            ?? [:]
         var collapsedIndicatorCategories = Self.collapsedIndicatorCategories(
             from: defaults.stringArray(forKey: Keys.visibleCollapsedIndicatorCategories)
         )
@@ -333,6 +353,24 @@ final class NotchPreferences: ObservableObject {
         defaults.set(collapsedIndicatorPriorityOrder.map(\.rawValue), forKey: Keys.collapsedIndicatorPriorityOrder)
     }
 
+    func customCollapsedIndicatorColor(for category: CollapsedNotchIndicatorCategory) -> Color? {
+        collapsedIndicatorColors[category]?.color
+    }
+
+    func setCollapsedIndicatorColor(_ color: Color, for category: CollapsedNotchIndicatorCategory) {
+        guard let color = CollapsedIndicatorColor(color) else { return }
+        collapsedIndicatorColors[category] = color
+        persistCollapsedIndicatorColors()
+    }
+
+    var hasCustomCollapsedIndicatorColors: Bool { !collapsedIndicatorColors.isEmpty }
+
+    func resetCollapsedIndicatorColors() {
+        guard !collapsedIndicatorColors.isEmpty else { return }
+        collapsedIndicatorColors.removeAll()
+        defaults.removeObject(forKey: Keys.collapsedIndicatorColors)
+    }
+
     func isCollapsedIndicatorCategoryVisible(_ category: CollapsedNotchIndicatorCategory) -> Bool {
         isCollapsedIndicatorCategoryEnabled(category)
             && (category.ownerPage.map(isVisible) ?? true)
@@ -416,6 +454,11 @@ final class NotchPreferences: ObservableObject {
     ) -> [CollapsedNotchIndicatorCategory] {
         let stored = storedPriorities?.compactMap(CollapsedNotchIndicatorCategory.init(rawValue:)) ?? []
         return stored + CollapsedNotchIndicatorCategory.defaultPriorityOrder.filter { !stored.contains($0) }
+    }
+
+    private func persistCollapsedIndicatorColors() {
+        guard let data = try? JSONEncoder().encode(collapsedIndicatorColors) else { return }
+        defaults.set(data, forKey: Keys.collapsedIndicatorColors)
     }
 
     private static func clampedCollapsedIndicatorMaximum(_ maximum: Int) -> Int {

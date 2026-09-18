@@ -92,6 +92,17 @@ struct CollapsedNotchIndicatorsTests {
     }
 
     @Test
+    func onlyRunningIndicatorsAllowCustomColors() {
+        #expect(CollapsedIndicatorPreview.calendar.indicator(instance: 0).supportsCustomColor)
+        #expect(CollapsedIndicatorPreview.githubActions.indicator(instance: 0).supportsCustomColor)
+        #expect(CollapsedIndicatorPreview.codex.indicator(instance: 0).supportsCustomColor)
+        #expect(CollapsedIndicatorPreview.download.indicator(instance: 0).supportsCustomColor)
+        #expect(CollapsedIndicatorPreview.mediaPlayback.indicator(instance: 0).supportsCustomColor)
+        #expect(!NotchIndicator(id: "failed", content: .githubActions(.failed), accessibilityLabel: "Failed").supportsCustomColor)
+        #expect(!NotchIndicator(id: "completed", content: .completedAgent(.codex), accessibilityLabel: "Completed").supportsCustomColor)
+    }
+
+    @Test
     func prioritizesRunningGitHubActionsOverFailedActions() {
         let url = URL(string: "https://github.com/acme/app/pull/1")!
         let actionSessions = [

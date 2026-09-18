@@ -58,9 +58,18 @@ struct NotchIndicator: Identifiable {
         }
     }
 
+    var supportsCustomColor: Bool {
+        switch content {
+        case .upcomingCalendarEvent, .runningAgent, .runningDownload, .githubActions(.running), .mediaPlayback:
+            true
+        case .completedAgent, .githubActions:
+            false
+        }
+    }
+
 }
 
-enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
+enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiable {
     case calendar
     case githubActions
     case codingAgents
@@ -68,6 +77,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
     case mediaPlayback
 
     var id: String { "collapsed-indicator-\(rawValue)" }
+    var colorPickerID: String { "collapsed-indicator-color-\(rawValue)" }
 
     var name: String {
         switch self {
@@ -96,6 +106,16 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
         case .codingAgents: "terminal"
         case .downloads: "arrow.down.circle"
         case .mediaPlayback: "waveform"
+        }
+    }
+
+    var defaultColor: Color {
+        switch self {
+        case .calendar: .pink
+        case .githubActions: .orange
+        case .codingAgents: .cyan
+        case .downloads: .blue
+        case .mediaPlayback: .purple
         }
     }
 
@@ -313,6 +333,9 @@ private extension Collection {
 struct NotchIndicatorView: View {
     let indicator: NotchIndicator
     let reduceMotion: Bool
+    var colorOverride: Color? = nil
+
+    private var color: Color { colorOverride ?? indicator.color }
 
     var body: some View {
         Group {
@@ -320,23 +343,23 @@ struct NotchIndicatorView: View {
             case let .upcomingCalendarEvent(minutesUntilStart):
                 CalendarCountdownIndicator(
                     minutesUntilStart: minutesUntilStart,
-                    color: indicator.color,
+                    color: color,
                     reduceMotion: reduceMotion
                 )
             case .runningAgent:
-                AgentActivityOrbit(color: indicator.color, reduceMotion: reduceMotion)
+                AgentActivityOrbit(color: color, reduceMotion: reduceMotion)
             case .completedAgent:
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(indicator.color)
+                    .foregroundStyle(color)
                     .symbolEffect(.bounce, value: indicator.content)
             case .runningDownload:
-                DownloadActivityIndicator(color: indicator.color, reduceMotion: reduceMotion)
+                DownloadActivityIndicator(color: color, reduceMotion: reduceMotion)
             case let .githubActions(status):
-                GitHubActionIndicator(status: status, color: indicator.color, reduceMotion: reduceMotion)
+                GitHubActionIndicator(status: status, color: color, reduceMotion: reduceMotion)
             case let .mediaPlayback(playback):
                 MediaEqualizer(isPlaying: playback.isPlaying, reduceMotion: reduceMotion)
-                    .foregroundStyle(indicator.color)
+                    .foregroundStyle(color)
             }
         }
             .accessibilityLabel(indicator.accessibilityLabel)

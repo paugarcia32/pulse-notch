@@ -170,6 +170,26 @@ struct PreferencesView: View {
                     Text("Higher activities stay closer to the notch and remain visible when space is limited. Drag to reorder.")
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                Section {
+                    ForEach(CollapsedNotchIndicatorCategory.defaultPriorityOrder, id: \.colorPickerID) { category in
+                        ColorPicker(
+                            selection: collapsedIndicatorColor(category),
+                            supportsOpacity: false
+                        ) {
+                            Label(category.name, systemImage: category.symbolName)
+                        }
+                    }
+                    Button("Restore Default Colors") {
+                        preferences.resetCollapsedIndicatorColors()
+                    }
+                    .disabled(!preferences.hasCustomCollapsedIndicatorColors)
+                } header: {
+                    Text("Closed Notch Colors")
+                } footer: {
+                    Text("Colors apply while activity is running. Failures remain red and completed activity remains green.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .listStyle(.inset)
             .tabItem { Label("Pages", systemImage: "rectangle.3.group") }
@@ -318,6 +338,13 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.isCollapsedIndicatorCategoryEnabled(category) },
             set: { preferences.setCollapsedIndicatorCategory(category, isVisible: $0) }
+        )
+    }
+
+    private func collapsedIndicatorColor(_ category: CollapsedNotchIndicatorCategory) -> Binding<Color> {
+        Binding(
+            get: { preferences.customCollapsedIndicatorColor(for: category) ?? category.defaultColor },
+            set: { preferences.setCollapsedIndicatorColor($0, for: category) }
         )
     }
 
