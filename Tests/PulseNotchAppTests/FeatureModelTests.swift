@@ -346,12 +346,42 @@ struct FeatureModelTests {
         #expect(restoredPreferences.collapsedIndicatorMaximumPerSide == 4)
         #expect(!restoredPreferences.isCollapsedIndicatorCategoryVisible(.githubActions))
         #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.calendar))
-        #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
+        #expect(!restoredPreferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
+        #expect(restoredPreferences.isCollapsedIndicatorCategoryEnabled(.codingAgents))
         #expect(restoredPreferences.testingFeaturesEnabled)
         #expect(preferences.testingSystemActivity == .volume)
         #expect(preferences.testingSystemActivityTrigger != nil)
 
         defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    @Test
+    func pageVisibilityControlsItsClosedNotchActivityWithoutLosingTheActivityPreference() {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = NotchPreferences(defaults: defaults)
+
+        preferences.setVisible(.agents, isVisible: false)
+
+        #expect(!preferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
+        #expect(preferences.isCollapsedIndicatorCategoryEnabled(.codingAgents))
+        #expect(preferences.isCollapsedIndicatorCategoryVisible(.downloads))
+
+        preferences.setVisible(.agents, isVisible: true)
+
+        #expect(preferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    @Test
+    func closedNotchActivitiesDeclareTheirOwningPage() {
+        #expect(CollapsedNotchIndicatorCategory.calendar.ownerPage == .calendar)
+        #expect(CollapsedNotchIndicatorCategory.codingAgents.ownerPage == .agents)
+        #expect(CollapsedNotchIndicatorCategory.githubActions.ownerPage == .github)
+        #expect(CollapsedNotchIndicatorCategory.mediaPlayback.ownerPage == .media)
+        #expect(CollapsedNotchIndicatorCategory.downloads.ownerPage == nil)
     }
 
     @Test

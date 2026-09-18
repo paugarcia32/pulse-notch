@@ -81,7 +81,8 @@ struct NotchSurface: View {
 
     private var refreshingSurface: some View {
         surface
-        .task {
+        .task(id: preferences.isVisible(.calendar)) {
+            guard preferences.isVisible(.calendar) else { return }
             while !Task.isCancelled {
                 await calendarModel.refresh()
                 try? await Task.sleep(for: .seconds(30))
@@ -122,13 +123,15 @@ struct NotchSurface: View {
                 await brightnessModel.refresh()
             }
         }
-        .task {
+        .task(id: preferences.isVisible(.github)) {
+            guard preferences.isVisible(.github) else { return }
             while !Task.isCancelled {
                 await gitHubModel.refresh()
                 try? await Task.sleep(for: .seconds(30))
             }
         }
-        .task {
+        .task(id: preferences.isVisible(.agents)) {
+            guard preferences.isVisible(.agents) else { return }
             while !Task.isCancelled {
                 await codingAgentModel.refresh()
                 try? await Task.sleep(for: .seconds(2))
@@ -141,7 +144,8 @@ struct NotchSurface: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-        .task {
+        .task(id: preferences.isVisible(.media)) {
+            guard preferences.isVisible(.media) else { return }
             while !Task.isCancelled {
                 await mediaPlaybackModel.refresh()
                 try? await Task.sleep(for: .seconds(1))
@@ -517,7 +521,9 @@ struct NotchSurface: View {
                         preview.indicator(instance: $0)
                     }
                 }
-            if !previews.isEmpty { return previews }
+            if !previews.isEmpty {
+                return previews.filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
+            }
         }
         let schedule: CalendarEventSchedule?
         if case let .loaded(loadedSchedule) = calendarModel.state {

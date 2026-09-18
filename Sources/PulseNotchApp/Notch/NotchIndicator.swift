@@ -72,6 +72,16 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    var ownerPage: NotchPage? {
+        switch self {
+        case .calendar: .calendar
+        case .githubActions: .github
+        case .codingAgents: .agents
+        case .downloads: nil
+        case .mediaPlayback: .media
+        }
+    }
+
 }
 
 enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {

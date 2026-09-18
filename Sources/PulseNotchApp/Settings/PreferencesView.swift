@@ -52,7 +52,7 @@ struct PreferencesView: View {
                     Text("More than 3 items per side is not recommended.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    ForEach(CollapsedNotchIndicatorCategory.allCases) { category in
+                    ForEach(CollapsedNotchIndicatorCategory.allCases.filter { $0.ownerPage == nil }) { category in
                         Toggle(category.name, isOn: collapsedIndicatorCategory(category))
                     }
                 }
@@ -123,7 +123,7 @@ struct PreferencesView: View {
                 } header: {
                     Text("Notch Pages")
                 } footer: {
-                    Text("Drag a row to change the order. Turn off a page to hide it from the notch.")
+                    Text("Drag a row to change the order. Turning off a page also stops its closed-notch activity.")
                 }
             }
             .listStyle(.inset)
@@ -271,7 +271,7 @@ struct PreferencesView: View {
 
     private func collapsedIndicatorCategory(_ category: CollapsedNotchIndicatorCategory) -> Binding<Bool> {
         Binding(
-            get: { preferences.isCollapsedIndicatorCategoryVisible(category) },
+            get: { preferences.isCollapsedIndicatorCategoryEnabled(category) },
             set: { preferences.setCollapsedIndicatorCategory(category, isVisible: $0) }
         )
     }
@@ -291,19 +291,31 @@ private struct PagePreferenceRow: View {
     @ObservedObject var preferences: NotchPreferences
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text("\(position)")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 14, alignment: .trailing)
-            Label(page.name, systemImage: page.symbolName)
-                .foregroundStyle(preferences.isVisible(page) ? .primary : .secondary)
-            Spacer()
-            Toggle("Show \(page.name)", isOn: Binding(
-                get: { preferences.isVisible(page) },
-                set: { preferences.setVisible(page, isVisible: $0) }
-            ))
-            .labelsHidden()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Text("\(position)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14, alignment: .trailing)
+                Label(page.name, systemImage: page.symbolName)
+                    .foregroundStyle(preferences.isVisible(page) ? .primary : .secondary)
+                Spacer()
+                Toggle("Show \(page.name)", isOn: Binding(
+                    get: { preferences.isVisible(page) },
+                    set: { preferences.setVisible(page, isVisible: $0) }
+                ))
+                .labelsHidden()
+            }
+
+            ForEach(CollapsedNotchIndicatorCategory.allCases.filter { $0.ownerPage == page }) { category in
+                Toggle("Show \(category.name) when notch is closed", isOn: Binding(
+                    get: { preferences.isCollapsedIndicatorCategoryEnabled(category) },
+                    set: { preferences.setCollapsedIndicatorCategory(category, isVisible: $0) }
+                ))
+                .controlSize(.small)
+                .disabled(!preferences.isVisible(page))
+                .padding(.leading, 24)
+            }
         }
         .padding(.vertical, 3)
     }

@@ -44,15 +44,16 @@ The script builds and opens a local `PulseNotch.app`. Launching the executable
 directly with `swift run PulseNotch` is not supported because macOS cannot
 associate privacy permissions reliably with a standalone SwiftPM executable.
 
-On first launch, macOS asks for full Calendar access. Pulse Notch reads upcoming
-event metadata locally, refreshes it every 30 seconds, and does not persist it.
+On first launch, macOS asks for full Calendar access. While the Calendar page is
+enabled, Pulse Notch reads upcoming event metadata locally, refreshes it every 30
+seconds, and does not persist it.
 
-Coding-agent detection reads local process and session metadata every two seconds.
-It does not persist process data or require credentials. Completed agents remain
-visible for five minutes, while their collapsed notification is cleared as soon as
-the notch opens. Cursor's standalone `cursor-agent` CLI is supported; Cursor editor
-chats cannot currently be distinguished reliably from the editor's background
-processes.
+While the Coding Agents page is enabled, detection reads local process and session
+metadata every two seconds. It does not persist process data or require credentials.
+Completed agents remain visible for five minutes, while their collapsed notification
+is cleared as soon as the notch opens. Cursor's standalone `cursor-agent` CLI is
+supported; Cursor editor chats cannot currently be distinguished reliably from the
+editor's background processes.
 
 Pulse Notch reads the internal battery's charge and power-source state locally once
 per second. Connecting external power temporarily replaces collapsed indicators with
@@ -84,24 +85,25 @@ another folder in Settings. It observes browser temporary files locally and neve
 displays or persists download file names or paths. The feature can be disabled at
 any time.
 
-Media playback reads the active system Now Playing item locally, including Spotify and
-browser players such as YouTube when they publish a system media session. It keeps its
-title, artist, artwork, and progress in memory only. The compact indicator can be disabled
-in Settings > General and the whole Media page can be disabled in Settings > Pages.
-macOS has no public API for reading another app's Now Playing item, so the local
-bridge is optional at runtime; when it is unavailable, the page shows an empty state.
+While the Media page is enabled, media playback reads the active system Now Playing
+item locally, including Spotify and browser players such as YouTube when they publish
+a system media session. It keeps its title, artist, artwork, and progress in memory
+only. Its compact indicator can be disabled below the Media page in Settings > Pages;
+disabling the page also hides the indicator and stops playback polling. macOS has no
+public API for reading another app's Now Playing item, so the local bridge is optional
+at runtime; when it is unavailable, the page shows an empty state.
 
 For active sessions, Pulse Notch reads the working directory and Git branch locally
 when the agent exposes them. It does not read or show coding-agent prompts or thread
 titles. This metadata stays in memory; directory and branch lookups are cached for
 thirty seconds while the agent is running.
 
-The GitHub page uses the official `gh` CLI session you have already authenticated with
-(`gh auth login`). It reads up to 100 open pull requests authored by you, including
-their review decision and GitHub Actions checks, refreshes every thirty seconds, and
-keeps the result in memory only. A workflow appears as a runner only while it is
-running or for five minutes after it finishes; completions appear in the collapsed
-notch until it is opened. It does not read, save, or log a token.
+While enabled, the GitHub page uses the official `gh` CLI session you have already
+authenticated with (`gh auth login`). It reads up to 100 open pull requests authored
+by you, including their review decision and GitHub Actions checks, refreshes every
+thirty seconds, and keeps the result in memory only. A workflow appears as a runner
+only while it is running or for five minutes after it finishes; completions appear in
+the collapsed notch until it is opened. It does not read, save, or log a token.
 
 When the coding-agent page is visible, Pulse Notch asks the locally installed Codex
 App Server for the current quota windows once per minute. This reuses Codex's own

@@ -302,6 +302,11 @@ final class NotchPreferences: ObservableObject {
     }
 
     func isCollapsedIndicatorCategoryVisible(_ category: CollapsedNotchIndicatorCategory) -> Bool {
+        isCollapsedIndicatorCategoryEnabled(category)
+            && (category.ownerPage.map(isVisible) ?? true)
+    }
+
+    func isCollapsedIndicatorCategoryEnabled(_ category: CollapsedNotchIndicatorCategory) -> Bool {
         visibleCollapsedIndicatorCategories.contains(category)
     }
 
