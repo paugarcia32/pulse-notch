@@ -20,7 +20,9 @@ struct NotchSurface: View {
     @State private var selectedPage = NotchPage.summary
     @State private var pageDragOffset: CGFloat = 0
     @State private var isHoveringPageIndicator = false
+    @State private var hoverState = NotchHoverState()
     @State private var hoverTask: Task<Void, Never>?
+    @State private var hoverRearmTask: Task<Void, Never>?
     @State private var systemActivityTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -82,6 +84,8 @@ struct NotchSurface: View {
         .onChange(of: preferences.showBluetoothHeadphonesActivity) { _, isShown in dismissSystemActivity(.bluetoothHeadphones(batteryLevel: nil), when: !isShown) }
         .onDisappear {
             systemActivityTask?.cancel()
+            hoverTask?.cancel()
+            hoverRearmTask?.cancel()
             volumeModel.stopMonitoring()
             brightnessModel.stopMonitoring()
             downloadModel.stopMonitoring()
@@ -236,21 +240,33 @@ struct NotchSurface: View {
     }
 
     private func notch(at date: Date, pages: [NotchPage]) -> some View {
-        Group {
-            if isExpanded { expandedContent(at: date, pages: pages) } else { collapsedIndicators(at: date) }
+        ZStack {
+            if isExpanded {
+                expandedContent(at: date, pages: pages)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            } else {
+                collapsedIndicators(at: date)
+                    .transition(.opacity)
+            }
         }
         .foregroundStyle(.white)
         .padding(.horizontal, isExpanded ? 18 : 12)
         .padding(.vertical, isExpanded ? 14 : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background { notchBackground }
-        .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: isExpanded)
+        .animation(
+            reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.4),
+            value: isExpanded
+        )
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: systemActivityModel.activity)
         .onChange(of: isExpanded) { _, isOpen in
             if isOpen { NotchHapticFeedback.performOpen() }
         }
         .onHover(perform: handleHover)
-        .onTapGesture { openNotch() }
+        .onTapGesture {
+            hoverState.update(isHovering: true)
+            openNotch()
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pulse Notch")
     }
@@ -607,17 +623,25 @@ struct NotchSurface: View {
     }
 
     private func toggleNotch() {
-        isExpanded ? (isExpanded = false) : openNotch()
+        isExpanded ? closeNotch() : openNotch()
     }
 
     private func closeNotch() {
+        hoverState.notchClosed()
+        hoverRearmTask?.cancel()
+        hoverRearmTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(550))
+            guard !Task.isCancelled else { return }
+            hoverState.finishClosing()
+        }
         isExpanded = false
     }
 
     private func handleHover(_ hovering: Bool) {
         hoverTask?.cancel()
+        hoverState.update(isHovering: hovering)
         if hovering {
-            guard !isExpanded else { return }
+            guard hoverState.canOpen, !isExpanded else { return }
             hoverTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(180))
                 guard !Task.isCancelled else { return }
@@ -702,6 +726,28 @@ struct NotchSurface: View {
 
     private func previousPage(in pages: [NotchPage]) -> NotchPage {
         wrappingPage(in: pages, from: selectedPage, offset: -1) ?? selectedPage
+    }
+}
+
+struct NotchHoverState {
+    private(set) var canOpen = true
+    private(set) var isHovering = false
+    private var isClosing = false
+
+    mutating func update(isHovering: Bool) {
+        self.isHovering = isHovering
+        if !isClosing, !isHovering { canOpen = true }
+    }
+
+    mutating func notchClosed() {
+        guard isHovering else { return }
+        canOpen = false
+        isClosing = true
+    }
+
+    mutating func finishClosing() {
+        isClosing = false
+        if !isHovering { canOpen = true }
     }
 }
 

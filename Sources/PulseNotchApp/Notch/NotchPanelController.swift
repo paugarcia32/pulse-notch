@@ -222,8 +222,8 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             return
         }
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.25
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.duration = 0.4
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0, 0.2, 1)
             panel.animator().setFrame(targetFrame, display: true)
         }
     }
