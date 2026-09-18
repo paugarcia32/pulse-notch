@@ -108,6 +108,12 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         guard isExpanded != expanded else { return }
         isExpanded = expanded
         resizePanel(animated: true)
+        if expanded {
+            NSApp.activate()
+            panel?.makeKeyAndOrderFront(nil)
+        } else {
+            panel?.resignKey()
+        }
     }
 
     func showPanel(on screen: NSScreen?) {
@@ -273,7 +279,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     }
 }
 
-private final class NotchPanel: NSPanel {
+final class NotchPanel: NSPanel {
     init(contentRect: NSRect) {
         super.init(
             contentRect: contentRect,
@@ -292,6 +298,6 @@ private final class NotchPanel: NSPanel {
         isMovable = false
     }
 
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
