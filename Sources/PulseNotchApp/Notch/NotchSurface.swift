@@ -294,7 +294,7 @@ struct NotchSurface: View {
                 .accessibilityLabel(currentIndicators[0].accessibilityLabel)
             } else {
                 HStack(spacing: 8) {
-                    ForEach(currentIndicators) {
+                    ForEach(currentIndicators.prefix(5)) {
                         NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion)
                     }
                     Spacer(minLength: 0)
@@ -356,92 +356,76 @@ struct NotchSurface: View {
     }
 
     private func physicalNotchIndicators(_ indicators: [NotchIndicator], notchSize: CGSize) -> some View {
-        let mediaIndicator = indicators.first { indicator in
-            if case .mediaPlayback = indicator.content { return true }
-            return false
-        }
-        let calendarIndicator = indicators.first { indicator in
-            if case .upcomingCalendarEvent = indicator.content { return true }
-            return false
-        }
-        let primaryIndicator = mediaIndicator ?? calendarIndicator
-        let otherIndicators = indicators.filter {
-            $0.id != primaryIndicator?.id && $0.id != calendarIndicator?.id
-        }
-        let indicatorCountPerSide = primaryIndicator == nil
-            ? preferences.collapsedIndicatorMaximumPerSide
-            : max(0, preferences.collapsedIndicatorMaximumPerSide - 1)
-        let leftIndicators = Array(otherIndicators.prefix(indicatorCountPerSide))
-        let rightIndicators = Array(otherIndicators.dropFirst(indicatorCountPerSide).prefix(indicatorCountPerSide))
-        // A paired indicator occupies the same slot on both sides of the notch.
-        let pairedContentWidth: CGFloat = mediaIndicator != nil && calendarIndicator != nil ? 50 : 0
-        let leftWidth = collapsedSideWidth(
-            itemCount: leftIndicators.count,
-            additionalContentWidth: pairedContentWidth > 0 ? pairedContentWidth : mediaIndicator == nil
-                ? (calendarIndicator == nil ? 0 : 16)
-                : 22
+        let layout = CollapsedNotchLayout(
+            indicators: indicators,
+            maximumPerSide: preferences.collapsedIndicatorMaximumPerSide
         )
-        let rightWidth = collapsedSideWidth(
-            itemCount: rightIndicators.count,
-            additionalContentWidth: pairedContentWidth > 0 ? pairedContentWidth : mediaIndicator == nil
-                ? (calendarIndicator == nil ? 0 : 28)
-                : 16
-        )
+        let sideWidth = collapsedSideWidth(for: layout.levels)
 
         return HStack(spacing: 0) {
             HStack(spacing: 8) {
-                if let mediaIndicator, case let .mediaPlayback(playback) = mediaIndicator.content {
-                    MediaArtworkView(data: playback.artworkData, size: 22)
-                        .accessibilityLabel(mediaIndicator.accessibilityLabel)
-                    if let calendarIndicator {
-                        CalendarCountdownIcon(color: calendarIndicator.color)
-                        .accessibilityLabel(calendarIndicator.accessibilityLabel)
-                    }
-                    ForEach(leftIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
-                } else if let calendarIndicator {
-                    ForEach(leftIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
-                    CalendarCountdownIcon(color: calendarIndicator.color)
-                        .accessibilityLabel(calendarIndicator.accessibilityLabel)
-                } else {
-                    ForEach(leftIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
+                ForEach(Array(layout.levels.enumerated().reversed()), id: \.offset) { _, level in
+                    collapsedIndicator(level.left, side: .left)
+                        .frame(width: level.width, alignment: .trailing)
                 }
             }
             .padding(.leading, NotchSurfaceSize.collapsedIndicatorOuterPadding)
             .padding(.trailing, NotchSurfaceSize.physicalNotchContentSpacing)
-            .frame(width: leftWidth, height: notchSize.height, alignment: .trailing)
+            .frame(width: sideWidth, height: notchSize.height, alignment: .trailing)
 
             Color.clear
                 .frame(width: notchSize.width, height: notchSize.height)
                 .accessibilityHidden(true)
 
             HStack(spacing: 8) {
-                if let calendarIndicator, case let .upcomingCalendarEvent(minutesUntilStart) = calendarIndicator.content {
-                    CalendarCountdownValue(minutesUntilStart: minutesUntilStart, reduceMotion: reduceMotion)
-                        .foregroundStyle(calendarIndicator.color)
-                        .accessibilityHidden(true)
+                ForEach(Array(layout.levels.enumerated()), id: \.offset) { _, level in
+                    collapsedIndicator(level.right, side: .right)
+                        .frame(width: level.width, alignment: .leading)
                 }
-                if let mediaIndicator, case let .mediaPlayback(playback) = mediaIndicator.content {
-                    MediaEqualizer(isPlaying: playback.isPlaying, reduceMotion: reduceMotion)
-                        .foregroundStyle(mediaIndicator.color)
-                        .accessibilityHidden(true)
-                }
-                ForEach(rightIndicators) { NotchIndicatorView(indicator: $0, reduceMotion: reduceMotion) }
             }
             .padding(.leading, NotchSurfaceSize.physicalNotchContentSpacing)
             .padding(.trailing, NotchSurfaceSize.collapsedIndicatorOuterPadding)
-            .frame(width: rightWidth, height: notchSize.height, alignment: .leading)
+            .frame(width: sideWidth, height: notchSize.height, alignment: .leading)
         }
         .background { AttachedNotchShape(bottomCornerRadius: 8).fill(.black) }
-        .offset(x: (rightWidth - leftWidth) / 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func collapsedSideWidth(itemCount: Int, additionalContentWidth: CGFloat = 0) -> CGFloat {
-        guard itemCount > 0 || additionalContentWidth > 0 else { return 0 }
-        let contentWidth = CGFloat(itemCount) * 16
-            + additionalContentWidth
-            + CGFloat(max(itemCount - 1 + (additionalContentWidth > 0 && itemCount > 0 ? 1 : 0), 0)) * 8
-        return contentWidth
+    private enum CollapsedIndicatorSide {
+        case left
+        case right
+    }
+
+    @ViewBuilder
+    private func collapsedIndicator(_ indicator: NotchIndicator?, side: CollapsedIndicatorSide) -> some View {
+        if let indicator {
+            switch (indicator.content, side) {
+            case (.upcomingCalendarEvent, .left):
+                CalendarCountdownIcon(color: indicator.color)
+                    .accessibilityLabel(indicator.accessibilityLabel)
+            case let (.upcomingCalendarEvent(minutesUntilStart), .right):
+                CalendarCountdownValue(minutesUntilStart: minutesUntilStart, reduceMotion: reduceMotion)
+                    .foregroundStyle(indicator.color)
+                    .accessibilityHidden(true)
+            case let (.mediaPlayback(playback), .left):
+                MediaArtworkView(data: playback.artworkData, size: 22)
+                    .accessibilityLabel(indicator.accessibilityLabel)
+            case let (.mediaPlayback(playback), .right):
+                MediaEqualizer(isPlaying: playback.isPlaying, reduceMotion: reduceMotion)
+                    .foregroundStyle(indicator.color)
+                    .accessibilityHidden(true)
+            default:
+                NotchIndicatorView(indicator: indicator, reduceMotion: reduceMotion)
+            }
+        } else {
+            Color.clear.accessibilityHidden(true)
+        }
+    }
+
+    private func collapsedSideWidth(for levels: [CollapsedNotchLayout.Level]) -> CGFloat {
+        guard !levels.isEmpty else { return 0 }
+        return levels.map(\.width).reduce(0, +)
+            + CGFloat(levels.count - 1) * 8
             + NotchSurfaceSize.collapsedIndicatorOuterPadding
             + NotchSurfaceSize.physicalNotchContentSpacing
     }
@@ -547,7 +531,10 @@ struct NotchSurface: View {
                     }
                 }
             if !previews.isEmpty {
-                return previews.filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
+                return CollapsedNotchIndicators.prioritize(
+                    previews.filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) },
+                    using: preferences.collapsedIndicatorPriorityOrder
+                )
             }
         }
         let schedule: CalendarEventSchedule?
@@ -561,7 +548,7 @@ struct NotchSurface: View {
         } else {
             []
         }
-        return CollapsedNotchIndicators.make(
+        let indicators = CollapsedNotchIndicators.make(
             schedule: schedule,
             sessions: sessions,
             actionSessions: gitHubModel.notificationActionSessions,
@@ -570,6 +557,10 @@ struct NotchSurface: View {
             at: date,
             calendarReminderLeadTime: preferences.calendarReminderLeadTime
         ).filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
+        return CollapsedNotchIndicators.prioritize(
+            indicators,
+            using: preferences.collapsedIndicatorPriorityOrder
+        )
     }
 
     private var downloadsMonitoringID: String {

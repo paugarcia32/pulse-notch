@@ -151,6 +151,25 @@ struct PreferencesView: View {
                     Text("The first priority with relevant activity fills the main Summary panel. Drag to reorder.")
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                Section {
+                    ForEach(Array(preferences.collapsedIndicatorPriorityOrder.enumerated()), id: \.element.id) { index, category in
+                        HStack(spacing: 10) {
+                            Text("\(index + 1)")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .frame(width: 14, alignment: .trailing)
+                            Label(category.name, systemImage: category.symbolName)
+                        }
+                        .padding(.vertical, 3)
+                    }
+                    .onMove(perform: preferences.moveCollapsedIndicatorPriorities)
+                } header: {
+                    Text("Closed Notch Priorities")
+                } footer: {
+                    Text("Higher activities stay closer to the notch and remain visible when space is limited. Drag to reorder.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .listStyle(.inset)
             .tabItem { Label("Pages", systemImage: "rectangle.3.group") }

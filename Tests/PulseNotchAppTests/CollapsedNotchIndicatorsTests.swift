@@ -5,7 +5,7 @@ import Testing
 
 struct CollapsedNotchIndicatorsTests {
     @Test
-    func prioritizesUpcomingCalendarThenLimitsAgentIndicators() {
+    func createsAllRelevantIndicatorsBeforeLayoutAppliesItsLimit() {
         let now = Date(timeIntervalSince1970: 1_000)
         let schedule = CalendarEventSchedule(events: [CalendarEvent(
             id: "event",
@@ -31,8 +31,64 @@ struct CollapsedNotchIndicatorsTests {
             calendarReminderLeadTime: 10 * 60
         )
 
-        #expect(indicators.map(\.id) == ["calendar-event", "codex", "claude", "cursor", "antigravity"])
+        #expect(indicators.map(\.id) == ["calendar-event", "codex", "claude", "cursor", "antigravity", "opencode"])
         #expect(indicators.first?.content == .upcomingCalendarEvent(minutesUntilStart: 1))
+    }
+
+    @Test
+    func ordersIndicatorsUsingTheUsersCategoryPriorities() {
+        let indicators = [
+            CollapsedIndicatorPreview.codex.indicator(instance: 0),
+            CollapsedIndicatorPreview.calendar.indicator(instance: 0),
+            CollapsedIndicatorPreview.download.indicator(instance: 0)
+        ]
+
+        let prioritized = CollapsedNotchIndicators.prioritize(
+            indicators,
+            using: [.downloads, .codingAgents, .calendar, .githubActions, .mediaPlayback]
+        )
+
+        #expect(prioritized.map(\.category) == [.downloads, .codingAgents, .calendar])
+    }
+
+    @Test
+    func pairedIndicatorsOccupyTheSameLevelOnBothSides() {
+        let calendar = CollapsedIndicatorPreview.calendar.indicator(instance: 0)
+        let agent = CollapsedIndicatorPreview.codex.indicator(instance: 0)
+        let layout = CollapsedNotchLayout(indicators: [calendar, agent], maximumPerSide: 2)
+
+        #expect(layout.levels.count == 2)
+        #expect(layout.levels[0].left?.id == calendar.id)
+        #expect(layout.levels[0].right?.id == calendar.id)
+        #expect(layout.levels[1].left?.id == agent.id)
+        #expect(layout.levels[1].right == nil)
+    }
+
+    @Test
+    func balancesSingleIndicatorsAcrossBothSidesByPriorityLevel() {
+        let indicators = [
+            CollapsedIndicatorPreview.codex.indicator(instance: 0),
+            CollapsedIndicatorPreview.claude.indicator(instance: 0),
+            CollapsedIndicatorPreview.cursor.indicator(instance: 0)
+        ]
+        let layout = CollapsedNotchLayout(indicators: indicators, maximumPerSide: 2)
+
+        #expect(layout.levels.map { $0.left?.id } == ["codex-0", "cursor-0"])
+        #expect(layout.levels.map { $0.right?.id } == ["claude-0", nil])
+    }
+
+    @Test
+    func dropsLowerPriorityLevelsWhenTheNotchIsFull() {
+        let indicators = [
+            CollapsedIndicatorPreview.calendar.indicator(instance: 0),
+            CollapsedIndicatorPreview.codex.indicator(instance: 0),
+            CollapsedIndicatorPreview.claude.indicator(instance: 0)
+        ]
+        let layout = CollapsedNotchLayout(indicators: indicators, maximumPerSide: 1)
+
+        #expect(layout.levels.count == 1)
+        #expect(layout.levels[0].left?.category == .calendar)
+        #expect(layout.levels[0].right?.category == .calendar)
     }
 
     @Test

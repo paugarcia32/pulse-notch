@@ -51,6 +51,13 @@ struct NotchIndicator: Identifiable {
         }
     }
 
+    var occupiesBothSides: Bool {
+        switch content {
+        case .upcomingCalendarEvent, .mediaPlayback: true
+        default: false
+        }
+    }
+
 }
 
 enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
@@ -60,7 +67,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
     case downloads
     case mediaPlayback
 
-    var id: String { rawValue }
+    var id: String { "collapsed-indicator-\(rawValue)" }
 
     var name: String {
         switch self {
@@ -81,6 +88,24 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Identifiable {
         case .mediaPlayback: .media
         }
     }
+
+    var symbolName: String {
+        switch self {
+        case .calendar: "calendar"
+        case .githubActions: "arrow.triangle.2.circlepath"
+        case .codingAgents: "terminal"
+        case .downloads: "arrow.down.circle"
+        case .mediaPlayback: "waveform"
+        }
+    }
+
+    static let defaultPriorityOrder: [Self] = [
+        .mediaPlayback,
+        .calendar,
+        .githubActions,
+        .downloads,
+        .codingAgents
+    ]
 
 }
 
@@ -199,7 +224,7 @@ enum CollapsedNotchIndicators {
             )
         }
 
-        indicators.append(contentsOf: downloads.prefix(4).map { download in
+        indicators.append(contentsOf: downloads.map { download in
             NotchIndicator(
                 id: "download-\(download.id)",
                 content: .runningDownload,
@@ -207,7 +232,7 @@ enum CollapsedNotchIndicators {
             )
         })
 
-        indicators.append(contentsOf: sessions.prefix(4).map { session in
+        indicators.append(contentsOf: sessions.map { session in
             let isRunning = session.status == .running
             return NotchIndicator(
                 id: session.id,
@@ -218,8 +243,71 @@ enum CollapsedNotchIndicators {
             )
         })
 
-        return Array(indicators.prefix(5))
+        return indicators
     }
+
+    static func prioritize(
+        _ indicators: [NotchIndicator],
+        using categories: [CollapsedNotchIndicatorCategory]
+    ) -> [NotchIndicator] {
+        let ranks = Dictionary(uniqueKeysWithValues: categories.enumerated().map { ($1, $0) })
+        return indicators.enumerated().sorted {
+            let leftRank = ranks[$0.element.category] ?? categories.count
+            let rightRank = ranks[$1.element.category] ?? categories.count
+            return leftRank == rightRank ? $0.offset < $1.offset : leftRank < rightRank
+        }.map(\.element)
+    }
+}
+
+struct CollapsedNotchLayout {
+    struct Level {
+        let left: NotchIndicator?
+        let right: NotchIndicator?
+
+        var width: CGFloat {
+            max(left.map(itemWidth) ?? 0, right.map(itemWidth) ?? 0)
+        }
+
+        private func itemWidth(_ indicator: NotchIndicator) -> CGFloat {
+            switch indicator.content {
+            case .upcomingCalendarEvent: 28
+            case .mediaPlayback: 22
+            default: 16
+            }
+        }
+    }
+
+    let levels: [Level]
+
+    init(indicators: [NotchIndicator], maximumPerSide: Int) {
+        var levels: [Level] = []
+        var index = 0
+        var placeUnpairedOnLeft = true
+
+        while index < indicators.count, levels.count < maximumPerSide {
+            let indicator = indicators[index]
+            if indicator.occupiesBothSides {
+                levels.append(Level(left: indicator, right: indicator))
+                index += 1
+            } else if indicators[safe: index + 1]?.occupiesBothSides == false {
+                levels.append(Level(left: indicator, right: indicators[index + 1]))
+                index += 2
+            } else {
+                levels.append(Level(
+                    left: placeUnpairedOnLeft ? indicator : nil,
+                    right: placeUnpairedOnLeft ? nil : indicator
+                ))
+                placeUnpairedOnLeft.toggle()
+                index += 1
+            }
+        }
+
+        self.levels = levels
+    }
+}
+
+private extension Collection {
+    subscript(safe index: Index) -> Element? { indices.contains(index) ? self[index] : nil }
 }
 
 struct NotchIndicatorView: View {

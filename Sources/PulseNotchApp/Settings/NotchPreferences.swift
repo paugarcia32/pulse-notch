@@ -94,6 +94,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var externalNotchStyle: ExternalNotchStyle
     @Published private(set) var collapsedIndicatorPreviewCounts: [CollapsedIndicatorPreview: Int] = [:]
     @Published private(set) var collapsedIndicatorMaximumPerSide: Int
+    @Published private(set) var collapsedIndicatorPriorityOrder: [CollapsedNotchIndicatorCategory]
     @Published private(set) var visibleCollapsedIndicatorCategories: Set<CollapsedNotchIndicatorCategory>
     @Published private(set) var testingFeaturesEnabled: Bool
     @Published private(set) var testingSystemActivity: TestingSystemActivity?
@@ -121,6 +122,7 @@ final class NotchPreferences: ObservableObject {
         static let preferredDisplayID = "settings.preferredDisplayID"
         static let externalNotchStyle = "settings.externalNotchStyle"
         static let collapsedIndicatorMaximumPerSide = "settings.collapsedIndicatorMaximumPerSide"
+        static let collapsedIndicatorPriorityOrder = "settings.collapsedIndicatorPriorityOrder"
         static let visibleCollapsedIndicatorCategories = "settings.visibleCollapsedIndicatorCategories"
         static let mediaCollapsedIndicatorIntroduced = "settings.mediaCollapsedIndicatorIntroduced"
         static let testingFeaturesEnabled = "settings.testingFeaturesEnabled"
@@ -165,6 +167,9 @@ final class NotchPreferences: ObservableObject {
         externalNotchStyle = ExternalNotchStyle(rawValue: defaults.string(forKey: Keys.externalNotchStyle) ?? "") ?? .capsule
         collapsedIndicatorMaximumPerSide = Self.clampedCollapsedIndicatorMaximum(
             defaults.object(forKey: Keys.collapsedIndicatorMaximumPerSide) as? Int ?? 3
+        )
+        collapsedIndicatorPriorityOrder = Self.collapsedIndicatorPriorities(
+            from: defaults.stringArray(forKey: Keys.collapsedIndicatorPriorityOrder)
         )
         var collapsedIndicatorCategories = Self.collapsedIndicatorCategories(
             from: defaults.stringArray(forKey: Keys.visibleCollapsedIndicatorCategories)
@@ -323,6 +328,11 @@ final class NotchPreferences: ObservableObject {
         defaults.set(value, forKey: Keys.collapsedIndicatorMaximumPerSide)
     }
 
+    func moveCollapsedIndicatorPriorities(from offsets: IndexSet, to destination: Int) {
+        collapsedIndicatorPriorityOrder.move(fromOffsets: offsets, toOffset: destination)
+        defaults.set(collapsedIndicatorPriorityOrder.map(\.rawValue), forKey: Keys.collapsedIndicatorPriorityOrder)
+    }
+
     func isCollapsedIndicatorCategoryVisible(_ category: CollapsedNotchIndicatorCategory) -> Bool {
         isCollapsedIndicatorCategoryEnabled(category)
             && (category.ownerPage.map(isVisible) ?? true)
@@ -399,6 +409,13 @@ final class NotchPreferences: ObservableObject {
     ) -> Set<CollapsedNotchIndicatorCategory> {
         guard let storedCategories else { return Set(CollapsedNotchIndicatorCategory.allCases) }
         return Set(storedCategories.compactMap(CollapsedNotchIndicatorCategory.init(rawValue:)))
+    }
+
+    private static func collapsedIndicatorPriorities(
+        from storedPriorities: [String]?
+    ) -> [CollapsedNotchIndicatorCategory] {
+        let stored = storedPriorities?.compactMap(CollapsedNotchIndicatorCategory.init(rawValue:)) ?? []
+        return stored + CollapsedNotchIndicatorCategory.defaultPriorityOrder.filter { !stored.contains($0) }
     }
 
     private static func clampedCollapsedIndicatorMaximum(_ maximum: Int) -> Int {
