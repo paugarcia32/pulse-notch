@@ -15,4 +15,11 @@ struct DynamicPageVisibilityTests {
 
         #expect(activity.visiblePages(from: [.github, .agents, .calendar, .media], isEnabled: true) == [.github, .calendar])
     }
+
+    @Test
+    func dynamicModeAlwaysKeepsSummaryWhenConfigured() {
+        let activity = DynamicPageActivity(calendar: false, agents: false, github: false, media: false)
+
+        #expect(activity.visiblePages(from: [.summary, .calendar], isEnabled: true) == [.summary])
+    }
 }

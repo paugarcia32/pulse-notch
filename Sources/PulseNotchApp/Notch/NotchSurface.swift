@@ -17,7 +17,7 @@ struct NotchSurface: View {
     let physicalNotchSize: CGSize?
     let onExpansionChanged: (Bool) -> Void
     @State private var isExpanded = false
-    @State private var selectedPage = NotchPage.calendar
+    @State private var selectedPage = NotchPage.summary
     @State private var pageDragOffset: CGFloat = 0
     @State private var isHoveringPageIndicator = false
     @State private var hoverTask: Task<Void, Never>?
@@ -38,6 +38,10 @@ struct NotchSurface: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchOpen)) { _ in toggleNotch() }
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchClose)) { _ in closeNotch() }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowSummary)) { _ in
+            openNotch()
+            selectPage(.summary)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowCalendar)) { _ in
             openNotch()
             selectPage(.calendar)
@@ -86,8 +90,8 @@ struct NotchSurface: View {
 
     private var refreshingSurface: some View {
         surface
-        .task(id: preferences.isVisible(.calendar)) {
-            guard preferences.isVisible(.calendar) else { return }
+        .task(id: preferences.isVisible(.calendar) || preferences.isVisible(.summary)) {
+            guard preferences.isVisible(.calendar) || preferences.isVisible(.summary) else { return }
             while !Task.isCancelled {
                 await calendarModel.refresh()
                 try? await Task.sleep(for: .seconds(30))
@@ -128,15 +132,15 @@ struct NotchSurface: View {
                 await brightnessModel.refresh()
             }
         }
-        .task(id: preferences.isVisible(.github)) {
-            guard preferences.isVisible(.github) else { return }
+        .task(id: preferences.isVisible(.github) || preferences.isVisible(.summary)) {
+            guard preferences.isVisible(.github) || preferences.isVisible(.summary) else { return }
             while !Task.isCancelled {
                 await gitHubModel.refresh()
                 try? await Task.sleep(for: .seconds(30))
             }
         }
-        .task(id: preferences.isVisible(.agents)) {
-            guard preferences.isVisible(.agents) else { return }
+        .task(id: preferences.isVisible(.agents) || preferences.isVisible(.summary)) {
+            guard preferences.isVisible(.agents) || preferences.isVisible(.summary) else { return }
             while !Task.isCancelled {
                 await codingAgentModel.refresh()
                 try? await Task.sleep(for: .seconds(2))
@@ -149,8 +153,8 @@ struct NotchSurface: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-        .task(id: preferences.isVisible(.media)) {
-            guard preferences.isVisible(.media) else { return }
+        .task(id: preferences.isVisible(.media) || preferences.isVisible(.summary)) {
+            guard preferences.isVisible(.media) || preferences.isVisible(.summary) else { return }
             while !Task.isCancelled {
                 await mediaPlaybackModel.refresh()
                 try? await Task.sleep(for: .seconds(1))
@@ -632,6 +636,16 @@ struct NotchSurface: View {
     @ViewBuilder
     private func pageContent(_ page: NotchPage, at date: Date) -> some View {
         switch page {
+        case .summary:
+            SummaryPage(
+                calendarModel: calendarModel,
+                codingAgentModel: codingAgentModel,
+                gitHubModel: gitHubModel,
+                mediaPlaybackModel: mediaPlaybackModel,
+                priorities: preferences.summaryPriorityOrder,
+                date: date,
+                onSelectPage: { selectPage($0) }
+            )
         case .calendar: CalendarPage(model: calendarModel, date: date)
         case .agents: CodingAgentsPage(model: codingAgentModel, date: date)
         case .github: GitHubPage(model: gitHubModel, date: date)

@@ -331,7 +331,8 @@ struct FeatureModelTests {
 
         preferences.setVisible(.agents, isVisible: false)
         preferences.setDynamicPagesEnabled(true)
-        preferences.movePages(from: IndexSet(integer: 2), to: 0)
+        preferences.movePages(from: IndexSet(integer: 3), to: 0)
+        preferences.moveSummaryPriorities(from: IndexSet(integer: 2), to: 0)
         preferences.setShortcut(AppShortcut(key: "g", modifiers: [.command, .option]), for: .firstPage)
         preferences.setCalendarReminderLeadTimeMinutes(5)
         preferences.setTransientSystemActivityDurationSeconds(6)
@@ -349,9 +350,10 @@ struct FeatureModelTests {
         preferences.triggerTestingSystemActivity(.volume)
 
         let restoredPreferences = NotchPreferences(defaults: defaults)
-        #expect(restoredPreferences.pageOrder == [.github, .calendar, .agents, .media])
-        #expect(restoredPreferences.orderedVisiblePages == [.github, .calendar, .media])
+        #expect(restoredPreferences.pageOrder == [.github, .summary, .calendar, .agents, .media])
+        #expect(restoredPreferences.orderedVisiblePages == [.github, .summary, .calendar, .media])
         #expect(restoredPreferences.dynamicPagesEnabled)
+        #expect(restoredPreferences.summaryPriorityOrder == [.activeWork, .calendarEvent, .githubAttention, .media, .openPullRequest])
         #expect(restoredPreferences.page(for: .firstPage) == .github)
         #expect(restoredPreferences.shortcut(for: .firstPage).displayName == "⌥⌘G")
         #expect(restoredPreferences.calendarReminderLeadTimeMinutes == 5)

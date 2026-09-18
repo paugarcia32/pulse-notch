@@ -11,6 +11,7 @@ struct DynamicPageActivity: Equatable {
 
     private func isActive(_ page: NotchPage) -> Bool {
         switch page {
+        case .summary: true
         case .calendar: calendar
         case .agents: agents
         case .github: github

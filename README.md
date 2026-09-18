@@ -8,13 +8,15 @@ The repository currently contains the first executable product slice:
 
 - A non-activating AppKit panel anchored to the active display's notch area, with
   public-framework support for Spaces, full-screen apps, and display changes.
+- A dynamic Summary page that prioritizes the next event, work needing attention,
+  active agents and Actions, media playback, or a quiet all-clear state.
+- Reorderable Summary priorities in Settings > Pages.
 - A selectable week showing every Calendar event for the chosen day.
 - An amber Calendar icon when the next event starts within ten minutes.
 - A Join action for Google Meet, Zoom, Teams, and Webex links.
 - Local detection of running Codex, Claude Code, Cursor Agent, Antigravity, and OpenCode
   sessions.
-- Calendar and coding-agent pages navigable with a two-finger horizontal swipe,
-  also available with Command-1 and Command-2.
+- Pages navigable with a two-finger horizontal swipe or Command-number shortcuts.
 - Animated running and recently-completed agent indicators in the collapsed notch.
 - Animated indicators for active browser downloads in a configurable folder.
 - A temporary charging activity with the current battery percentage when external power connects.
@@ -44,12 +46,12 @@ The script builds and opens a local `PulseNotch.app`. Launching the executable
 directly with `swift run PulseNotch` is not supported because macOS cannot
 associate privacy permissions reliably with a standalone SwiftPM executable.
 
-On first launch, macOS asks for full Calendar access. While the Calendar page is
-enabled, Pulse Notch reads upcoming event metadata locally, refreshes it every 30
-seconds, and does not persist it.
+On first launch, macOS asks for full Calendar access. While the Calendar or Summary
+page is enabled, Pulse Notch reads upcoming event metadata locally, refreshes it
+every 30 seconds, and does not persist it.
 
-While the Coding Agents page is enabled, detection reads local process and session
-metadata every two seconds. It does not persist process data or require credentials.
+While the Coding Agents or Summary page is enabled, detection reads local process
+and session metadata every two seconds. It does not persist process data or require credentials.
 Completed agents remain visible for five minutes, while their collapsed notification
 is cleared as soon as the notch opens. Cursor's standalone `cursor-agent` CLI is
 supported; Cursor editor chats cannot currently be distinguished reliably from the
@@ -85,7 +87,7 @@ another folder in Settings. It observes browser temporary files locally and neve
 displays or persists download file names or paths. The feature can be disabled at
 any time.
 
-While the Media page is enabled, media playback reads the active system Now Playing
+While the Media or Summary page is enabled, media playback reads the active system Now Playing
 item locally, including Spotify and browser players such as YouTube when they publish
 a system media session. It keeps its title, artist, artwork, and progress in memory
 only. Its compact indicator can be disabled below the Media page in Settings > Pages;
@@ -96,15 +98,15 @@ at runtime; when it is unavailable, the page shows an empty state.
 Settings > Pages can enable dynamic pages. In that mode, configured pages keep their
 order but appear only when relevant: Calendar has a current or upcoming event today,
 an agent is running, GitHub has an open pull request or running Action, or media is
-playing or was paused within the last five minutes. When disabled, every configured
-page remains available as usual.
+playing or was paused within the last five minutes. Summary remains available as the
+stable overview. When disabled, every configured page remains available as usual.
 
 For active sessions, Pulse Notch reads the working directory and Git branch locally
 when the agent exposes them. It does not read or show coding-agent prompts or thread
 titles. This metadata stays in memory; directory and branch lookups are cached for
 thirty seconds while the agent is running.
 
-While enabled, the GitHub page uses the official `gh` CLI session you have already
+While the GitHub or Summary page is enabled, Pulse Notch uses the official `gh` CLI session you have already
 authenticated with (`gh auth login`). It reads up to 100 open pull requests authored
 by you, including their review decision and GitHub Actions checks, refreshes every
 thirty seconds, and keeps the result in memory only. A workflow appears as a runner

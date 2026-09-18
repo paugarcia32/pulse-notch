@@ -2,6 +2,7 @@ import SwiftUI
 
 extension Notification.Name {
     static let pulseNotchOpen = Notification.Name("pulseNotchOpen")
+    static let pulseNotchShowSummary = Notification.Name("pulseNotchShowSummary")
     static let pulseNotchShowCalendar = Notification.Name("pulseNotchShowCalendar")
     static let pulseNotchShowAgents = Notification.Name("pulseNotchShowAgents")
     static let pulseNotchShowGitHub = Notification.Name("pulseNotchShowGitHub")
@@ -69,6 +70,7 @@ struct PulseNotchApp: App {
 private extension Notification.Name {
     static func pulseNotchShow(_ page: NotchPage) -> Notification.Name {
         switch page {
+        case .summary: .pulseNotchShowSummary
         case .calendar: .pulseNotchShowCalendar
         case .agents: .pulseNotchShowAgents
         case .github: .pulseNotchShowGitHub

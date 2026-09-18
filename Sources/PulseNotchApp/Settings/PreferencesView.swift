@@ -132,6 +132,25 @@ struct PreferencesView: View {
                 } footer: {
                     Text("Drag a row to change the order. Turning off a page also stops its closed-notch activity.")
                 }
+
+                Section {
+                    ForEach(Array(preferences.summaryPriorityOrder.enumerated()), id: \.element.id) { index, priority in
+                        HStack(spacing: 10) {
+                            Text("\(index + 1)")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .frame(width: 14, alignment: .trailing)
+                            Label(priority.name, systemImage: priority.symbolName)
+                        }
+                        .padding(.vertical, 3)
+                    }
+                    .onMove(perform: preferences.moveSummaryPriorities)
+                } header: {
+                    Text("Summary Priorities")
+                } footer: {
+                    Text("The first priority with relevant activity fills the main Summary panel. Drag to reorder.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .listStyle(.inset)
             .tabItem { Label("Pages", systemImage: "rectangle.3.group") }

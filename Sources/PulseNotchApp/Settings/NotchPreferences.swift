@@ -3,6 +3,7 @@ import ServiceManagement
 import SwiftUI
 
 enum NotchPage: String, CaseIterable, Identifiable {
+    case summary
     case calendar
     case agents
     case github
@@ -12,6 +13,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
 
     var name: String {
         switch self {
+        case .summary: "Summary"
         case .calendar: "Calendar"
         case .agents: "Coding Agents"
         case .github: "GitHub"
@@ -21,6 +23,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
 
     var symbolName: String {
         switch self {
+        case .summary: "sparkles"
         case .calendar: "calendar"
         case .agents: "terminal"
         case .github: "chevron.left.forwardslash.chevron.right"
@@ -35,11 +38,12 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
     case secondPage
     case thirdPage
     case fourthPage
+    case fifthPage
 
     var id: String { rawValue }
 
     static func page(at index: Int) -> ShortcutAction {
-        [firstPage, secondPage, thirdPage, fourthPage][index]
+        [firstPage, secondPage, thirdPage, fourthPage, fifthPage][index]
     }
 }
 
@@ -67,6 +71,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var pageOrder: [NotchPage]
     @Published private(set) var visiblePages: Set<NotchPage>
     @Published private(set) var dynamicPagesEnabled: Bool
+    @Published private(set) var summaryPriorityOrder: [SummaryPriority]
     @Published var openAtLogin: Bool {
         didSet {
             guard !isSynchronizingOpenAtLogin else { return }
@@ -99,6 +104,8 @@ final class NotchPreferences: ObservableObject {
         static let visiblePages = "settings.visiblePages"
         static let dynamicPagesEnabled = "settings.dynamicPagesEnabled"
         static let mediaPageIntroduced = "settings.mediaPageIntroduced"
+        static let summaryPageIntroduced = "settings.summaryPageIntroduced"
+        static let summaryPriorityOrder = "settings.summaryPriorityOrder"
         static let openAtLogin = "settings.openAtLogin"
         static let hideFromDock = "settings.hideFromDock"
         static let hideFromMenuBar = "settings.hideFromMenuBar"
@@ -131,8 +138,13 @@ final class NotchPreferences: ObservableObject {
             storedVisiblePages.append(.media)
         }
         defaults.set(true, forKey: Keys.mediaPageIntroduced)
+        if persistedVisiblePages != nil, defaults.object(forKey: Keys.summaryPageIntroduced) == nil {
+            storedVisiblePages.append(.summary)
+        }
+        defaults.set(true, forKey: Keys.summaryPageIntroduced)
         visiblePages = storedVisiblePages.isEmpty ? Set(NotchPage.allCases) : Set(storedVisiblePages)
         dynamicPagesEnabled = defaults.bool(forKey: Keys.dynamicPagesEnabled)
+        summaryPriorityOrder = Self.summaryPriorities(from: defaults.stringArray(forKey: Keys.summaryPriorityOrder))
         openAtLogin = defaults.bool(forKey: Keys.openAtLogin)
         hideFromDock = defaults.bool(forKey: Keys.hideFromDock)
         hideFromMenuBar = defaults.bool(forKey: Keys.hideFromMenuBar)
@@ -197,6 +209,7 @@ final class NotchPreferences: ObservableObject {
         case .secondPage: orderedVisiblePages[safe: 1]
         case .thirdPage: orderedVisiblePages[safe: 2]
         case .fourthPage: orderedVisiblePages[safe: 3]
+        case .fifthPage: orderedVisiblePages[safe: 4]
         }
     }
 
@@ -333,6 +346,11 @@ final class NotchPreferences: ObservableObject {
         defaults.set(pageOrder.map(\.rawValue), forKey: Keys.pageOrder)
     }
 
+    func moveSummaryPriorities(from offsets: IndexSet, to destination: Int) {
+        summaryPriorityOrder.move(fromOffsets: offsets, toOffset: destination)
+        defaults.set(summaryPriorityOrder.map(\.rawValue), forKey: Keys.summaryPriorityOrder)
+    }
+
     func applySystemAppearance() {
         updateDockVisibility()
     }
@@ -363,11 +381,17 @@ final class NotchPreferences: ObservableObject {
     private static func pages(from storedPages: [String]?) -> [NotchPage] {
         let stored = validPages(from: storedPages)
         guard !stored.isEmpty else { return NotchPage.allCases }
-        return stored + NotchPage.allCases.filter { !stored.contains($0) }
+        let newPages = NotchPage.allCases.filter { !stored.contains($0) }
+        return newPages.filter { $0 == .summary } + stored + newPages.filter { $0 != .summary }
     }
 
     private static func validPages(from storedPages: [String]?) -> [NotchPage] {
         storedPages?.compactMap(NotchPage.init(rawValue:)) ?? []
+    }
+
+    private static func summaryPriorities(from storedPriorities: [String]?) -> [SummaryPriority] {
+        let stored = storedPriorities?.compactMap(SummaryPriority.init(rawValue:)) ?? []
+        return stored + SummaryPriority.allCases.filter { !stored.contains($0) }
     }
 
     private static func collapsedIndicatorCategories(
@@ -397,7 +421,8 @@ final class NotchPreferences: ObservableObject {
         .firstPage: AppShortcut(key: "1", modifiers: [.command]),
         .secondPage: AppShortcut(key: "2", modifiers: [.command]),
         .thirdPage: AppShortcut(key: "3", modifiers: [.command]),
-        .fourthPage: AppShortcut(key: "4", modifiers: [.command])
+        .fourthPage: AppShortcut(key: "4", modifiers: [.command]),
+        .fifthPage: AppShortcut(key: "5", modifiers: [.command])
     ]
 }
 
