@@ -49,7 +49,7 @@ struct CalendarPage: View {
                     showsAllEvents = false
                 }
             }
-            .frame(width: 190)
+            .frame(width: 190, height: 160, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -176,39 +176,50 @@ private struct MonthGrid: View {
                 .textCase(.uppercase)
                 .foregroundStyle(.pink)
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 7), spacing: 4) {
+            HStack(spacing: 0) {
                 ForEach(weekdaySymbols.indices, id: \.self) { index in
                     Text(weekdaySymbols[index])
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                 }
-                ForEach(monthDates.indices, id: \.self) { index in
-                    if let day = monthDates[index] {
-                        dayButton(day)
-                    } else {
-                        Color.clear.frame(height: 20).accessibilityHidden(true)
+            }
+
+            VStack(spacing: 4) {
+                ForEach(monthWeeks.indices, id: \.self) { index in
+                    HStack(spacing: 0) {
+                        ForEach(monthWeeks[index].indices, id: \.self) { dayIndex in
+                            if let day = monthWeeks[index][dayIndex] {
+                                dayCell(day)
+                            } else {
+                                Color.clear
+                                    .frame(maxWidth: .infinity, minHeight: 20)
+                                    .accessibilityHidden(true)
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    private func dayButton(_ day: Date) -> some View {
+    private func dayCell(_ day: Date) -> some View {
         let isSelected = calendar.isDate(day, inSameDayAs: selectedDate)
         let isToday = calendar.isDateInToday(day)
-        return Button { onSelect(day) } label: {
-            Text(day, format: .dateTime.day())
-                .font(.system(size: 11, weight: isSelected ? .bold : .medium, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(isSelected ? .white : (isToday ? .pink : .secondary))
-                .frame(width: 20, height: 20)
-                .background(isSelected ? Color.pink : .clear, in: Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(day.formatted(date: .complete, time: .omitted))
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        return Text(day, format: .dateTime.day())
+            .font(.system(size: 11, weight: isSelected ? .bold : .medium, design: .monospaced))
+            .monospacedDigit()
+            .foregroundStyle(isSelected ? .white : (isToday ? .pink : .white))
+            .frame(width: 20, height: 20)
+            .background(isSelected ? Color.pink : .clear, in: Circle())
+            .frame(maxWidth: .infinity)
+            .frame(height: 20)
+            .contentShape(Rectangle())
+            .onTapGesture { onSelect(day) }
+            .accessibilityLabel(day.formatted(date: .complete, time: .omitted))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .accessibilityAction { onSelect(day) }
     }
 
     private var weekdaySymbols: [String] {
@@ -224,6 +235,13 @@ private struct MonthGrid: View {
         let dayCount = calendar.range(of: .day, in: .month, for: selectedDate)?.count ?? 0
         return Array(repeating: nil, count: leadingDays)
             + (0..<dayCount).compactMap { calendar.date(byAdding: .day, value: $0, to: month.start) }
+    }
+
+    private var monthWeeks: [[Date?]] {
+        stride(from: 0, to: monthDates.count, by: 7).map { start in
+            let week = Array(monthDates[start..<min(start + 7, monthDates.count)])
+            return week + Array(repeating: nil, count: 7 - week.count)
+        }
     }
 
 }
