@@ -612,8 +612,14 @@ struct NotchSurface: View {
     }
 
     private var selectedPageIndex: Int { preferences.orderedVisiblePages.firstIndex(of: selectedPage) ?? 0 }
-    private var nextPage: NotchPage { preferences.orderedVisiblePages[min(selectedPageIndex + 1, preferences.orderedVisiblePages.count - 1)] }
-    private var previousPage: NotchPage { preferences.orderedVisiblePages[max(selectedPageIndex - 1, 0)] }
+    private var nextPage: NotchPage { wrappingPage(in: preferences.orderedVisiblePages, from: selectedPage, offset: 1) ?? selectedPage }
+    private var previousPage: NotchPage { wrappingPage(in: preferences.orderedVisiblePages, from: selectedPage, offset: -1) ?? selectedPage }
+}
+
+func wrappingPage(in pages: [NotchPage], from selectedPage: NotchPage, offset: Int) -> NotchPage? {
+    guard let selectedIndex = pages.firstIndex(of: selectedPage) else { return nil }
+    let index = (selectedIndex + offset) % pages.count
+    return pages[index >= 0 ? index : index + pages.count]
 }
 
 private struct AttachedNotchShape: Shape {
