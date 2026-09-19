@@ -57,9 +57,7 @@ enum SummaryHighlight: Equatable {
         for priority in priorities {
             switch priority {
             case .calendarEvent:
-                if let event = schedule?.events.first(where: {
-                    !$0.isAllDay && ($0.isInProgress(relativeTo: date) || $0.startsAt >= date)
-                }) {
+                if let event = schedule?.currentAndUpcoming(on: date, relativeTo: date).first {
                     return .event(event)
                 }
             case .githubAttention:

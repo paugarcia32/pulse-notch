@@ -56,6 +56,34 @@ struct SummaryPageTests {
     }
 
     @Test
+    func eventAfterTodayFallsThroughToNextPriority() throws {
+        let tomorrow = try #require(Calendar.autoupdatingCurrent.date(byAdding: .day, value: 1, to: now))
+        let event = CalendarEvent(
+            id: "tomorrow-event",
+            title: "Tomorrow's review",
+            startsAt: tomorrow,
+            endsAt: tomorrow.addingTimeInterval(1_800)
+        )
+        let agent = CodingAgentSession(
+            id: "agent",
+            kind: .codex,
+            title: "Implement summary",
+            detectedAt: now,
+            status: .running
+        )
+
+        #expect(SummaryHighlight.select(
+            schedule: CalendarEventSchedule(events: [event]),
+            pullRequests: [],
+            agents: [agent],
+            actions: [],
+            media: nil,
+            priorities: [.calendarEvent, .activeWork],
+            at: now
+        ) == .activeWork(agentCount: 1, actionCount: 0))
+    }
+
+    @Test
     func summaryIsAllClearWhenNothingIsRelevant() {
         #expect(SummaryHighlight.select(
             schedule: nil,
