@@ -90,6 +90,14 @@ Build and open the app without launching it automatically:
 ./Scripts/run-app.sh --no-open
 ```
 
+Build the ad-hoc signed release DMG and its SHA-256 checksum:
+
+```sh
+./Scripts/build-dmg.sh
+```
+
+The release artifacts are written to `dist/`.
+
 Run the test suite:
 
 ```sh
