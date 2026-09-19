@@ -97,6 +97,7 @@ Build the ad-hoc signed release DMG and its SHA-256 checksum:
 ```
 
 The release artifacts are written to `dist/`.
+See [Docs/RELEASING.md](Docs/RELEASING.md) for the release process.
 
 Run the test suite:
 
