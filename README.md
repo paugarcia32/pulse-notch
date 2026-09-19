@@ -1,3 +1,4 @@
+
 <p align="center">
   <img src="Docs/Assets/pulse-notch-logo.png" width="128" height="128" alt="Pulse Notch app icon">
 </p>
@@ -18,13 +19,10 @@
 
 <p align="center">
   <a href="Docs/Assets/pulse-notch-demo.mov">
-    <img src="Docs/Assets/pulse-notch-demo-poster.png" width="900" alt="Pulse Notch demo">
+    <img width="800" height="389" alt="pulse-notch-demo" src="https://github.com/user-attachments/assets/599cfd5e-b757-4b37-b5d2-62e22235243f" />
   </a>
 </p>
 
-<p align="center">
-  <a href="Docs/Assets/pulse-notch-demo.mov">▶ Watch the demo</a>
-</p>
 
 ## Installation
 
