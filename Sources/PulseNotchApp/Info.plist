@@ -8,8 +8,10 @@
     <string>PulseNotch</string>
     <key>CFBundleIdentifier</key>
     <string>com.pau.PulseNotch</string>
+    <key>CFBundleIconFile</key>
+    <string>PulseNotch.icns</string>
     <key>CFBundleName</key>
-    <string>PulseNotch</string>
+    <string>Pulse Notch</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>

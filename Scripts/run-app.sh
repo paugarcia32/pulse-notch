@@ -5,12 +5,13 @@ set -euo pipefail
 script_directory=${0:A:h}
 repository_root=${script_directory:h}
 configuration=debug
-app_path="$repository_root/.build/PulseNotch.app"
+app_path="$repository_root/.build/Pulse Notch.app"
 contents_path="$app_path/Contents"
 executable_path="$contents_path/MacOS/PulseNotch"
 claude_bridge_path="$contents_path/MacOS/PulseNotchClaudeBridge"
 resource_bundle_name="PulseNotch_PulseNotchApp.bundle"
 info_plist_path="$repository_root/Sources/PulseNotchApp/Info.plist"
+icon_path="$repository_root/Sources/PulseNotchApp/Resources/PulseNotch.icns"
 media_remote_adapter_path="$repository_root/Vendor/MediaRemoteAdapter"
 launch_services_register="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 should_open=true
@@ -50,8 +51,9 @@ mkdir -p "$contents_path/MacOS"
 install -m 755 "$binary_directory/PulseNotch" "$executable_path"
 install -m 755 "$binary_directory/PulseNotchClaudeBridge" "$claude_bridge_path"
 install -m 644 "$info_plist_path" "$contents_path/Info.plist"
+mkdir -p "$contents_path/Resources"
+install -m 644 "$icon_path" "$contents_path/Resources/PulseNotch.icns"
 if [[ -d "$binary_directory/$resource_bundle_name" ]]; then
-    mkdir -p "$contents_path/Resources"
     ditto "$binary_directory/$resource_bundle_name" "$contents_path/Resources/$resource_bundle_name"
 fi
 

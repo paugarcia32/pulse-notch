@@ -1,166 +1,116 @@
-# Pulse Notch
+<p align="center">
+  <img src="Docs/Assets/pulse-notch-logo.png" width="128" height="128" alt="Pulse Notch app icon">
+</p>
 
-Pulse Notch is a native macOS app that turns the display notch into an ambient,
-expandable surface for calendar events, GitHub activity, coding-agent status, and
-media controls.
+<h1 align="center">Pulse Notch</h1>
 
-The repository currently contains the first executable product slice:
+<p align="center">
+  A quiet, expandable activity surface for the MacBook notch.
+</p>
 
-- A non-activating AppKit panel anchored to the active display's notch area, with
-  public-framework support for Spaces, full-screen apps, and display changes.
-- A dynamic Summary page that prioritizes the next event, work needing attention,
-  active agents and Actions, media playback, or a quiet all-clear state.
-- Reorderable Summary priorities in Settings > Pages.
-- A Summary usage-limit highlight when an agent quota has 20% or less remaining.
-- A selectable week showing every Calendar event for the chosen day.
-- An amber Calendar icon when the next event starts within ten minutes.
-- A Join action for Google Meet, Zoom, Teams, and Webex links.
-- Local detection of running Codex, Claude Code, Cursor Agent, Antigravity, and OpenCode
-  sessions.
-- Pages navigable with a two-finger horizontal swipe or Command-number shortcuts.
-- Animated running and recently-completed agent indicators in the collapsed notch.
-- Live progress indicators and a detail page for active browser downloads and Homebrew activity.
-- A temporary charging activity with the current battery percentage when external power connects.
-- Temporary volume and display-brightness activities that replace collapsed indicators.
-- A temporary Bluetooth-headphones connection activity, with a battery glyph when headphones connect.
-- A configurable Media page with artwork, transport controls, and a compact artwork/equalizer indicator.
-- Live Codex five-hour and weekly usage gauges on the coding-agent page.
-- Agent cards with project, Git branch, and elapsed-session context when available.
-- A GitHub page for your open and draft pull requests, with comments, passed checks,
-  review state, and individual GitHub Actions runners.
-- A platform-independent domain module.
-- Deterministic unit tests for activity ordering.
-- Shared engineering rules for coding agents.
+<p align="center">
+  Pulse Notch started as a personal tool for my own workflow: I wanted the notch
+  to tell me when coding agents and GitHub Actions finished, while keeping my next
+  calendar event close without adding more notification noise.
+</p>
 
-## Requirements
+## Demo
 
-- macOS 14 or newer.
-- Swift 6 or newer.
+<p align="center">
+  <a href="Docs/Assets/pulse-notch-demo.mov">
+    <img src="Docs/Assets/pulse-notch-demo-poster.png" width="900" alt="Pulse Notch demo">
+  </a>
+</p>
 
-## Run
+<p align="center">
+  <a href="Docs/Assets/pulse-notch-demo.mov">▶ Watch the demo</a>
+</p>
+
+## Installation
+
+Pulse Notch is currently installed from source:
 
 ```sh
+git clone https://github.com/paugarcia32/pulse-notch.git
+cd pulse-notch
 ./Scripts/run-app.sh
 ```
 
-The script builds and opens a local `PulseNotch.app`. Launching the executable
-directly with `swift run PulseNotch` is not supported because macOS cannot
-associate privacy permissions reliably with a standalone SwiftPM executable.
+The script builds, ad-hoc signs, registers, and opens `.build/Pulse Notch.app`.
+Launching the executable directly with `swift run PulseNotch` is not supported
+because macOS cannot reliably associate privacy permissions with a standalone
+SwiftPM executable.
 
-On first launch, macOS asks for full Calendar access. While the Calendar or Summary
-page is enabled, Pulse Notch reads upcoming event metadata locally, refreshes it
-every 30 seconds, and does not persist it.
+## System requirements
 
-While the Coding Agents or Summary page is enabled, detection reads local process
-and session metadata every two seconds. It does not persist process data or require credentials.
-Completed agents remain visible for five minutes, while their collapsed notification
-is cleared as soon as the notch opens. Cursor's standalone `cursor-agent` CLI is
-supported; Cursor editor chats cannot currently be distinguished reliably from the
-editor's background processes.
+- macOS 14 Sonoma or newer.
+- Swift 6 or newer.
+- A Mac with or without a physical notch. External displays use a compact fallback.
+- The GitHub CLI (`gh`) is optional and only required for GitHub activity.
 
-Pulse Notch reads the internal battery's charge and power-source state locally once
-per second. Connecting external power temporarily replaces collapsed indicators with
-a charging icon and percentage; its duration and visibility are configurable in
-Settings > General. Battery state is kept only in memory and needs
-no permission.
+## What it shows
 
-Volume changes use a local Core Audio listener, so the activity follows each key
-press rather than waiting for a polling interval. Display brightness observes
-CoreBrightness changes when macOS publishes them, with a short local polling
-fallback for the built-in display. IOKit remains the first reader and the local
-CoreBrightness diagnostic handles Macs where IOKit does not expose that value.
-Their visibility and duration use the same Settings > General controls as
-charging. External displays without a compatible brightness control remain quiet.
+- A prioritized summary of the next event, active work, agent usage limits, media,
+  and anything that needs attention.
+- Upcoming Calendar events, including meeting links and configurable reminders.
+- Running and recently completed Codex, Claude Code, Cursor Agent, Antigravity,
+  and OpenCode sessions.
+- Open pull requests, reviews, checks, and active GitHub Actions.
+- Active browser downloads and Homebrew operations.
+- Now Playing controls, artwork, and playback progress.
+- Charging, volume, brightness, and Bluetooth-headphone activities.
+- Stopwatch and timer activity.
+- Multiple displays, Spaces, full-screen apps, keyboard shortcuts, and configurable
+  collapsed indicators.
 
-Bluetooth headphones are detected locally from the public IOBluetooth connection
-state. A new connection temporarily replaces collapsed indicators with headphones
-on the left and a battery glyph on the right; its visibility and duration are also
-configurable in Settings > General. Device names and addresses are never shown,
-persisted, or logged. macOS does not provide a generic public battery-level API for
-all Bluetooth headphones, so Pulse Notch matches the connected device against
-locally reported accessory battery levels from IOKit, `system_profiler`, and
-`pmset`. When neither source reports a value, it uses a neutral battery glyph
-rather than inventing a percentage. The Testing view includes a 72% example to
-verify the filled battery treatment.
+Pulse Notch is not intended to replace Notification Center. It keeps a small number
+of useful, time-sensitive signals visible and stays out of the way until expanded.
 
-Downloads monitoring defaults to the user's Downloads folder and can be pointed at
-another folder in Settings. It observes browser temporary files locally and shows
-their names and paths only while they are active. It can also inspect the local process
-list for active Homebrew fetch, install, reinstall, update, and upgrade commands. No
-download or process metadata is persisted. Homebrew monitoring or the whole feature can
-be disabled in Settings.
+## Privacy and permissions
 
-While the Media or Summary page is enabled, media playback reads the active system Now Playing
-item locally, including Spotify and browser players such as YouTube when they publish
-a system media session. It keeps its title, artist, artwork, and progress in memory
-only. Its compact indicator can be disabled below the Media page in Settings > Pages;
-disabling the page also hides the indicator and stops playback polling. macOS has no
-public API for reading another app's Now Playing item, so the local bridge is optional
-at runtime; when it is unavailable, the page shows an empty state.
+Pulse Notch processes activity locally and does not include telemetry.
 
-Settings > Pages can enable dynamic pages. In that mode, configured pages keep their
-order but appear only when relevant: Calendar has a current or upcoming event today,
-an agent is running or has a usage limit with 20% or less remaining, GitHub has an
-open pull request or running Action, or media is playing or was paused within the last
-five minutes. Summary remains available as the stable overview. When disabled, every
-configured page remains available as usual.
+- Calendar access is requested only when Calendar features are enabled. Event data
+  stays in memory and refreshes every 30 seconds.
+- Coding-agent detection reads local process and session metadata, never prompts or
+  conversation contents.
+- GitHub activity uses the authenticated official `gh` CLI and never reads or stores
+  its token.
+- Downloads monitoring observes the selected local folder and can be disabled.
+- Battery, Bluetooth, volume, brightness, and media state are read locally and kept
+  in memory.
+- No credentials are stored by Pulse Notch.
 
-For active sessions, Pulse Notch reads the working directory and Git branch locally
-when the agent exposes them. It does not read or show coding-agent prompts or thread
-titles. This metadata stays in memory; directory and branch lookups are cached for
-thirty seconds while the agent is running.
+Each integration can be disabled from Settings. macOS requests Calendar, Bluetooth,
+or Downloads access only when the corresponding feature needs it.
 
-While the GitHub or Summary page is enabled, Pulse Notch uses the official `gh` CLI session you have already
-authenticated with (`gh auth login`). It reads up to 100 open pull requests authored
-by you, including their review decision and GitHub Actions checks, refreshes every
-thirty seconds, and keeps the result in memory only. A workflow appears as a runner
-only while it is running or for five minutes after it finishes; completions appear in
-the collapsed notch until it is opened. It does not read, save, or log a token.
+## Development
 
-When the Coding Agents or Summary page is open, Pulse Notch asks the locally installed Codex
-App Server for the current quota windows once per minute. This reuses Codex's own
-login, does not read or store its credentials, and keeps the returned percentages
-in memory only. Summary surfaces the most depleted quota after it reaches 80% usage;
-its position among other Summary content is configurable. Claude Code can optionally
-share its usage through its official status-line input. Antigravity's locally installed `agy` CLI is queried with its
-official non-interactive `/usage` command; its credentials remain in the system
-Keychain. Cursor exposes its monthly pools in its dashboard rather than a CLI
-usage API. OpenCode can use many providers, so its limits are owned by the
-configured provider and are not represented as one OpenCode quota.
-
-To opt into Claude Code usage, set its status-line command to the following in
-`/statusline` (replace the path if Pulse Notch is installed elsewhere):
+Build and open the app without launching it automatically:
 
 ```sh
-/path/to/PulseNotch.app/Contents/MacOS/PulseNotchClaudeBridge
+./Scripts/run-app.sh --no-open
 ```
 
-Claude Code passes its local session JSON to that command after each response.
-Pulse Notch stores only the quota fields in `~/.claude/pulse-notch-usage.json`;
-no credential or transcript is read. This is available for Claude.ai Pro/Max
-accounts after the session's first API response.
-
-If a local rebuild invalidates the development permission, register the rebuilt
-app, reset only its Calendar decision, and open it again with:
-
-```sh
-./Scripts/run-app.sh --reset-calendar-access
-```
-
-## Test
+Run the test suite:
 
 ```sh
 swift test
 ```
 
-## Current Scope
+The project uses Swift 6, SwiftUI, AppKit where needed, Swift Package Manager, strict
+concurrency checking, and Swift Testing. Domain behavior lives in `PulseNotchCore`;
+macOS UI and integrations live in `PulseNotchApp`.
 
-This is an intentionally small foundation. Pulse Notch uses public AppKit APIs to
-anchor one non-activating surface to the selected display. It follows the physical
-notch dimensions when macOS exposes them and falls back to a compact centered
-surface on displays without a notch.
+## Contributing
 
-In Settings > General > Display, choose a specific display or follow the display
-under the pointer. External displays can use a compact capsule or rectangular
-notch; the physical-notch appearance is always preserved on notched displays.
-Each external style uses the target display's actual menu-bar height.
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before
+opening an issue or pull request.
+
+## Inspiration
+
+Pulse Notch is heavily inspired by [Alcove](https://tryalcove.com/),
+[Boring Notch](https://github.com/TheBoredTeam/boring.notch), and
+[Atoll](https://github.com/Atoll-Labs/Atoll). Those apps helped establish what a
+native notch utility can feel like; Pulse Notch builds on that idea with the agent,
+GitHub Actions, usage-limit, and workflow features that matter most to my own setup.
