@@ -4,10 +4,10 @@ import Testing
 struct HorizontalSwipeTrackerTests {
     @Test
     func pageNavigationWrapsAtBothEnds() {
-        let pages: [NotchPage] = [.summary, .calendar, .agents, .github, .media]
+        let pages: [NotchPage] = [.summary, .calendar, .agents, .github, .media, .clock]
 
-        #expect(wrappingPage(in: pages, from: .media, offset: 1) == .summary)
-        #expect(wrappingPage(in: pages, from: .summary, offset: -1) == .media)
+        #expect(wrappingPage(in: pages, from: .clock, offset: 1) == .summary)
+        #expect(wrappingPage(in: pages, from: .summary, offset: -1) == .clock)
     }
 
     @Test

@@ -22,6 +22,7 @@ struct NotchIndicator: Identifiable {
         case runningDownload
         case githubActions(GitHubPullRequest.ActionStatus)
         case mediaPlayback(MediaPlaybackStatus)
+        case clock(ClockStatus)
     }
 
     let id: String
@@ -38,6 +39,7 @@ struct NotchIndicator: Identifiable {
         case .githubActions(.failed): .red
         case .githubActions: .green
         case .mediaPlayback: .purple
+        case .clock: .orange
         }
     }
 
@@ -48,19 +50,20 @@ struct NotchIndicator: Identifiable {
         case .runningAgent, .completedAgent: .codingAgents
         case .runningDownload: .downloads
         case .mediaPlayback: .mediaPlayback
+        case .clock: .clock
         }
     }
 
     var occupiesBothSides: Bool {
         switch content {
-        case .upcomingCalendarEvent, .mediaPlayback: true
+        case .upcomingCalendarEvent, .mediaPlayback, .clock: true
         default: false
         }
     }
 
     var supportsCustomColor: Bool {
         switch content {
-        case .upcomingCalendarEvent, .runningAgent, .runningDownload, .githubActions(.running), .mediaPlayback:
+        case .upcomingCalendarEvent, .runningAgent, .runningDownload, .githubActions(.running), .mediaPlayback, .clock:
             true
         case .completedAgent, .githubActions:
             false
@@ -75,6 +78,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
     case codingAgents
     case downloads
     case mediaPlayback
+    case clock
 
     var id: String { "collapsed-indicator-\(rawValue)" }
     var colorPickerID: String { "collapsed-indicator-color-\(rawValue)" }
@@ -86,6 +90,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .codingAgents: "Coding agents"
         case .downloads: "Downloads"
         case .mediaPlayback: "Media playback"
+        case .clock: "Clock"
         }
     }
 
@@ -96,6 +101,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .codingAgents: .agents
         case .downloads: nil
         case .mediaPlayback: .media
+        case .clock: .clock
         }
     }
 
@@ -106,6 +112,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .codingAgents: "terminal"
         case .downloads: "arrow.down.circle"
         case .mediaPlayback: "waveform"
+        case .clock: "timer"
         }
     }
 
@@ -116,11 +123,13 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .codingAgents: .cyan
         case .downloads: .blue
         case .mediaPlayback: .purple
+        case .clock: .orange
         }
     }
 
     static let defaultPriorityOrder: [Self] = [
         .mediaPlayback,
+        .clock,
         .calendar,
         .githubActions,
         .downloads,
@@ -139,6 +148,7 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
     case opencode
     case download
     case mediaPlayback
+    case clock
 
     var id: String { rawValue }
 
@@ -153,11 +163,12 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
         case .opencode: "OpenCode agent"
         case .download: "Download"
         case .mediaPlayback: "Media playback"
+        case .clock: "Running timer"
         }
     }
 
     var maximumPreviewCount: Int {
-        self == .calendar ? 1 : 5
+        self == .calendar || self == .clock ? 1 : 5
     }
 
     func indicator(instance: Int) -> NotchIndicator {
@@ -179,6 +190,12 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
                 content: .mediaPlayback(.init(id: "preview", title: "Sample track", artist: "Pulse Notch", duration: 180, elapsedTime: 42, isPlaying: true)),
                 accessibilityLabel: "Sample track playing"
             )
+        case .clock:
+            return NotchIndicator(
+                id: "clock-preview",
+                content: .clock(ClockStatus(mode: .timer, time: 4 * 60 + 32, isRunning: true)),
+                accessibilityLabel: "Timer, 4 minutes, 32 seconds, running"
+            )
         }
     }
 
@@ -194,10 +211,15 @@ enum CollapsedNotchIndicators {
         actionSessions: [GitHubActionSession],
         downloads: [DetectedDownload] = [],
         mediaPlayback: MediaPlaybackStatus? = nil,
+        clock: ClockStatus? = nil,
         at date: Date,
         calendarReminderLeadTime: TimeInterval
     ) -> [NotchIndicator] {
         var indicators: [NotchIndicator] = []
+
+        if let clock, clock.isRunning {
+            indicators.append(NotchIndicator(id: "clock", content: .clock(clock), accessibilityLabel: clock.accessibilityLabel))
+        }
 
         if let mediaPlayback, mediaPlayback.isPlaying {
             indicators.append(
@@ -292,6 +314,7 @@ struct CollapsedNotchLayout {
             switch indicator.content {
             case .upcomingCalendarEvent: 28
             case .mediaPlayback: 22
+            case .clock: 48
             default: 16
             }
         }
@@ -360,9 +383,40 @@ struct NotchIndicatorView: View {
             case let .mediaPlayback(playback):
                 MediaEqualizer(isPlaying: playback.isPlaying, reduceMotion: reduceMotion)
                     .foregroundStyle(color)
+            case let .clock(status):
+                ClockCollapsedIndicator(status: status, color: color, reduceMotion: reduceMotion)
             }
         }
             .accessibilityLabel(indicator.accessibilityLabel)
+    }
+}
+
+struct ClockCollapsedIndicator: View {
+    let status: ClockStatus
+    let color: Color
+    let reduceMotion: Bool
+
+    var body: some View {
+        HStack {
+            Image(systemName: status.mode.symbolName)
+                .font(.system(size: 15, weight: .semibold))
+            Spacer(minLength: 0)
+            ClockCollapsedValue(status: status, reduceMotion: reduceMotion)
+        }
+        .foregroundStyle(color)
+    }
+}
+
+struct ClockCollapsedValue: View {
+    let status: ClockStatus
+    let reduceMotion: Bool
+
+    var body: some View {
+        Text(ClockTimeFormatter.display(status.time))
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .contentTransition(reduceMotion ? .identity : .numericText())
+            .fixedSize()
     }
 }
 

@@ -69,6 +69,22 @@ struct SummaryPageTests {
     }
 
     @Test
+    func activeClockCanAppearInSummary() {
+        let clock = ClockStatus(mode: .timer, time: 90, isRunning: true)
+
+        #expect(SummaryHighlight.select(
+            schedule: nil,
+            pullRequests: [],
+            agents: [],
+            actions: [],
+            media: nil,
+            clock: clock,
+            priorities: [.clock],
+            at: now
+        ) == .clock(clock))
+    }
+
+    @Test
     func configuredPriorityOrderChoosesActiveWorkBeforeCalendar() {
         let event = CalendarEvent(
             id: "event",

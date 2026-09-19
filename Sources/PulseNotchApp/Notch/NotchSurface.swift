@@ -10,6 +10,7 @@ struct NotchSurface: View {
     @ObservedObject var brightnessModel: BrightnessFeatureModel
     @ObservedObject var downloadModel: DownloadFeatureModel
     @ObservedObject var mediaPlaybackModel: MediaPlaybackFeatureModel
+    @ObservedObject var clockModel: ClockFeatureModel
     let bluetoothHeadphonesModel: BluetoothHeadphonesFeatureModel
     @ObservedObject var systemActivityModel: SystemActivityFeatureModel
     @ObservedObject var preferences: NotchPreferences
@@ -60,6 +61,10 @@ struct NotchSurface: View {
             openNotch()
             selectPage(.media)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowClock)) { _ in
+            openNotch()
+            selectPage(.clock)
+        }
         .onChange(of: preferences.orderedVisiblePages) { _, _ in
             handleVisiblePagesChange(displayedPages(at: .now))
         }
@@ -94,8 +99,8 @@ struct NotchSurface: View {
 
     private var refreshingSurface: some View {
         surface
-        .task(id: preferences.isVisible(.calendar) || preferences.isVisible(.summary)) {
-            guard preferences.isVisible(.calendar) || preferences.isVisible(.summary) else { return }
+        .task(id: calendarMonitoringEnabled) {
+            guard calendarMonitoringEnabled else { return }
             while !Task.isCancelled {
                 await calendarModel.refresh()
                 try? await Task.sleep(for: .seconds(30))
@@ -137,15 +142,15 @@ struct NotchSurface: View {
                 await brightnessModel.refresh()
             }
         }
-        .task(id: preferences.isVisible(.github) || preferences.isVisible(.summary)) {
-            guard preferences.isVisible(.github) || preferences.isVisible(.summary) else { return }
+        .task(id: gitHubMonitoringEnabled) {
+            guard gitHubMonitoringEnabled else { return }
             while !Task.isCancelled {
                 await gitHubModel.refresh()
                 try? await Task.sleep(for: .seconds(30))
             }
         }
-        .task(id: preferences.isVisible(.agents) || preferences.isVisible(.summary)) {
-            guard preferences.isVisible(.agents) || preferences.isVisible(.summary) else { return }
+        .task(id: codingAgentsMonitoringEnabled) {
+            guard codingAgentsMonitoringEnabled else { return }
             while !Task.isCancelled {
                 await codingAgentModel.refresh()
                 try? await Task.sleep(for: .seconds(2))
@@ -158,8 +163,8 @@ struct NotchSurface: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-        .task(id: preferences.isVisible(.media) || preferences.isVisible(.summary)) {
-            guard preferences.isVisible(.media) || preferences.isVisible(.summary) else { return }
+        .task(id: mediaMonitoringEnabled) {
+            guard mediaMonitoringEnabled else { return }
             while !Task.isCancelled {
                 await mediaPlaybackModel.refresh()
                 try? await Task.sleep(for: .seconds(1))
@@ -175,7 +180,7 @@ struct NotchSurface: View {
     }
 
     private var surface: some View {
-        TimelineView(.periodic(from: .now, by: 15)) { context in
+        TimelineView(.periodic(from: .now, by: clockModel.isRunning ? 1 : 15)) { context in
             let pages = displayedPages(at: context.date)
             notch(at: context.date, pages: pages)
                 .onChange(of: pages) { _, pages in handleVisiblePagesChange(pages) }
@@ -309,6 +314,15 @@ struct NotchSurface: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(currentIndicators[0].accessibilityLabel)
+            } else if case let .clock(status) = currentIndicators.first?.content {
+                ClockCollapsedIndicator(
+                    status: status,
+                    color: collapsedIndicatorColor(for: currentIndicators[0]),
+                    reduceMotion: reduceMotion
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(currentIndicators[0].accessibilityLabel)
             } else {
                 HStack(spacing: 8) {
                     ForEach(currentIndicators.prefix(5)) {
@@ -433,6 +447,15 @@ struct NotchSurface: View {
                     .accessibilityLabel(indicator.accessibilityLabel)
             case let (.mediaPlayback(playback), .right):
                 MediaEqualizer(isPlaying: playback.isPlaying, reduceMotion: reduceMotion)
+                    .foregroundStyle(collapsedIndicatorColor(for: indicator))
+                    .accessibilityHidden(true)
+            case let (.clock(status), .left):
+                Image(systemName: status.mode.symbolName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(collapsedIndicatorColor(for: indicator))
+                    .accessibilityLabel(indicator.accessibilityLabel)
+            case let (.clock(status), .right):
+                ClockCollapsedValue(status: status, reduceMotion: reduceMotion)
                     .foregroundStyle(collapsedIndicatorColor(for: indicator))
                     .accessibilityHidden(true)
             default:
@@ -592,6 +615,7 @@ struct NotchSurface: View {
             actionSessions: gitHubModel.notificationActionSessions,
             downloads: preferences.showDownloads ? downloadModel.activeDownloads : [],
             mediaPlayback: mediaPlaybackModel.playback,
+            clock: clockModel.status(at: date),
             at: date,
             calendarReminderLeadTime: preferences.calendarReminderLeadTime
         ).filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
@@ -603,6 +627,30 @@ struct NotchSurface: View {
 
     private var downloadsMonitoringID: String {
         "\(preferences.showDownloads)-\(preferences.downloadsDirectoryPath)"
+    }
+
+    private var calendarMonitoringEnabled: Bool {
+        preferences.isVisible(.calendar)
+            || preferences.isVisible(.summary)
+            || preferences.isCollapsedIndicatorCategoryEnabled(.calendar)
+    }
+
+    private var gitHubMonitoringEnabled: Bool {
+        preferences.isVisible(.github)
+            || preferences.isVisible(.summary)
+            || preferences.isCollapsedIndicatorCategoryEnabled(.githubActions)
+    }
+
+    private var codingAgentsMonitoringEnabled: Bool {
+        preferences.isVisible(.agents)
+            || preferences.isVisible(.summary)
+            || preferences.isCollapsedIndicatorCategoryEnabled(.codingAgents)
+    }
+
+    private var mediaMonitoringEnabled: Bool {
+        preferences.isVisible(.media)
+            || preferences.isVisible(.summary)
+            || preferences.isCollapsedIndicatorCategoryEnabled(.mediaPlayback)
     }
 
     private func scheduleSystemActivityDismissal(_ activity: SystemActivityFeatureModel.Activity?) {
@@ -679,6 +727,7 @@ struct NotchSurface: View {
                 codingAgentModel: codingAgentModel,
                 gitHubModel: gitHubModel,
                 mediaPlaybackModel: mediaPlaybackModel,
+                clockModel: clockModel,
                 priorities: preferences.summaryPriorityOrder,
                 date: date,
                 onSelectPage: { selectPage($0) }
@@ -687,6 +736,7 @@ struct NotchSurface: View {
         case .agents: CodingAgentsPage(model: codingAgentModel, date: date)
         case .github: GitHubPage(model: gitHubModel, date: date)
         case .media: MediaPlaybackPage(model: mediaPlaybackModel)
+        case .clock: ClockPage(model: clockModel)
         }
     }
 
@@ -695,7 +745,8 @@ struct NotchSurface: View {
             calendar: calendarHasActivity(at: date),
             agents: agentsHaveActivity,
             github: gitHubHasActivity,
-            media: mediaPlaybackModel.isPageActive(at: date)
+            media: mediaPlaybackModel.isPageActive(at: date),
+            clock: clockModel.status(at: date, includePaused: true) != nil
         ).visiblePages(
             from: preferences.orderedVisiblePages,
             isEnabled: preferences.dynamicPagesEnabled

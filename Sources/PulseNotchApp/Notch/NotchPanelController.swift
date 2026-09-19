@@ -51,6 +51,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     let brightnessModel = BrightnessFeatureModel(provider: DisplayBrightnessProvider())
     let downloadModel = DownloadFeatureModel(provider: DownloadsDirectoryProvider())
     let mediaPlaybackModel = MediaPlaybackFeatureModel(provider: makeMediaPlaybackProvider())
+    let clockModel = ClockFeatureModel()
     let bluetoothHeadphonesModel = BluetoothHeadphonesFeatureModel(provider: BluetoothHeadphonesProvider())
     let systemActivityModel = SystemActivityFeatureModel()
 
@@ -157,6 +158,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             brightnessModel: brightnessModel,
             downloadModel: downloadModel,
             mediaPlaybackModel: mediaPlaybackModel,
+            clockModel: clockModel,
             bluetoothHeadphonesModel: bluetoothHeadphonesModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
@@ -178,6 +180,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             brightnessModel: brightnessModel,
             downloadModel: downloadModel,
             mediaPlaybackModel: mediaPlaybackModel,
+            clockModel: clockModel,
             bluetoothHeadphonesModel: bluetoothHeadphonesModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,

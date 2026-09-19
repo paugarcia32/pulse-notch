@@ -365,16 +365,16 @@ struct FeatureModelTests {
         preferences.setPreferredDisplayID("42")
         preferences.setExternalNotchStyle(.rectangle)
         preferences.setCollapsedIndicatorMaximumPerSide(4)
-        preferences.moveCollapsedIndicatorPriorities(from: IndexSet(integer: 4), to: 0)
+        preferences.moveCollapsedIndicatorPriorities(from: IndexSet(integer: 5), to: 0)
         preferences.setCollapsedIndicatorCategory(.githubActions, isVisible: false)
         preferences.setTestingFeaturesEnabled(true)
         preferences.triggerTestingSystemActivity(.volume)
 
         let restoredPreferences = NotchPreferences(defaults: defaults)
-        #expect(restoredPreferences.pageOrder == [.github, .summary, .calendar, .agents, .media])
-        #expect(restoredPreferences.orderedVisiblePages == [.github, .summary, .calendar, .media])
+        #expect(restoredPreferences.pageOrder == [.github, .summary, .calendar, .agents, .media, .clock])
+        #expect(restoredPreferences.orderedVisiblePages == [.github, .summary, .calendar, .media, .clock])
         #expect(restoredPreferences.dynamicPagesEnabled)
-        #expect(restoredPreferences.summaryPriorityOrder == [.activeWork, .calendarEvent, .githubAttention, .media, .openPullRequest])
+        #expect(restoredPreferences.summaryPriorityOrder == [.activeWork, .calendarEvent, .githubAttention, .media, .openPullRequest, .clock])
         #expect(restoredPreferences.page(for: .firstPage) == .github)
         #expect(restoredPreferences.shortcut(for: .firstPage).displayName == "⌥⌘G")
         #expect(restoredPreferences.calendarReminderLeadTimeMinutes == 5)
@@ -389,10 +389,10 @@ struct FeatureModelTests {
         #expect(restoredPreferences.preferredDisplayID == "42")
         #expect(restoredPreferences.externalNotchStyle == .rectangle)
         #expect(restoredPreferences.collapsedIndicatorMaximumPerSide == 4)
-        #expect(restoredPreferences.collapsedIndicatorPriorityOrder == [.codingAgents, .mediaPlayback, .calendar, .githubActions, .downloads])
+        #expect(restoredPreferences.collapsedIndicatorPriorityOrder == [.codingAgents, .mediaPlayback, .clock, .calendar, .githubActions, .downloads])
         #expect(!restoredPreferences.isCollapsedIndicatorCategoryVisible(.githubActions))
         #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.calendar))
-        #expect(!restoredPreferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
+        #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
         #expect(restoredPreferences.isCollapsedIndicatorCategoryEnabled(.codingAgents))
         #expect(restoredPreferences.testingFeaturesEnabled)
         #expect(preferences.testingSystemActivity == .volume)
@@ -402,7 +402,24 @@ struct FeatureModelTests {
     }
 
     @Test
-    func pageVisibilityControlsItsClosedNotchActivityWithoutLosingTheActivityPreference() {
+    func existingPreferencesEnableTheNewClockPageOnce() {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set([NotchPage.calendar.rawValue], forKey: "settings.visiblePages")
+        defaults.set(true, forKey: "settings.mediaPageIntroduced")
+        defaults.set(true, forKey: "settings.summaryPageIntroduced")
+
+        _ = NotchPreferences(defaults: defaults)
+        let restoredPreferences = NotchPreferences(defaults: defaults)
+
+        #expect(restoredPreferences.orderedVisiblePages == [.calendar, .clock])
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    @Test
+    func pageAndClosedNotchActivityVisibilityAreIndependent() {
         let suiteName = "PulseNotchTests.\(#function)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -410,13 +427,14 @@ struct FeatureModelTests {
 
         preferences.setVisible(.agents, isVisible: false)
 
-        #expect(!preferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
+        #expect(preferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
         #expect(preferences.isCollapsedIndicatorCategoryEnabled(.codingAgents))
         #expect(preferences.isCollapsedIndicatorCategoryVisible(.downloads))
 
-        preferences.setVisible(.agents, isVisible: true)
+        preferences.setCollapsedIndicatorCategory(.codingAgents, isVisible: false)
 
-        #expect(preferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
+        #expect(!preferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
+        #expect(!preferences.isCollapsedIndicatorCategoryEnabled(.codingAgents))
 
         defaults.removePersistentDomain(forName: suiteName)
     }
@@ -427,6 +445,7 @@ struct FeatureModelTests {
         #expect(CollapsedNotchIndicatorCategory.codingAgents.ownerPage == .agents)
         #expect(CollapsedNotchIndicatorCategory.githubActions.ownerPage == .github)
         #expect(CollapsedNotchIndicatorCategory.mediaPlayback.ownerPage == .media)
+        #expect(CollapsedNotchIndicatorCategory.clock.ownerPage == .clock)
         #expect(CollapsedNotchIndicatorCategory.downloads.ownerPage == nil)
     }
 

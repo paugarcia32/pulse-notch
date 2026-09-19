@@ -8,6 +8,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
     case agents
     case github
     case media
+    case clock
 
     var id: String { rawValue }
 
@@ -18,6 +19,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
         case .agents: "Coding Agents"
         case .github: "GitHub"
         case .media: "Media"
+        case .clock: "Clock"
         }
     }
 
@@ -28,6 +30,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
         case .agents: "terminal"
         case .github: "chevron.left.forwardslash.chevron.right"
         case .media: "play.rectangle"
+        case .clock: "timer"
         }
     }
 }
@@ -39,11 +42,12 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
     case thirdPage
     case fourthPage
     case fifthPage
+    case sixthPage
 
     var id: String { rawValue }
 
     static func page(at index: Int) -> ShortcutAction {
-        [firstPage, secondPage, thirdPage, fourthPage, fifthPage][index]
+        [firstPage, secondPage, thirdPage, fourthPage, fifthPage, sixthPage][index]
     }
 }
 
@@ -122,6 +126,7 @@ final class NotchPreferences: ObservableObject {
         static let dynamicPagesEnabled = "settings.dynamicPagesEnabled"
         static let mediaPageIntroduced = "settings.mediaPageIntroduced"
         static let summaryPageIntroduced = "settings.summaryPageIntroduced"
+        static let clockPageIntroduced = "settings.clockPageIntroduced"
         static let summaryPriorityOrder = "settings.summaryPriorityOrder"
         static let openAtLogin = "settings.openAtLogin"
         static let hideFromDock = "settings.hideFromDock"
@@ -142,6 +147,7 @@ final class NotchPreferences: ObservableObject {
         static let collapsedIndicatorColors = "settings.collapsedIndicatorColors"
         static let visibleCollapsedIndicatorCategories = "settings.visibleCollapsedIndicatorCategories"
         static let mediaCollapsedIndicatorIntroduced = "settings.mediaCollapsedIndicatorIntroduced"
+        static let clockCollapsedIndicatorIntroduced = "settings.clockCollapsedIndicatorIntroduced"
         static let testingFeaturesEnabled = "settings.testingFeaturesEnabled"
     }
 
@@ -161,6 +167,11 @@ final class NotchPreferences: ObservableObject {
             storedVisiblePages.append(.summary)
         }
         defaults.set(true, forKey: Keys.summaryPageIntroduced)
+        if persistedVisiblePages != nil, defaults.object(forKey: Keys.clockPageIntroduced) == nil {
+            storedVisiblePages.append(.clock)
+            defaults.set(storedVisiblePages.map(\.rawValue), forKey: Keys.visiblePages)
+        }
+        defaults.set(true, forKey: Keys.clockPageIntroduced)
         visiblePages = storedVisiblePages.isEmpty ? Set(NotchPage.allCases) : Set(storedVisiblePages)
         dynamicPagesEnabled = defaults.bool(forKey: Keys.dynamicPagesEnabled)
         summaryPriorityOrder = Self.summaryPriorities(from: defaults.stringArray(forKey: Keys.summaryPriorityOrder))
@@ -201,6 +212,10 @@ final class NotchPreferences: ObservableObject {
             collapsedIndicatorCategories.insert(.mediaPlayback)
             defaults.set(true, forKey: Keys.mediaCollapsedIndicatorIntroduced)
         }
+        if defaults.object(forKey: Keys.clockCollapsedIndicatorIntroduced) == nil {
+            collapsedIndicatorCategories.insert(.clock)
+            defaults.set(true, forKey: Keys.clockCollapsedIndicatorIntroduced)
+        }
         visibleCollapsedIndicatorCategories = collapsedIndicatorCategories
         testingFeaturesEnabled = defaults.bool(forKey: Keys.testingFeaturesEnabled)
         testingSystemActivity = nil
@@ -235,6 +250,7 @@ final class NotchPreferences: ObservableObject {
         case .thirdPage: orderedVisiblePages[safe: 2]
         case .fourthPage: orderedVisiblePages[safe: 3]
         case .fifthPage: orderedVisiblePages[safe: 4]
+        case .sixthPage: orderedVisiblePages[safe: 5]
         }
     }
 
@@ -373,7 +389,6 @@ final class NotchPreferences: ObservableObject {
 
     func isCollapsedIndicatorCategoryVisible(_ category: CollapsedNotchIndicatorCategory) -> Bool {
         isCollapsedIndicatorCategoryEnabled(category)
-            && (category.ownerPage.map(isVisible) ?? true)
     }
 
     func isCollapsedIndicatorCategoryEnabled(_ category: CollapsedNotchIndicatorCategory) -> Bool {
@@ -482,7 +497,8 @@ final class NotchPreferences: ObservableObject {
         .secondPage: AppShortcut(key: "2", modifiers: [.command]),
         .thirdPage: AppShortcut(key: "3", modifiers: [.command]),
         .fourthPage: AppShortcut(key: "4", modifiers: [.command]),
-        .fifthPage: AppShortcut(key: "5", modifiers: [.command])
+        .fifthPage: AppShortcut(key: "5", modifiers: [.command]),
+        .sixthPage: AppShortcut(key: "6", modifiers: [.command])
     ]
 }
 

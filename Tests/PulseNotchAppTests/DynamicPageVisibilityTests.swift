@@ -22,4 +22,11 @@ struct DynamicPageVisibilityTests {
 
         #expect(activity.visiblePages(from: [.summary, .calendar], isEnabled: true) == [.summary])
     }
+
+    @Test
+    func dynamicModeShowsClockOnlyWhileItHasActivity() {
+        let activity = DynamicPageActivity(calendar: false, agents: false, github: false, media: false, clock: true)
+
+        #expect(activity.visiblePages(from: [.calendar, .clock], isEnabled: true) == [.clock])
+    }
 }

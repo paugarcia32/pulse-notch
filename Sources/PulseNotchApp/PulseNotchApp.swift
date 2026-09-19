@@ -7,6 +7,7 @@ extension Notification.Name {
     static let pulseNotchShowAgents = Notification.Name("pulseNotchShowAgents")
     static let pulseNotchShowGitHub = Notification.Name("pulseNotchShowGitHub")
     static let pulseNotchShowMedia = Notification.Name("pulseNotchShowMedia")
+    static let pulseNotchShowClock = Notification.Name("pulseNotchShowClock")
     static let pulseNotchClose = Notification.Name("pulseNotchClose")
     static let pulseNotchDisplayPreferencesChanged = Notification.Name("pulseNotchDisplayPreferencesChanged")
 }
@@ -75,6 +76,7 @@ private extension Notification.Name {
         case .agents: .pulseNotchShowAgents
         case .github: .pulseNotchShowGitHub
         case .media: .pulseNotchShowMedia
+        case .clock: .pulseNotchShowClock
         }
     }
 }

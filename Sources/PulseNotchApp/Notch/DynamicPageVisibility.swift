@@ -3,6 +3,15 @@ struct DynamicPageActivity: Equatable {
     let agents: Bool
     let github: Bool
     let media: Bool
+    let clock: Bool
+
+    init(calendar: Bool, agents: Bool, github: Bool, media: Bool, clock: Bool = false) {
+        self.calendar = calendar
+        self.agents = agents
+        self.github = github
+        self.media = media
+        self.clock = clock
+    }
 
     func visiblePages(from configuredPages: [NotchPage], isEnabled: Bool) -> [NotchPage] {
         guard isEnabled else { return configuredPages }
@@ -16,6 +25,7 @@ struct DynamicPageActivity: Equatable {
         case .agents: agents
         case .github: github
         case .media: media
+        case .clock: clock
         }
     }
 }

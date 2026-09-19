@@ -7,6 +7,7 @@ enum SummaryPriority: String, CaseIterable, Identifiable {
     case activeWork
     case media
     case openPullRequest
+    case clock
 
     var id: String { "summary-priority-\(rawValue)" }
 
@@ -17,6 +18,7 @@ enum SummaryPriority: String, CaseIterable, Identifiable {
         case .activeWork: "Agents and Actions running"
         case .media: "Now playing"
         case .openPullRequest: "Open pull request"
+        case .clock: "Active timer or stopwatch"
         }
     }
 
@@ -27,6 +29,7 @@ enum SummaryPriority: String, CaseIterable, Identifiable {
         case .activeWork: "bolt.fill"
         case .media: "waveform"
         case .openPullRequest: "arrow.triangle.pull"
+        case .clock: "timer"
         }
     }
 }
@@ -36,6 +39,7 @@ enum SummaryHighlight: Equatable {
     case pullRequest(GitHubPullRequest)
     case activeWork(agentCount: Int, actionCount: Int)
     case media(MediaPlaybackStatus)
+    case clock(ClockStatus)
     case allClear
 
     static func select(
@@ -44,6 +48,7 @@ enum SummaryHighlight: Equatable {
         agents: [CodingAgentSession],
         actions: [GitHubActionSession],
         media: MediaPlaybackStatus?,
+        clock: ClockStatus? = nil,
         priorities: [SummaryPriority],
         at date: Date
     ) -> SummaryHighlight {
@@ -71,6 +76,8 @@ enum SummaryHighlight: Equatable {
                 if let pullRequest = pullRequests.first(where: { !$0.needsAttention }) {
                     return .pullRequest(pullRequest)
                 }
+            case .clock:
+                if let clock { return .clock(clock) }
             }
         }
         return .allClear
@@ -82,6 +89,7 @@ struct SummaryPage: View {
     @ObservedObject var codingAgentModel: CodingAgentFeatureModel
     @ObservedObject var gitHubModel: GitHubFeatureModel
     @ObservedObject var mediaPlaybackModel: MediaPlaybackFeatureModel
+    @ObservedObject var clockModel: ClockFeatureModel
     let priorities: [SummaryPriority]
     let date: Date
     let onSelectPage: (NotchPage) -> Void
@@ -108,6 +116,7 @@ struct SummaryPage: View {
             agents: agentSessions,
             actions: gitHubModel.actionSessions,
             media: mediaPlaybackModel.playback,
+            clock: clockModel.status(at: date, includePaused: true),
             priorities: priorities,
             at: date
         )
@@ -286,6 +295,7 @@ private extension SummaryHighlight {
         case .pullRequest: .github
         case .activeWork: .summary
         case .media: .media
+        case .clock: .clock
         case .allClear: .summary
         }
     }
@@ -297,6 +307,7 @@ private extension SummaryHighlight {
         case .activeWork: "IN PROGRESS"
         case .media: "NOW PLAYING"
         case .allClear: "SUMMARY"
+        case .clock: "CLOCK"
         }
     }
 
@@ -307,6 +318,7 @@ private extension SummaryHighlight {
         case .activeWork: "bolt.fill"
         case .media: "waveform"
         case .allClear: "checkmark"
+        case let .clock(status): status.mode.symbolName
         }
     }
 
@@ -317,6 +329,7 @@ private extension SummaryHighlight {
         case .activeWork: .cyan
         case .media: .purple
         case .allClear: .green
+        case .clock: .orange
         }
     }
 
@@ -328,6 +341,7 @@ private extension SummaryHighlight {
             Self.workTitle(agentCount: agentCount, actionCount: actionCount)
         case let .media(playback): playback.title
         case .allClear: "All clear"
+        case let .clock(status): ClockTimeFormatter.display(status.time, showsTenths: status.mode == .stopwatch)
         }
     }
 
@@ -338,6 +352,7 @@ private extension SummaryHighlight {
         case .activeWork: "Live work is grouped on the right"
         case let .media(playback): playback.artist.isEmpty ? "Unknown artist" : playback.artist
         case .allClear: "No upcoming events or work needing attention"
+        case let .clock(status): status.mode.name
         }
     }
 
@@ -353,6 +368,7 @@ private extension SummaryHighlight {
         case let .activeWork(agentCount, actionCount): return "\(agentCount + actionCount) active"
         case let .media(playback): return playback.isPlaying ? "Playing" : "Paused"
         case .allClear: return "Quiet"
+        case let .clock(status): return status.isRunning ? "Running" : "Paused"
         }
     }
 

@@ -36,6 +36,23 @@ struct CollapsedNotchIndicatorsTests {
     }
 
     @Test
+    func runningClockUsesPairedIconAndTimeIndicator() {
+        let status = ClockStatus(mode: .timer, time: 125, isRunning: true)
+        let indicators = CollapsedNotchIndicators.make(
+            schedule: nil,
+            sessions: [],
+            actionSessions: [],
+            clock: status,
+            at: Date(timeIntervalSince1970: 1_000),
+            calendarReminderLeadTime: 10 * 60
+        )
+
+        #expect(indicators.first?.content == .clock(status))
+        #expect(indicators.first?.occupiesBothSides == true)
+        #expect(indicators.first?.category == .clock)
+    }
+
+    @Test
     func ordersIndicatorsUsingTheUsersCategoryPriorities() {
         let indicators = [
             CollapsedIndicatorPreview.codex.indicator(instance: 0),

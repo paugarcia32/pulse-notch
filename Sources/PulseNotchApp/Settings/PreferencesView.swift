@@ -130,7 +130,7 @@ struct PreferencesView: View {
                 } header: {
                     Text("Notch Pages")
                 } footer: {
-                    Text("Drag a row to change the order. Turning off a page also stops its closed-notch activity.")
+                    Text("Drag a row to change the order. Page visibility and closed-notch activity can be configured independently.")
                 }
 
                 Section {
@@ -392,7 +392,6 @@ private struct PagePreferenceRow: View {
                     set: { preferences.setCollapsedIndicatorCategory(category, isVisible: $0) }
                 ))
                 .controlSize(.small)
-                .disabled(!preferences.isVisible(page))
                 .padding(.leading, 24)
             }
         }
