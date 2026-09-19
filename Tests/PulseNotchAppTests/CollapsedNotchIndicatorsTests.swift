@@ -252,9 +252,11 @@ struct CollapsedNotchIndicatorsTests {
         url: URL
     ) -> GitHubActionSession {
         GitHubActionSession(
-            runner: .init(
-            id: id,
+            run: .init(
+                id: id,
+                repository: "example/project",
                 name: "Workflow",
+                url: url,
                 pullRequestNumber: 1,
                 updatedAt: Date(timeIntervalSince1970: 1_000),
                 status: status == .running ? .running : .failed

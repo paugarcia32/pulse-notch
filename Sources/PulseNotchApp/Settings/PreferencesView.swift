@@ -1,4 +1,5 @@
 import AppKit
+import PulseNotchCore
 import SwiftUI
 
 private enum SettingsDestination: Hashable {
@@ -15,6 +16,7 @@ struct PreferencesView: View {
     @ObservedObject var updateModel: UpdateFeatureModel
     let displays: [NotchDisplayOption]
     @State private var selection = SettingsDestination.general
+    @State private var gitHubRepositoryName = ""
 
     var body: some View {
         NavigationSplitView {
@@ -251,6 +253,10 @@ struct PreferencesView: View {
                 downloadsSettings
             }
 
+            if page == .github {
+                gitHubSettings
+            }
+
             if let category = indicatorCategory(for: page) {
                 Section {
                     Toggle("Show \(category.name) when notch is closed", isOn: collapsedIndicatorCategory(category))
@@ -293,6 +299,50 @@ struct PreferencesView: View {
         } footer: {
             Text("File names, locations, and Homebrew processes are inspected locally and are not persisted. Homebrew progress is shown as indeterminate.")
         }
+    }
+
+    private var gitHubSettings: some View {
+        Section {
+            HStack {
+                TextField("owner/repository", text: $gitHubRepositoryName)
+                    .onSubmit(addGitHubRepository)
+                Button("Add", action: addGitHubRepository)
+                    .disabled(!canAddGitHubRepository)
+            }
+
+            if preferences.monitoredGitHubRepositories.isEmpty {
+                Label("No repositories selected", systemImage: "tray")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(preferences.monitoredGitHubRepositories) { repository in
+                    HStack {
+                        Label(repository.nameWithOwner, systemImage: "shippingbox")
+                        Spacer()
+                        Button {
+                            preferences.removeMonitoredGitHubRepository(repository)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Stop monitoring \(repository.nameWithOwner)")
+                    }
+                }
+            }
+        } header: {
+            Text("GitHub Actions monitoring")
+        } footer: {
+            Text("Monitors push, tag, and manual runs. Pull request checks stay enabled.")
+        }
+    }
+
+    private var canAddGitHubRepository: Bool {
+        guard let repository = GitHubRepository(nameWithOwner: gitHubRepositoryName) else { return false }
+        return !preferences.monitoredGitHubRepositories.contains { $0.id == repository.id }
+    }
+
+    private func addGitHubRepository() {
+        guard preferences.addMonitoredGitHubRepository(named: gitHubRepositoryName) else { return }
+        gitHubRepositoryName = ""
     }
 
     private var shortcutSettings: some View {

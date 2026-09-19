@@ -1,14 +1,56 @@
 import Foundation
 import PulseNotchCore
 
-actor GitHubCLIProvider: GitHubPullRequestProviding {
-    func pullRequests() throws -> [GitHubPullRequest] {
+enum GitHubCLIProviderError: Error, Equatable {
+    case executableNotFound
+}
+
+actor GitHubCLIProvider: GitHubActivityProviding {
+    private let executableURL: URL?
+
+    init(executableURL: URL? = GitHubCLIExecutable.locate()) {
+        self.executableURL = executableURL
+    }
+
+    func activity(repositories: [GitHubRepository]) throws -> GitHubActivitySnapshot {
+        guard let executableURL else { throw GitHubCLIProviderError.executableNotFound }
+        let pullRequests = try pullRequests(using: executableURL)
+        let selectedRepositoryIDs = Set(repositories.map(\.id))
+        let pullRequestRuns = pullRequests
+            .filter { !selectedRepositoryIDs.contains($0.repository.lowercased()) }
+            .flatMap(\.actionRuns)
+        let repositoryRuns = try repositories.flatMap { try actionRuns(in: $0, using: executableURL) }
+        return GitHubActivitySnapshot(
+            pullRequests: pullRequests,
+            actionRuns: pullRequestRuns + repositoryRuns
+        )
+    }
+
+    private func pullRequests(using executableURL: URL) throws -> [GitHubPullRequest] {
         let output = try CommandOutput.read(
-            executable: "/usr/bin/env",
-            arguments: ["gh", "api", "graphql", "-f", "query=\(query)"],
+            executable: executableURL.path,
+            arguments: ["api", "graphql", "-f", "query=\(query)"],
             timeout: 15
         )
         return try JSONDecoder.github.decode(Response.self, from: Data(output.utf8)).data.search.nodes.map(\.pullRequest)
+    }
+
+    private func actionRuns(
+        in repository: GitHubRepository,
+        using executableURL: URL
+    ) throws -> [GitHubActionRun] {
+        let output = try CommandOutput.read(
+            executable: executableURL.path,
+            arguments: [
+                "run", "list",
+                "--repo", repository.nameWithOwner,
+                "--limit", "20",
+                "--json", "databaseId,workflowName,displayTitle,event,headBranch,status,conclusion,updatedAt,url"
+            ],
+            timeout: 15
+        )
+        return try JSONDecoder.github.decode([GitHubCLIWorkflowRun].self, from: Data(output.utf8))
+            .map { $0.actionRun(repository: repository) }
     }
 
     private var query: String {
@@ -73,7 +115,7 @@ private struct Response: Decodable {
                 commentCount: comments.totalCount,
                 passedCheckCount: statusCheckRollup?.contexts.nodes.count(where: \.passedCheck) ?? 0,
                 actionStatus: GitHubActionSummary.status(for: actionChecks),
-                actionRunners: actionRunners
+                actionRuns: actionRuns
             )
         }
 
@@ -89,7 +131,7 @@ private struct Response: Decodable {
             statusCheckRollup?.contexts.nodes.compactMap(\.actionCheck) ?? []
         }
 
-        private var actionRunners: [GitHubPullRequest.ActionRunner] {
+        private var actionRuns: [GitHubActionRun] {
             let grouped = Dictionary(grouping: statusCheckRollup?.contexts.nodes ?? [], by: \CheckNode.workflowRun?.id)
             return grouped.compactMap { id, nodes in
                 guard
@@ -100,6 +142,7 @@ private struct Response: Decodable {
                 guard status != .none else { return nil }
                 return .init(
                     id: id,
+                    repository: repository.nameWithOwner,
                     name: workflowRun.workflow.name ?? workflowRun.displayTitle,
                     pullRequestNumber: number,
                     updatedAt: workflowRun.updatedAt,
@@ -155,6 +198,55 @@ private struct Response: Decodable {
     }
     struct Workflow: Decodable { let name: String? }
     struct App: Decodable { let slug: String }
+}
+
+struct GitHubCLIWorkflowRun: Decodable {
+    let databaseId: Int
+    let workflowName: String?
+    let displayTitle: String
+    let event: String
+    let headBranch: String?
+    let status: String
+    let conclusion: String?
+    let updatedAt: Date
+    let url: URL
+
+    func actionRun(repository: GitHubRepository) -> GitHubActionRun {
+        GitHubActionRun(
+            id: "\(repository.id)-\(databaseId)",
+            repository: repository.nameWithOwner,
+            name: workflowName ?? displayTitle,
+            event: event,
+            ref: headBranch,
+            url: url,
+            updatedAt: updatedAt,
+            status: GitHubActionSummary.status(for: [
+                .init(
+                    status: status,
+                    conclusion: conclusion,
+                    completedAt: status.uppercased() == "COMPLETED" ? updatedAt : nil
+                )
+            ])
+        )
+    }
+}
+
+enum GitHubCLIExecutable {
+    static func locate(
+        fileManager: FileManager = .default,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL? {
+        var paths = [
+            "/opt/homebrew/bin/gh",
+            "/usr/local/bin/gh",
+            fileManager.homeDirectoryForCurrentUser.appending(path: ".local/bin/gh").path
+        ]
+        paths.append(contentsOf: (environment["PATH"] ?? "")
+            .split(separator: ":")
+            .map { URL(fileURLWithPath: String($0)).appending(path: "gh").path })
+        return paths.first(where: fileManager.isExecutableFile(atPath:))
+            .map(URL.init(fileURLWithPath:))
+    }
 }
 
 private extension JSONDecoder {

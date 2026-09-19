@@ -149,10 +149,10 @@ struct NotchSurface: View {
                 await brightnessModel.refresh()
             }
         }
-        .task(id: gitHubMonitoringEnabled) {
+        .task(id: gitHubMonitoringID) {
             guard gitHubMonitoringEnabled else { return }
             while !Task.isCancelled {
-                await gitHubModel.refresh()
+                await gitHubModel.refresh(repositories: preferences.monitoredGitHubRepositories)
                 try? await Task.sleep(for: .seconds(30))
             }
         }
@@ -659,6 +659,10 @@ struct NotchSurface: View {
         preferences.isVisible(.github)
             || preferences.isVisible(.summary)
             || preferences.isCollapsedIndicatorCategoryEnabled(.githubActions)
+    }
+
+    private var gitHubMonitoringID: String {
+        "\(gitHubMonitoringEnabled)-\(preferences.monitoredGitHubRepositories.map(\.id).joined(separator: ","))"
     }
 
     private var codingAgentsMonitoringEnabled: Bool {

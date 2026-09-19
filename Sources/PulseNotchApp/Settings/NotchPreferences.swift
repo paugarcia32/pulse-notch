@@ -1,4 +1,5 @@
 import AppKit
+import PulseNotchCore
 import ServiceManagement
 import SwiftUI
 
@@ -112,6 +113,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var showDownloads: Bool
     @Published private(set) var showHomebrewDownloads: Bool
     @Published private(set) var downloadsDirectoryPath: String
+    @Published private(set) var monitoredGitHubRepositories: [GitHubRepository]
     @Published private(set) var shortcuts: [ShortcutAction: AppShortcut]
     @Published private(set) var startupError: String?
     @Published private(set) var preferredDisplayID: String?
@@ -146,6 +148,7 @@ final class NotchPreferences: ObservableObject {
         static let showDownloads = "settings.showDownloads"
         static let showHomebrewDownloads = "settings.showHomebrewDownloads"
         static let downloadsDirectoryPath = "settings.downloadsDirectoryPath"
+        static let monitoredGitHubRepositories = "settings.monitoredGitHubRepositories"
         static let shortcuts = "settings.shortcuts"
         static let preferredDisplayID = "settings.preferredDisplayID"
         static let externalNotchStyle = "settings.externalNotchStyle"
@@ -203,6 +206,8 @@ final class NotchPreferences: ObservableObject {
         downloadsDirectoryPath = defaults.string(forKey: Keys.downloadsDirectoryPath)
             ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path
             ?? "/Downloads"
+        monitoredGitHubRepositories = defaults.stringArray(forKey: Keys.monitoredGitHubRepositories)?
+            .compactMap(GitHubRepository.init(nameWithOwner:)) ?? []
         shortcuts = Self.shortcuts(from: defaults.data(forKey: Keys.shortcuts))
         preferredDisplayID = defaults.string(forKey: Keys.preferredDisplayID)
         externalNotchStyle = ExternalNotchStyle(rawValue: defaults.string(forKey: Keys.externalNotchStyle) ?? "") ?? .capsule
@@ -339,6 +344,22 @@ final class NotchPreferences: ObservableObject {
         guard downloadsDirectoryPath != path else { return }
         downloadsDirectoryPath = path
         defaults.set(path, forKey: Keys.downloadsDirectoryPath)
+    }
+
+    @discardableResult
+    func addMonitoredGitHubRepository(named name: String) -> Bool {
+        guard
+            let repository = GitHubRepository(nameWithOwner: name),
+            !monitoredGitHubRepositories.contains(where: { $0.id == repository.id })
+        else { return false }
+        monitoredGitHubRepositories.append(repository)
+        persistMonitoredGitHubRepositories()
+        return true
+    }
+
+    func removeMonitoredGitHubRepository(_ repository: GitHubRepository) {
+        monitoredGitHubRepositories.removeAll { $0.id == repository.id }
+        persistMonitoredGitHubRepositories()
     }
 
     func setPreferredDisplayID(_ displayID: String?) {
@@ -494,6 +515,13 @@ final class NotchPreferences: ObservableObject {
     private func persistCollapsedIndicatorColors() {
         guard let data = try? JSONEncoder().encode(collapsedIndicatorColors) else { return }
         defaults.set(data, forKey: Keys.collapsedIndicatorColors)
+    }
+
+    private func persistMonitoredGitHubRepositories() {
+        defaults.set(
+            monitoredGitHubRepositories.map(\.nameWithOwner),
+            forKey: Keys.monitoredGitHubRepositories
+        )
     }
 
     private static func clampedCollapsedIndicatorMaximum(_ maximum: Int) -> Int {

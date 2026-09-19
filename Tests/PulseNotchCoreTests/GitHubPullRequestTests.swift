@@ -25,4 +25,19 @@ struct GitHubPullRequestTests {
 
         #expect(status == .succeeded(completedAt: last))
     }
+
+    @Test
+    func reportsRequestedWorkflowAsRunning() {
+        let status = GitHubActionSummary.status(for: [.init(status: "requested")])
+
+        #expect(status == .running)
+    }
+
+    @Test
+    func repositoryRequiresOwnerAndName() {
+        #expect(GitHubRepository(nameWithOwner: " paugarcia32/pulse-notch ")?.nameWithOwner == "paugarcia32/pulse-notch")
+        #expect(GitHubRepository(nameWithOwner: "pulse-notch") == nil)
+        #expect(GitHubRepository(nameWithOwner: "owner/repo/extra") == nil)
+        #expect(GitHubRepository(nameWithOwner: "owner/repo name") == nil)
+    }
 }

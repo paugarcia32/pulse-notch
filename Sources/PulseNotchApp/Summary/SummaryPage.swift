@@ -311,8 +311,8 @@ struct SummaryPage: View {
                     .foregroundStyle(.orange)
                     .frame(width: 22, height: 22)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(session.runner.name).font(.caption.weight(.semibold)).lineLimit(1)
-                    Text("Pull request #\(session.runner.pullRequestNumber)")
+                    Text(session.run.name).font(.caption.weight(.semibold)).lineLimit(1)
+                    Text(actionContext(session.run))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -322,7 +322,15 @@ struct SummaryPage: View {
             .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("GitHub Action \(session.runner.name) running")
+        .accessibilityLabel("GitHub Action \(session.run.name) running")
+    }
+
+    private func actionContext(_ run: GitHubActionRun) -> String {
+        if let number = run.pullRequestNumber {
+            return "\(run.repository) #\(number)"
+        }
+        if let ref = run.ref { return "\(run.repository) · \(ref)" }
+        return run.repository
     }
 
     private func workspaceName(_ session: CodingAgentSession) -> String? {

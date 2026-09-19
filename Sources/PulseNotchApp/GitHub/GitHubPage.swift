@@ -15,9 +15,9 @@ struct GitHubPage: View {
                 placeholder { ProgressView().controlSize(.small) }
             case let .loaded(pullRequests):
                 content(pullRequests)
-            case .unavailable:
+            case let .unavailable(reason):
                 placeholder {
-                    Label("GitHub is unavailable — sign in with gh auth login", systemImage: "exclamationmark.triangle")
+                    Label(unavailableMessage(reason), systemImage: "exclamationmark.triangle")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -141,13 +141,25 @@ struct GitHubPage: View {
                         ),
                         reduceMotion: reduceMotion
                     )
-                    Text(session.runner.name)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(session.run.name)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                        Text(actionContext(session.run))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                     Spacer(minLength: 4)
-                    Text("#\(session.runner.pullRequestNumber)")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    if let url = session.run.url {
+                        Button { openURL(url) } label: {
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open \(session.run.name) in GitHub")
+                    }
                 }
                 .padding(.horizontal, 9)
                 .padding(.vertical, 6)
@@ -173,6 +185,20 @@ struct GitHubPage: View {
         case .failed: "GitHub Actions failed"
         case .succeeded: "GitHub Actions passed"
         case .none: "No GitHub Actions"
+        }
+    }
+
+    private func actionContext(_ run: GitHubActionRun) -> String {
+        let context = run.pullRequestNumber.map { "#\($0)" } ?? run.ref
+        return [run.repository, context].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func unavailableMessage(_ reason: GitHubFeatureModel.State.Reason) -> String {
+        switch reason {
+        case .commandLineToolMissing:
+            "GitHub CLI was not found — install gh with Homebrew"
+        case .requestFailed:
+            "GitHub is unavailable — verify gh authentication and repository access"
         }
     }
 }

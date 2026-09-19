@@ -67,7 +67,8 @@ SwiftPM executable.
 - Upcoming Calendar events, including meeting links and configurable reminders.
 - Running and recently completed Codex, Claude Code, Cursor Agent, Antigravity,
   and OpenCode sessions.
-- Open pull requests, reviews, checks, and active GitHub Actions.
+- Open pull requests, reviews, checks, and Actions from repositories selected in
+  Settings, including workflows triggered by pushes and tags.
 - Active browser downloads and Homebrew operations.
 - Now Playing controls, artwork, and playback progress.
 - Charging, volume, brightness, and Bluetooth-headphone activities.
@@ -86,8 +87,9 @@ Pulse Notch processes activity locally and does not include telemetry.
   stays in memory and refreshes every 30 seconds.
 - Coding-agent detection reads local process and session metadata, never prompts or
   conversation contents.
-- GitHub activity uses the authenticated official `gh` CLI and never reads or stores
-  its token.
+- GitHub activity refreshes every 30 seconds through the authenticated official
+  `gh` CLI and never reads or stores its token. Selected repository names are saved
+  locally; removing a repository in Settings stops monitoring it.
 - Downloads monitoring observes the selected local folder and can be disabled.
 - Battery, Bluetooth, volume, brightness, and media state are read locally and kept
   in memory.

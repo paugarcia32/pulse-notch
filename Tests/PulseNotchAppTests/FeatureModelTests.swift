@@ -44,7 +44,41 @@ struct FeatureModelTests {
 
         await model.refresh()
 
-        #expect(model.state == .unavailable)
+        #expect(model.state == .unavailable(.requestFailed))
+    }
+
+    @Test
+    func githubModelTracksRepositoryActionWithoutAPullRequest() async throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let run = GitHubActionRun(
+            id: "repo-1",
+            repository: "paugarcia32/pulse-notch",
+            name: "Release",
+            event: "push",
+            ref: "v0.1.1",
+            updatedAt: now,
+            status: .running
+        )
+        let model = GitHubFeatureModel(provider: GitHubProviderFake(
+            activity: .init(pullRequests: [], actionRuns: [run])
+        ))
+
+        await model.refresh(
+            repositories: [try #require(GitHubRepository(nameWithOwner: "paugarcia32/pulse-notch"))],
+            at: now
+        )
+
+        #expect(model.state == .loaded([]))
+        #expect(model.actionSessions.first?.run == run)
+    }
+
+    @Test
+    func githubModelReportsMissingCommandLineTool() async {
+        let model = GitHubFeatureModel(provider: GitHubCLIProvider(executableURL: nil))
+
+        await model.refresh()
+
+        #expect(model.state == .unavailable(.commandLineToolMissing))
     }
 
     @Test
@@ -450,6 +484,9 @@ struct FeatureModelTests {
         preferences.setShowDownloads(false)
         preferences.setShowHomebrewDownloads(false)
         preferences.setDownloadsDirectoryURL(URL(fileURLWithPath: "/tmp/PulseNotchDownloads", isDirectory: true))
+        #expect(preferences.addMonitoredGitHubRepository(named: "paugarcia32/pulse-notch"))
+        #expect(!preferences.addMonitoredGitHubRepository(named: "PAUGARCiA32/PULSE-NOTCH"))
+        #expect(!preferences.addMonitoredGitHubRepository(named: "not-a-repository"))
         preferences.setPreferredDisplayID("42")
         preferences.setExternalNotchStyle(.rectangle)
         preferences.setCollapsedIndicatorMaximumPerSide(4)
@@ -475,6 +512,7 @@ struct FeatureModelTests {
         #expect(!restoredPreferences.showDownloads)
         #expect(!restoredPreferences.showHomebrewDownloads)
         #expect(restoredPreferences.downloadsDirectoryPath == "/tmp/PulseNotchDownloads")
+        #expect(restoredPreferences.monitoredGitHubRepositories.map(\.nameWithOwner) == ["paugarcia32/pulse-notch"])
         #expect(restoredPreferences.preferredDisplayID == "42")
         #expect(restoredPreferences.externalNotchStyle == .rectangle)
         #expect(restoredPreferences.collapsedIndicatorMaximumPerSide == 4)
@@ -487,6 +525,21 @@ struct FeatureModelTests {
         #expect(preferences.testingSystemActivity == .volume)
         #expect(preferences.testingSystemActivityTrigger != nil)
 
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    @Test
+    func githubRepositoryPreferencesCanDisconnectARepository() throws {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = NotchPreferences(defaults: defaults)
+        let repository = try #require(GitHubRepository(nameWithOwner: "example/project"))
+
+        #expect(preferences.addMonitoredGitHubRepository(named: repository.nameWithOwner))
+        preferences.removeMonitoredGitHubRepository(repository)
+
+        #expect(NotchPreferences(defaults: defaults).monitoredGitHubRepositories.isEmpty)
         defaults.removePersistentDomain(forName: suiteName)
     }
 
@@ -617,12 +670,21 @@ private struct CodingAgentProviderFake: CodingAgentProviding {
     }
 }
 
-private struct GitHubProviderFake: GitHubPullRequestProviding {
+private struct GitHubProviderFake: GitHubActivityProviding {
     let fails: Bool
+    let providedActivity: GitHubActivitySnapshot
 
-    func pullRequests() async throws -> [GitHubPullRequest] {
+    init(
+        fails: Bool = false,
+        activity: GitHubActivitySnapshot = .init(pullRequests: [], actionRuns: [])
+    ) {
+        self.fails = fails
+        providedActivity = activity
+    }
+
+    func activity(repositories: [GitHubRepository]) async throws -> GitHubActivitySnapshot {
         if fails { throw CocoaError(.fileReadUnknown) }
-        return []
+        return providedActivity
     }
 }
 

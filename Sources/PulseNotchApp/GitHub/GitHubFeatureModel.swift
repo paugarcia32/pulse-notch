@@ -7,33 +7,40 @@ final class GitHubFeatureModel: ObservableObject {
     enum State: Equatable {
         case loading
         case loaded([GitHubPullRequest])
-        case unavailable
+        case unavailable(Reason)
+
+        enum Reason: Equatable {
+            case commandLineToolMissing
+            case requestFailed
+        }
     }
 
     @Published private(set) var state: State = .loading
     @Published private(set) var actionSessions: [GitHubActionSession] = []
 
-    private let provider: any GitHubPullRequestProviding
+    private let provider: any GitHubActivityProviding
     private var actionTracker = GitHubActionTracker()
 
     var notificationActionSessions: [GitHubActionSession] {
         actionTracker.notificationSessions
     }
 
-    init(provider: any GitHubPullRequestProviding) {
+    init(provider: any GitHubActivityProviding) {
         self.provider = provider
     }
 
-    func refresh(at date: Date = Date()) async {
+    func refresh(repositories: [GitHubRepository] = [], at date: Date = Date()) async {
         do {
-            let pullRequests = try await provider.pullRequests()
+            let activity = try await provider.activity(repositories: repositories)
             actionSessions = actionTracker.update(
-                runners: pullRequests.flatMap(\.actionRunners),
+                runs: activity.actionRuns,
                 at: date
             )
-            state = .loaded(pullRequests)
+            state = .loaded(activity.pullRequests)
+        } catch GitHubCLIProviderError.executableNotFound {
+            state = .unavailable(.commandLineToolMissing)
         } catch {
-            state = .unavailable
+            state = .unavailable(.requestFailed)
         }
     }
 

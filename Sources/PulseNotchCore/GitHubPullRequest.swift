@@ -7,34 +7,7 @@ public struct GitHubPullRequest: Identifiable, Equatable, Sendable {
         case awaitingReview
     }
 
-    public enum ActionStatus: Equatable, Sendable {
-        case none
-        case running
-        case failed
-        case succeeded(completedAt: Date?)
-    }
-
-    public struct ActionRunner: Identifiable, Equatable, Sendable {
-        public let id: String
-        public let name: String
-        public let pullRequestNumber: Int
-        public let updatedAt: Date
-        public let status: ActionStatus
-
-        public init(
-            id: String,
-            name: String,
-            pullRequestNumber: Int,
-            updatedAt: Date,
-            status: ActionStatus
-        ) {
-            self.id = id
-            self.name = name
-            self.pullRequestNumber = pullRequestNumber
-            self.updatedAt = updatedAt
-            self.status = status
-        }
-    }
+    public typealias ActionStatus = GitHubActionRun.Status
 
     public let id: String
     public let repository: String
@@ -46,7 +19,7 @@ public struct GitHubPullRequest: Identifiable, Equatable, Sendable {
     public let commentCount: Int
     public let passedCheckCount: Int
     public let actionStatus: ActionStatus
-    public let actionRunners: [ActionRunner]
+    public let actionRuns: [GitHubActionRun]
 
     public init(
         id: String,
@@ -59,7 +32,7 @@ public struct GitHubPullRequest: Identifiable, Equatable, Sendable {
         commentCount: Int = 0,
         passedCheckCount: Int = 0,
         actionStatus: ActionStatus = .none,
-        actionRunners: [ActionRunner] = []
+        actionRuns: [GitHubActionRun] = []
     ) {
         self.id = id
         self.repository = repository
@@ -71,12 +44,8 @@ public struct GitHubPullRequest: Identifiable, Equatable, Sendable {
         self.commentCount = commentCount
         self.passedCheckCount = passedCheckCount
         self.actionStatus = actionStatus
-        self.actionRunners = actionRunners
+        self.actionRuns = actionRuns
     }
-}
-
-public protocol GitHubPullRequestProviding: Sendable {
-    func pullRequests() async throws -> [GitHubPullRequest]
 }
 
 public enum GitHubActionSummary {
@@ -94,7 +63,7 @@ public enum GitHubActionSummary {
 
     public static func status(for checks: [Check]) -> GitHubPullRequest.ActionStatus {
         guard !checks.isEmpty else { return .none }
-        if checks.contains(where: { ["QUEUED", "IN_PROGRESS", "PENDING", "WAITING"].contains($0.status.uppercased()) }) {
+        if checks.contains(where: { ["QUEUED", "IN_PROGRESS", "PENDING", "WAITING", "REQUESTED"].contains($0.status.uppercased()) }) {
             return .running
         }
         if checks.contains(where: { ["FAILURE", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE", "ACTION_REQUIRED", "STALE"].contains($0.conclusion?.uppercased() ?? "") }) {
