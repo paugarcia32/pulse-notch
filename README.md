@@ -26,7 +26,20 @@
 
 ## Installation
 
-Pulse Notch is currently installed from source:
+Install with Homebrew:
+
+```sh
+brew install --cask paugarcia32/tap/pulse-notch
+```
+
+Alternatively, download the DMG from the
+[latest GitHub release](https://github.com/paugarcia32/pulse-notch/releases/latest)
+and drag Pulse Notch to Applications.
+
+Pulse Notch is ad-hoc signed and not notarized. On first launch, macOS may require
+allowing it from System Settings > Privacy & Security.
+
+To build from source:
 
 ```sh
 git clone https://github.com/paugarcia32/pulse-notch.git
@@ -42,7 +55,8 @@ SwiftPM executable.
 ## System requirements
 
 - macOS 14 Sonoma or newer.
-- Swift 6 or newer.
+- An Apple Silicon Mac. Intel builds are not currently distributed.
+- Swift 6 or newer when building from source.
 - A Mac with or without a physical notch. External displays use a compact fallback.
 - The GitHub CLI (`gh`) is optional and only required for GitHub activity.
 
