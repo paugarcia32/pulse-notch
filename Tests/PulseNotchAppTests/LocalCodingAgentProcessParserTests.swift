@@ -46,6 +46,7 @@ struct LocalCodingAgentProcessParserTests {
           22 /bin/zsh -c codex --quiet
           23 /usr/bin/rg codex
           24 /usr/local/bin/codex app-server --listen stdio://
+          25 /Users/test/.local/bin/agy --print /usage --print-timeout 20s
         """
 
         #expect(LocalCodingAgentProcessParser.parse(output).isEmpty)

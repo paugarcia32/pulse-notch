@@ -1,6 +1,7 @@
 struct DynamicPageActivity: Equatable {
     let calendar: Bool
     let agents: Bool
+    let agentUsage: Bool
     let github: Bool
     let media: Bool
     let clock: Bool
@@ -9,6 +10,7 @@ struct DynamicPageActivity: Equatable {
     init(
         calendar: Bool,
         agents: Bool,
+        agentUsage: Bool = false,
         github: Bool,
         media: Bool,
         clock: Bool = false,
@@ -16,6 +18,7 @@ struct DynamicPageActivity: Equatable {
     ) {
         self.calendar = calendar
         self.agents = agents
+        self.agentUsage = agentUsage
         self.github = github
         self.media = media
         self.clock = clock
@@ -31,7 +34,7 @@ struct DynamicPageActivity: Equatable {
         switch page {
         case .summary: true
         case .calendar: calendar
-        case .agents: agents
+        case .agents: agents || agentUsage
         case .github: github
         case .media: media
         case .clock: clock

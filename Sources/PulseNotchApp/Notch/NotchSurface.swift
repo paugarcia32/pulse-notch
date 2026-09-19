@@ -177,8 +177,8 @@ struct NotchSurface: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-        .task(id: isExpanded && selectedPage == .agents) {
-            guard isExpanded, selectedPage == .agents else { return }
+        .task(id: usageMonitoringEnabled) {
+            guard usageMonitoringEnabled else { return }
             while !Task.isCancelled {
                 await codingAgentModel.refreshUsage()
                 try? await Task.sleep(for: .seconds(60))
@@ -521,7 +521,7 @@ struct NotchSurface: View {
                 GeometryReader { geometry in
                     HStack(spacing: 0) {
                         ForEach(pages) { page in
-                            pageContent(page, at: date)
+                            pageContent(page, at: date, availablePages: Set(pages))
                                 .frame(width: geometry.size.width)
                                 .accessibilityHidden(selectedPage != page)
                         }
@@ -673,6 +673,10 @@ struct NotchSurface: View {
             || preferences.isCollapsedIndicatorCategoryEnabled(.mediaPlayback)
     }
 
+    private var usageMonitoringEnabled: Bool {
+        isExpanded && (selectedPage == .agents || selectedPage == .summary)
+    }
+
     private func scheduleSystemActivityDismissal(_ activity: SystemActivityFeatureModel.Activity?) {
         systemActivityTask?.cancel()
         guard let activity else { return }
@@ -739,7 +743,11 @@ struct NotchSurface: View {
     }
 
     @ViewBuilder
-    private func pageContent(_ page: NotchPage, at date: Date) -> some View {
+    private func pageContent(
+        _ page: NotchPage,
+        at date: Date,
+        availablePages: Set<NotchPage>
+    ) -> some View {
         switch page {
         case .summary:
             SummaryPage(
@@ -750,6 +758,7 @@ struct NotchSurface: View {
                 clockModel: clockModel,
                 priorities: preferences.summaryPriorityOrder,
                 date: date,
+                availablePages: availablePages,
                 onSelectPage: { selectPage($0) }
             )
         case .calendar: CalendarPage(model: calendarModel, date: date)
@@ -765,6 +774,7 @@ struct NotchSurface: View {
         DynamicPageActivity(
             calendar: calendarHasActivity(at: date),
             agents: agentsHaveActivity,
+            agentUsage: usageLimitNeedsAttention,
             github: gitHubHasActivity,
             media: mediaPlaybackModel.isPageActive(at: date),
             clock: clockModel.status(at: date, includePaused: true) != nil,
@@ -783,6 +793,11 @@ struct NotchSurface: View {
     private var agentsHaveActivity: Bool {
         guard case let .loaded(sessions) = codingAgentModel.state else { return false }
         return sessions.contains { $0.status == .running }
+    }
+
+    private var usageLimitNeedsAttention: Bool {
+        guard case let .loaded(availability) = codingAgentModel.usageState else { return false }
+        return SummaryHighlight.depletedUsageLimit(in: availability) != nil
     }
 
     private var gitHubHasActivity: Bool {

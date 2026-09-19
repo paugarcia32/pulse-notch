@@ -290,6 +290,9 @@ enum LocalCodingAgentProcessParser {
             return .cursor
         }
         if executableName == "agy" {
+            guard !(command.contains("--print") && command.contains("/usage")) else {
+                return nil
+            }
             return .antigravity
         }
         if executableName == "opencode" {

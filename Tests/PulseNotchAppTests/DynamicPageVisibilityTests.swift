@@ -36,4 +36,17 @@ struct DynamicPageVisibilityTests {
 
         #expect(activity.visiblePages(from: [.calendar, .downloads], isEnabled: true) == [.downloads])
     }
+
+    @Test
+    func dynamicModeShowsAgentsWhileAUsageLimitNeedsAttention() {
+        let activity = DynamicPageActivity(
+            calendar: false,
+            agents: false,
+            agentUsage: true,
+            github: false,
+            media: false
+        )
+
+        #expect(activity.visiblePages(from: [.summary, .agents], isEnabled: true) == [.summary, .agents])
+    }
 }

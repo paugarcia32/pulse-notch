@@ -11,6 +11,7 @@ The repository currently contains the first executable product slice:
 - A dynamic Summary page that prioritizes the next event, work needing attention,
   active agents and Actions, media playback, or a quiet all-clear state.
 - Reorderable Summary priorities in Settings > Pages.
+- A Summary usage-limit highlight when an agent quota has 20% or less remaining.
 - A selectable week showing every Calendar event for the chosen day.
 - An amber Calendar icon when the next event starts within ten minutes.
 - A Join action for Google Meet, Zoom, Teams, and Webex links.
@@ -99,9 +100,10 @@ at runtime; when it is unavailable, the page shows an empty state.
 
 Settings > Pages can enable dynamic pages. In that mode, configured pages keep their
 order but appear only when relevant: Calendar has a current or upcoming event today,
-an agent is running, GitHub has an open pull request or running Action, or media is
-playing or was paused within the last five minutes. Summary remains available as the
-stable overview. When disabled, every configured page remains available as usual.
+an agent is running or has a usage limit with 20% or less remaining, GitHub has an
+open pull request or running Action, or media is playing or was paused within the last
+five minutes. Summary remains available as the stable overview. When disabled, every
+configured page remains available as usual.
 
 For active sessions, Pulse Notch reads the working directory and Git branch locally
 when the agent exposes them. It does not read or show coding-agent prompts or thread
@@ -115,11 +117,12 @@ thirty seconds, and keeps the result in memory only. A workflow appears as a run
 only while it is running or for five minutes after it finishes; completions appear in
 the collapsed notch until it is opened. It does not read, save, or log a token.
 
-When the coding-agent page is visible, Pulse Notch asks the locally installed Codex
+When the Coding Agents or Summary page is open, Pulse Notch asks the locally installed Codex
 App Server for the current quota windows once per minute. This reuses Codex's own
 login, does not read or store its credentials, and keeps the returned percentages
-in memory only. Claude Code can optionally share its usage through its official
-status-line input. Antigravity's locally installed `agy` CLI is queried with its
+in memory only. Summary surfaces the most depleted quota after it reaches 80% usage;
+its position among other Summary content is configurable. Claude Code can optionally
+share its usage through its official status-line input. Antigravity's locally installed `agy` CLI is queried with its
 official non-interactive `/usage` command; its credentials remain in the system
 Keychain. Cursor exposes its monthly pools in its dashboard rather than a CLI
 usage API. OpenCode can use many providers, so its limits are owned by the

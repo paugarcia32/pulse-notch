@@ -8,6 +8,7 @@ enum SummaryPriority: String, CaseIterable, Identifiable {
     case media
     case openPullRequest
     case clock
+    case usageLimits
 
     var id: String { "summary-priority-\(rawValue)" }
 
@@ -19,6 +20,7 @@ enum SummaryPriority: String, CaseIterable, Identifiable {
         case .media: "Now playing"
         case .openPullRequest: "Open pull request"
         case .clock: "Active timer or stopwatch"
+        case .usageLimits: "Usage limits running low"
         }
     }
 
@@ -30,6 +32,7 @@ enum SummaryPriority: String, CaseIterable, Identifiable {
         case .media: "waveform"
         case .openPullRequest: "arrow.triangle.pull"
         case .clock: "timer"
+        case .usageLimits: "gauge.with.dots.needle.67percent"
         }
     }
 }
@@ -40,6 +43,7 @@ enum SummaryHighlight: Equatable {
     case activeWork(agentCount: Int, actionCount: Int)
     case media(MediaPlaybackStatus)
     case clock(ClockStatus)
+    case usage(kind: CodingAgentKind, window: CodingAgentUsage.Window)
     case allClear
 
     static func select(
@@ -48,12 +52,15 @@ enum SummaryHighlight: Equatable {
         agents: [CodingAgentSession],
         actions: [GitHubActionSession],
         media: MediaPlaybackStatus?,
+        usage: [CodingAgentUsageAvailability] = [],
         clock: ClockStatus? = nil,
         priorities: [SummaryPriority],
         at date: Date
     ) -> SummaryHighlight {
         let runningAgents = agents.filter { $0.status == .running }.count
         let runningActions = actions.filter { $0.status == .running }.count
+        let mostDepletedLimit = depletedUsageLimit(in: usage)
+
         for priority in priorities {
             switch priority {
             case .calendarEvent:
@@ -76,9 +83,26 @@ enum SummaryHighlight: Equatable {
                 }
             case .clock:
                 if let clock { return .clock(clock) }
+            case .usageLimits:
+                if let (kind, window) = mostDepletedLimit {
+                    return .usage(kind: kind, window: window)
+                }
             }
         }
         return .allClear
+    }
+
+    static func depletedUsageLimit(
+        in usage: [CodingAgentUsageAvailability]
+    ) -> (kind: CodingAgentKind, window: CodingAgentUsage.Window)? {
+        let mostDepletedLimit = usage.compactMap { availability -> CodingAgentUsage? in
+            guard case let .available(usage) = availability else { return nil }
+            return usage
+        }
+        .flatMap { usage in usage.windows.map { (usage.kind, $0) } }
+        .max { $0.1.usedPercent < $1.1.usedPercent }
+        guard let mostDepletedLimit, mostDepletedLimit.1.usedPercent >= 80 else { return nil }
+        return mostDepletedLimit
     }
 }
 
@@ -90,6 +114,7 @@ struct SummaryPage: View {
     @ObservedObject var clockModel: ClockFeatureModel
     let priorities: [SummaryPriority]
     let date: Date
+    let availablePages: Set<NotchPage>
     let onSelectPage: (NotchPage) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -114,6 +139,7 @@ struct SummaryPage: View {
             agents: agentSessions,
             actions: gitHubModel.actionSessions,
             media: mediaPlaybackModel.playback,
+            usage: usageAvailability,
             clock: clockModel.status(at: date, includePaused: true),
             priorities: priorities,
             at: date
@@ -135,6 +161,11 @@ struct SummaryPage: View {
         return sessions
     }
 
+    private var usageAvailability: [CodingAgentUsageAvailability] {
+        guard case let .loaded(availability) = codingAgentModel.usageState else { return [] }
+        return availability
+    }
+
     private var runningAgents: [CodingAgentSession] {
         agentSessions.filter { $0.status == .running }
     }
@@ -145,7 +176,7 @@ struct SummaryPage: View {
 
     @ViewBuilder
     private var highlightCard: some View {
-        if highlight.destination == .summary {
+        if !canNavigateToHighlight {
             highlightContent
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(highlight.accessibilityLabel(at: date))
@@ -157,6 +188,10 @@ struct SummaryPage: View {
             .accessibilityLabel(highlight.accessibilityLabel(at: date))
             .accessibilityHint("Opens the related page")
         }
+    }
+
+    private var canNavigateToHighlight: Bool {
+        highlight.destination != .summary && availablePages.contains(highlight.destination)
     }
 
     private var highlightContent: some View {
@@ -171,7 +206,7 @@ struct SummaryPage: View {
                     .background(highlight.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(highlight.title)
-                        .font(.title3.weight(.semibold))
+                        .font(highlight.usesCompactTitle ? .callout.weight(.semibold) : .title3.weight(.semibold))
                         .lineLimit(2)
                     Text(highlight.subtitle)
                         .font(.caption)
@@ -179,7 +214,18 @@ struct SummaryPage: View {
                         .lineLimit(2)
                 }
                 Spacer(minLength: 0)
-                if highlight.destination != .summary {
+                if let percentage = highlight.remainingPercentage {
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text("\(percentage)%")
+                            .font(.title2.weight(.bold))
+                            .foregroundStyle(highlight.color)
+                            .monospacedDigit()
+                        Text("left")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if canNavigateToHighlight {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.tertiary)
@@ -294,6 +340,7 @@ private extension SummaryHighlight {
         case .activeWork: .summary
         case .media: .media
         case .clock: .clock
+        case .usage: .agents
         case .allClear: .summary
         }
     }
@@ -306,6 +353,7 @@ private extension SummaryHighlight {
         case .media: "NOW PLAYING"
         case .allClear: "SUMMARY"
         case .clock: "CLOCK"
+        case .usage: "USAGE"
         }
     }
 
@@ -317,6 +365,7 @@ private extension SummaryHighlight {
         case .media: "waveform"
         case .allClear: "checkmark"
         case let .clock(status): status.mode.symbolName
+        case .usage: "gauge.with.dots.needle.67percent"
         }
     }
 
@@ -328,6 +377,7 @@ private extension SummaryHighlight {
         case .media: .purple
         case .allClear: .green
         case .clock: .orange
+        case let .usage(kind, _): kind.notchColor
         }
     }
 
@@ -340,6 +390,7 @@ private extension SummaryHighlight {
         case let .media(playback): playback.title
         case .allClear: "All clear"
         case let .clock(status): ClockTimeFormatter.display(status.time, showsTenths: status.mode == .stopwatch)
+        case let .usage(_, window): "\(Self.windowName(window).capitalized) limit"
         }
     }
 
@@ -351,6 +402,9 @@ private extension SummaryHighlight {
         case let .media(playback): playback.artist.isEmpty ? "Unknown artist" : playback.artist
         case .allClear: "No upcoming events or work needing attention"
         case let .clock(status): status.mode.name
+        case let .usage(_, window):
+            window.resetsAt.map { "Resets \($0.formatted(date: .abbreviated, time: .shortened))" }
+                ?? "Reset time unavailable"
         }
     }
 
@@ -367,11 +421,24 @@ private extension SummaryHighlight {
         case let .media(playback): return playback.isPlaying ? "Playing" : "Paused"
         case .allClear: return "Quiet"
         case let .clock(status): return status.isRunning ? "Running" : "Paused"
+        case let .usage(kind, _): return kind.displayName
         }
     }
 
     func accessibilityLabel(at date: Date) -> String {
-        "\(eyebrow), \(title), \(detail(at: date)), \(subtitle)"
+        [eyebrow, title, remainingPercentage.map { "\($0) percent left" }, detail(at: date), subtitle]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+    }
+
+    var usesCompactTitle: Bool {
+        if case .usage = self { return true }
+        return false
+    }
+
+    var remainingPercentage: Int? {
+        guard case let .usage(_, window) = self else { return nil }
+        return Int(window.remainingPercent.rounded())
     }
 
     private static func workTitle(agentCount: Int, actionCount: Int) -> String {
@@ -380,6 +447,16 @@ private extension SummaryHighlight {
         if agentCount == 0 { return actions + " running" }
         if actionCount == 0 { return agents + " running" }
         return agents + " and " + actions
+    }
+
+    private static func windowName(_ window: CodingAgentUsage.Window) -> String {
+        if let label = window.label { return label }
+        switch window.durationMinutes {
+        case 300: return "5-hour"
+        case 10_080: return "weekly"
+        case let minutes?: return "\(max(minutes / 60, 1))-hour"
+        case nil: return "usage"
+        }
     }
 }
 

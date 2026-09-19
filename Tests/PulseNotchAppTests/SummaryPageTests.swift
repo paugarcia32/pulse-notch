@@ -138,4 +138,52 @@ struct SummaryPageTests {
             at: now
         ) == .activeWork(agentCount: 1, actionCount: 0))
     }
+
+    @Test
+    func mostDepletedUsageLimitAppearsWhenTwentyPercentOrLessRemains() {
+        let fiveHour = CodingAgentUsage.Window(
+            durationMinutes: 300,
+            usedPercent: 80,
+            resetsAt: now.addingTimeInterval(3_600)
+        )
+        let weekly = CodingAgentUsage.Window(
+            durationMinutes: 10_080,
+            usedPercent: 92,
+            resetsAt: now.addingTimeInterval(86_400)
+        )
+
+        #expect(SummaryHighlight.select(
+            schedule: nil,
+            pullRequests: [],
+            agents: [],
+            actions: [],
+            media: nil,
+            usage: [
+                .available(CodingAgentUsage(kind: .codex, windows: [fiveHour])),
+                .available(CodingAgentUsage(kind: .claude, windows: [weekly]))
+            ],
+            priorities: [.usageLimits],
+            at: now
+        ) == .usage(kind: .claude, window: weekly))
+    }
+
+    @Test
+    func healthyUsageLimitDoesNotReplaceAllClear() {
+        let window = CodingAgentUsage.Window(
+            durationMinutes: 300,
+            usedPercent: 79,
+            resetsAt: nil
+        )
+
+        #expect(SummaryHighlight.select(
+            schedule: nil,
+            pullRequests: [],
+            agents: [],
+            actions: [],
+            media: nil,
+            usage: [.available(CodingAgentUsage(kind: .codex, windows: [window]))],
+            priorities: [.usageLimits],
+            at: now
+        ) == .allClear)
+    }
 }
