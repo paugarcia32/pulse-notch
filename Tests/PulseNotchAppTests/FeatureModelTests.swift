@@ -414,6 +414,22 @@ struct FeatureModelTests {
     }
 
     @Test
+    func dynamicPagesStartEnabledAndPersistOptOut() {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = NotchPreferences(defaults: defaults)
+
+        #expect(preferences.dynamicPagesEnabled)
+
+        preferences.setDynamicPagesEnabled(false)
+
+        #expect(!NotchPreferences(defaults: defaults).dynamicPagesEnabled)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    @Test
     func pagePreferencesPersistOrderAndVisibility() {
         let suiteName = "PulseNotchTests.\(#function)"
         let defaults = UserDefaults(suiteName: suiteName)!

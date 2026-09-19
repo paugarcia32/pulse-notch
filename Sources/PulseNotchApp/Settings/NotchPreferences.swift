@@ -185,7 +185,7 @@ final class NotchPreferences: ObservableObject {
         }
         defaults.set(true, forKey: Keys.downloadsPageIntroduced)
         visiblePages = storedVisiblePages.isEmpty ? Set(NotchPage.allCases) : Set(storedVisiblePages)
-        dynamicPagesEnabled = defaults.bool(forKey: Keys.dynamicPagesEnabled)
+        dynamicPagesEnabled = defaults.object(forKey: Keys.dynamicPagesEnabled) as? Bool ?? true
         summaryPriorityOrder = Self.summaryPriorities(from: defaults.stringArray(forKey: Keys.summaryPriorityOrder))
         openAtLogin = defaults.bool(forKey: Keys.openAtLogin)
         hideFromDock = defaults.bool(forKey: Keys.hideFromDock)
