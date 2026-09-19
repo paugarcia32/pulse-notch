@@ -12,6 +12,7 @@ private enum SettingsDestination: Hashable {
 
 struct PreferencesView: View {
     @ObservedObject var preferences: NotchPreferences
+    @ObservedObject var updateModel: UpdateFeatureModel
     let displays: [NotchDisplayOption]
     @State private var selection = SettingsDestination.general
 
@@ -90,9 +91,53 @@ struct PreferencesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section {
+                Toggle("Automatically check for updates", isOn: $updateModel.automaticChecksEnabled)
+                LabeledContent("Current version", value: updateModel.currentVersion.description)
+
+                HStack {
+                    updateStatus
+                    Spacer()
+                    Button("Check Now") {
+                        updateModel.checkNow()
+                    }
+                    .disabled(updateModel.state == .checking)
+                }
+
+                if let release = updateModel.availableRelease {
+                    Link("View Version \(release.version.description)…", destination: release.pageURL)
+                }
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text("Pulse Notch checks the latest public GitHub release at most once per day.")
+            }
         }
         .formStyle(.grouped)
         .navigationTitle("General")
+    }
+
+    @ViewBuilder
+    private var updateStatus: some View {
+        switch updateModel.state {
+        case .idle:
+            Text("Not checked yet")
+                .foregroundStyle(.secondary)
+        case .checking:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Checking…")
+            }
+            .accessibilityElement(children: .combine)
+        case .upToDate:
+            Label("Up to date", systemImage: "checkmark.circle")
+        case let .available(release):
+            Label("Version \(release.version.description) is available", systemImage: "arrow.down.circle")
+        case .failed:
+            Label("Couldn’t check for updates", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var notchSettings: some View {

@@ -91,6 +91,8 @@ Pulse Notch processes activity locally and does not include telemetry.
 - Downloads monitoring observes the selected local folder and can be disabled.
 - Battery, Bluetooth, volume, brightness, and media state are read locally and kept
   in memory.
+- Update checks query the public GitHub Releases API at most once per day and can be
+  disabled in Settings.
 - No credentials are stored by Pulse Notch.
 
 Each integration can be disabled from Settings. macOS requests Calendar, Bluetooth,

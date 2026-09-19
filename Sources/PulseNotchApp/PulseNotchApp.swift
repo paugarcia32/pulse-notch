@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 extension Notification.Name {
@@ -21,6 +22,7 @@ struct PulseNotchApp: App {
         Settings {
             PreferencesView(
                 preferences: notchController.preferences,
+                updateModel: notchController.updateModel,
                 displays: notchController.availableDisplays
             )
         }
@@ -62,9 +64,22 @@ struct PulseNotchApp: App {
             Button("Open Notch") {
                 NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
             }
+            UpdateMenuItem(model: notchController.updateModel)
             SettingsLink { Text("Settings…") }
             Divider()
             Button("Quit Pulse Notch") { NSApplication.shared.terminate(nil) }
+        }
+    }
+}
+
+private struct UpdateMenuItem: View {
+    @ObservedObject var model: UpdateFeatureModel
+
+    var body: some View {
+        if let release = model.availableRelease {
+            Button("Version \(release.version.description) Available…") {
+                NSWorkspace.shared.open(release.pageURL)
+            }
         }
     }
 }

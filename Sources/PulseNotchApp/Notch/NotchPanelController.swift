@@ -54,6 +54,12 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     let clockModel = ClockFeatureModel()
     let bluetoothHeadphonesModel = BluetoothHeadphonesFeatureModel(provider: BluetoothHeadphonesProvider())
     let systemActivityModel = SystemActivityFeatureModel()
+    let updateModel = UpdateFeatureModel(
+        provider: GitHubReleaseProvider(),
+        currentVersion: AppVersion(
+            Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        ) ?? AppVersion(major: 0, minor: 0, patch: 0)
+    )
 
     private var panel: NotchPanel?
 
@@ -98,9 +104,11 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             object: nil
         )
         installDismissMonitors()
+        updateModel.startAutomaticCheck()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        updateModel.cancel()
         [localEventMonitor, globalEventMonitor].compactMap { $0 }.forEach(NSEvent.removeMonitor)
         if let preferenceObserver { NotificationCenter.default.removeObserver(preferenceObserver) }
     }
