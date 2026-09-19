@@ -18,7 +18,7 @@ The repository currently contains the first executable product slice:
   sessions.
 - Pages navigable with a two-finger horizontal swipe or Command-number shortcuts.
 - Animated running and recently-completed agent indicators in the collapsed notch.
-- Animated indicators for active browser downloads in a configurable folder.
+- Live progress indicators and a detail page for active browser downloads and Homebrew activity.
 - A temporary charging activity with the current battery percentage when external power connects.
 - Temporary volume and display-brightness activities that replace collapsed indicators.
 - A temporary Bluetooth-headphones connection activity, with a battery glyph when headphones connect.
@@ -83,9 +83,11 @@ rather than inventing a percentage. The Testing view includes a 72% example to
 verify the filled battery treatment.
 
 Downloads monitoring defaults to the user's Downloads folder and can be pointed at
-another folder in Settings. It observes browser temporary files locally and never
-displays or persists download file names or paths. The feature can be disabled at
-any time.
+another folder in Settings. It observes browser temporary files locally and shows
+their names and paths only while they are active. It can also inspect the local process
+list for active Homebrew fetch, install, reinstall, update, and upgrade commands. No
+download or process metadata is persisted. Homebrew monitoring or the whole feature can
+be disabled in Settings.
 
 While the Media or Summary page is enabled, media playback reads the active system Now Playing
 item locally, including Spotify and browser players such as YouTube when they publish

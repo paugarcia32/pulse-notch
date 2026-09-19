@@ -19,7 +19,7 @@ struct NotchIndicator: Identifiable {
         case upcomingCalendarEvent(minutesUntilStart: Int)
         case runningAgent(CodingAgentKind)
         case completedAgent(CodingAgentKind)
-        case runningDownload
+        case runningDownload(percentage: Int?)
         case githubActions(GitHubPullRequest.ActionStatus)
         case mediaPlayback(MediaPlaybackStatus)
         case clock(ClockStatus)
@@ -56,7 +56,7 @@ struct NotchIndicator: Identifiable {
 
     var occupiesBothSides: Bool {
         switch content {
-        case .upcomingCalendarEvent, .mediaPlayback, .clock: true
+        case .upcomingCalendarEvent, .runningDownload, .mediaPlayback, .clock: true
         default: false
         }
     }
@@ -99,7 +99,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .calendar: .calendar
         case .githubActions: .github
         case .codingAgents: .agents
-        case .downloads: nil
+        case .downloads: .downloads
         case .mediaPlayback: .media
         case .clock: .clock
         }
@@ -183,7 +183,11 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
         case .antigravity: return runningAgent(.antigravity, instance: instance)
         case .opencode: return runningAgent(.opencode, instance: instance)
         case .download:
-            return NotchIndicator(id: "download-\(instance)", content: .runningDownload, accessibilityLabel: "Download in progress")
+            return NotchIndicator(
+                id: "download-\(instance)",
+                content: .runningDownload(percentage: 42),
+                accessibilityLabel: "Download 42 percent complete"
+            )
         case .mediaPlayback:
             return NotchIndicator(
                 id: "media-playback",
@@ -269,8 +273,10 @@ enum CollapsedNotchIndicators {
         indicators.append(contentsOf: downloads.map { download in
             NotchIndicator(
                 id: "download-\(download.id)",
-                content: .runningDownload,
-                accessibilityLabel: "Download in progress"
+                content: .runningDownload(percentage: download.percentage),
+                accessibilityLabel: download.source == .homebrew
+                    ? "Homebrew activity in progress"
+                    : download.percentage.map { "Download \($0) percent complete" } ?? "Download in progress"
             )
         })
 
@@ -313,6 +319,7 @@ struct CollapsedNotchLayout {
         private func itemWidth(_ indicator: NotchIndicator) -> CGFloat {
             switch indicator.content {
             case .upcomingCalendarEvent: 28
+            case .runningDownload: 34
             case .mediaPlayback: 22
             case .clock: 48
             default: 16
@@ -376,8 +383,8 @@ struct NotchIndicatorView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(color)
                     .symbolEffect(.bounce, value: indicator.content)
-            case .runningDownload:
-                DownloadActivityIndicator(color: color, reduceMotion: reduceMotion)
+            case let .runningDownload(percentage):
+                DownloadCollapsedIndicator(percentage: percentage, color: color, reduceMotion: reduceMotion)
             case let .githubActions(status):
                 GitHubActionIndicator(status: status, color: color, reduceMotion: reduceMotion)
             case let .mediaPlayback(playback):
@@ -522,7 +529,7 @@ private struct AgentActivityOrbit: View {
     }
 }
 
-private struct DownloadActivityIndicator: View {
+struct DownloadActivityIndicator: View {
     let color: Color
     let reduceMotion: Bool
 
@@ -543,6 +550,35 @@ private struct DownloadActivityIndicator: View {
         }
         .frame(width: 16, height: 16)
         .accessibilityHidden(true)
+    }
+}
+
+struct DownloadProgressValue: View {
+    let percentage: Int?
+    let color: Color
+    let reduceMotion: Bool
+
+    var body: some View {
+        Text(percentage.map { "\($0)%" } ?? "—")
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(color)
+            .contentTransition(reduceMotion ? .identity : .numericText())
+            .fixedSize()
+    }
+}
+
+struct DownloadCollapsedIndicator: View {
+    let percentage: Int?
+    let color: Color
+    let reduceMotion: Bool
+
+    var body: some View {
+        HStack {
+            DownloadProgressValue(percentage: percentage, color: color, reduceMotion: reduceMotion)
+            Spacer(minLength: 0)
+            DownloadActivityIndicator(color: color, reduceMotion: reduceMotion)
+        }
     }
 }
 

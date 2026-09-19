@@ -29,4 +29,11 @@ struct DynamicPageVisibilityTests {
 
         #expect(activity.visiblePages(from: [.calendar, .clock], isEnabled: true) == [.clock])
     }
+
+    @Test
+    func dynamicModeShowsDownloadsOnlyWhileOneIsActive() {
+        let activity = DynamicPageActivity(calendar: false, agents: false, github: false, media: false, downloads: true)
+
+        #expect(activity.visiblePages(from: [.calendar, .downloads], isEnabled: true) == [.downloads])
+    }
 }

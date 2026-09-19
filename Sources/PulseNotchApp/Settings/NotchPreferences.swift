@@ -2,13 +2,14 @@ import AppKit
 import ServiceManagement
 import SwiftUI
 
-enum NotchPage: String, CaseIterable, Identifiable {
+enum NotchPage: String, CaseIterable, Identifiable, Hashable {
     case summary
     case calendar
     case agents
     case github
     case media
     case clock
+    case downloads
 
     var id: String { rawValue }
 
@@ -20,6 +21,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
         case .github: "GitHub"
         case .media: "Media"
         case .clock: "Clock"
+        case .downloads: "Downloads"
         }
     }
 
@@ -31,6 +33,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
         case .github: "chevron.left.forwardslash.chevron.right"
         case .media: "play.rectangle"
         case .clock: "timer"
+        case .downloads: "arrow.down.circle"
         }
     }
 }
@@ -43,11 +46,12 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
     case fourthPage
     case fifthPage
     case sixthPage
+    case seventhPage
 
     var id: String { rawValue }
 
     static func page(at index: Int) -> ShortcutAction {
-        [firstPage, secondPage, thirdPage, fourthPage, fifthPage, sixthPage][index]
+        [firstPage, secondPage, thirdPage, fourthPage, fifthPage, sixthPage, seventhPage][index]
     }
 }
 
@@ -106,6 +110,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var showBrightnessActivity: Bool
     @Published private(set) var showBluetoothHeadphonesActivity: Bool
     @Published private(set) var showDownloads: Bool
+    @Published private(set) var showHomebrewDownloads: Bool
     @Published private(set) var downloadsDirectoryPath: String
     @Published private(set) var shortcuts: [ShortcutAction: AppShortcut]
     @Published private(set) var startupError: String?
@@ -127,6 +132,7 @@ final class NotchPreferences: ObservableObject {
         static let mediaPageIntroduced = "settings.mediaPageIntroduced"
         static let summaryPageIntroduced = "settings.summaryPageIntroduced"
         static let clockPageIntroduced = "settings.clockPageIntroduced"
+        static let downloadsPageIntroduced = "settings.downloadsPageIntroduced"
         static let summaryPriorityOrder = "settings.summaryPriorityOrder"
         static let openAtLogin = "settings.openAtLogin"
         static let hideFromDock = "settings.hideFromDock"
@@ -138,6 +144,7 @@ final class NotchPreferences: ObservableObject {
         static let showBrightnessActivity = "settings.showBrightnessActivity"
         static let showBluetoothHeadphonesActivity = "settings.showBluetoothHeadphonesActivity"
         static let showDownloads = "settings.showDownloads"
+        static let showHomebrewDownloads = "settings.showHomebrewDownloads"
         static let downloadsDirectoryPath = "settings.downloadsDirectoryPath"
         static let shortcuts = "settings.shortcuts"
         static let preferredDisplayID = "settings.preferredDisplayID"
@@ -172,6 +179,11 @@ final class NotchPreferences: ObservableObject {
             defaults.set(storedVisiblePages.map(\.rawValue), forKey: Keys.visiblePages)
         }
         defaults.set(true, forKey: Keys.clockPageIntroduced)
+        if persistedVisiblePages != nil, defaults.object(forKey: Keys.downloadsPageIntroduced) == nil {
+            storedVisiblePages.append(.downloads)
+            defaults.set(storedVisiblePages.map(\.rawValue), forKey: Keys.visiblePages)
+        }
+        defaults.set(true, forKey: Keys.downloadsPageIntroduced)
         visiblePages = storedVisiblePages.isEmpty ? Set(NotchPage.allCases) : Set(storedVisiblePages)
         dynamicPagesEnabled = defaults.bool(forKey: Keys.dynamicPagesEnabled)
         summaryPriorityOrder = Self.summaryPriorities(from: defaults.stringArray(forKey: Keys.summaryPriorityOrder))
@@ -187,6 +199,7 @@ final class NotchPreferences: ObservableObject {
         showBrightnessActivity = defaults.object(forKey: Keys.showBrightnessActivity) as? Bool ?? true
         showBluetoothHeadphonesActivity = defaults.object(forKey: Keys.showBluetoothHeadphonesActivity) as? Bool ?? false
         showDownloads = defaults.object(forKey: Keys.showDownloads) as? Bool ?? false
+        showHomebrewDownloads = defaults.object(forKey: Keys.showHomebrewDownloads) as? Bool ?? true
         downloadsDirectoryPath = defaults.string(forKey: Keys.downloadsDirectoryPath)
             ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path
             ?? "/Downloads"
@@ -251,6 +264,7 @@ final class NotchPreferences: ObservableObject {
         case .fourthPage: orderedVisiblePages[safe: 3]
         case .fifthPage: orderedVisiblePages[safe: 4]
         case .sixthPage: orderedVisiblePages[safe: 5]
+        case .seventhPage: orderedVisiblePages[safe: 6]
         }
     }
 
@@ -312,6 +326,12 @@ final class NotchPreferences: ObservableObject {
         guard showDownloads != isShown else { return }
         showDownloads = isShown
         defaults.set(isShown, forKey: Keys.showDownloads)
+    }
+
+    func setShowHomebrewDownloads(_ isShown: Bool) {
+        guard showHomebrewDownloads != isShown else { return }
+        showHomebrewDownloads = isShown
+        defaults.set(isShown, forKey: Keys.showHomebrewDownloads)
     }
 
     func setDownloadsDirectoryURL(_ url: URL) {
@@ -498,7 +518,8 @@ final class NotchPreferences: ObservableObject {
         .thirdPage: AppShortcut(key: "3", modifiers: [.command]),
         .fourthPage: AppShortcut(key: "4", modifiers: [.command]),
         .fifthPage: AppShortcut(key: "5", modifiers: [.command]),
-        .sixthPage: AppShortcut(key: "6", modifiers: [.command])
+        .sixthPage: AppShortcut(key: "6", modifiers: [.command]),
+        .seventhPage: AppShortcut(key: "7", modifiers: [.command])
     ]
 }
 

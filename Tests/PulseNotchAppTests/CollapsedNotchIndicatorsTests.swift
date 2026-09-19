@@ -145,15 +145,19 @@ struct CollapsedNotchIndicatorsTests {
             sessions: [],
             actionSessions: [],
             downloads: [
-                DetectedDownload(id: "first", byteCount: 100),
-                DetectedDownload(id: "second", byteCount: 200)
+                DetectedDownload(id: "first", byteCount: 25, totalByteCount: 100),
+                DetectedDownload(id: "second", byteCount: 150, totalByteCount: 200)
             ],
             at: Date(timeIntervalSince1970: 1_000),
             calendarReminderLeadTime: 10 * 60
         )
 
         #expect(indicators.map(\.id) == ["download-first", "download-second"])
-        #expect(indicators.allSatisfy { $0.content == .runningDownload })
+        #expect(indicators.map(\.content) == [
+            .runningDownload(percentage: 25),
+            .runningDownload(percentage: 75)
+        ])
+        #expect(indicators.allSatisfy { $0.occupiesBothSides })
     }
 
     @Test

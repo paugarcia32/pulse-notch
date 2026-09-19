@@ -65,6 +65,10 @@ struct NotchSurface: View {
             openNotch()
             selectPage(.clock)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowDownloads)) { _ in
+            openNotch()
+            selectPage(.downloads)
+        }
         .onChange(of: preferences.orderedVisiblePages) { _, _ in
             handleVisiblePagesChange(displayedPages(at: .now))
         }
@@ -122,7 +126,10 @@ struct NotchSurface: View {
                 downloadModel.stopMonitoring()
                 return
             }
-            await downloadModel.startMonitoring(directory: preferences.downloadsDirectoryURL)
+            await downloadModel.startMonitoring(
+                directory: preferences.downloadsDirectoryURL,
+                includeHomebrew: preferences.showHomebrewDownloads
+            )
             // ponytail: scan once per second. Browser downloads have no public
             // system-wide activity API; use a file-system event source only if
             // polling proves measurably too expensive.
@@ -442,6 +449,19 @@ struct NotchSurface: View {
                 CalendarCountdownValue(minutesUntilStart: minutesUntilStart, reduceMotion: reduceMotion)
                     .foregroundStyle(collapsedIndicatorColor(for: indicator))
                     .accessibilityHidden(true)
+            case let (.runningDownload(percentage), .left):
+                DownloadProgressValue(
+                    percentage: percentage,
+                    color: collapsedIndicatorColor(for: indicator),
+                    reduceMotion: reduceMotion
+                )
+                .accessibilityLabel(indicator.accessibilityLabel)
+            case (.runningDownload, .right):
+                DownloadActivityIndicator(
+                    color: collapsedIndicatorColor(for: indicator),
+                    reduceMotion: reduceMotion
+                )
+                .accessibilityHidden(true)
             case let (.mediaPlayback(playback), .left):
                 MediaArtworkView(data: playback.artworkData, size: 22)
                     .accessibilityLabel(indicator.accessibilityLabel)
@@ -626,7 +646,7 @@ struct NotchSurface: View {
     }
 
     private var downloadsMonitoringID: String {
-        "\(preferences.showDownloads)-\(preferences.downloadsDirectoryPath)"
+        "\(preferences.showDownloads)-\(preferences.showHomebrewDownloads)-\(preferences.downloadsDirectoryPath)"
     }
 
     private var calendarMonitoringEnabled: Bool {
@@ -737,6 +757,7 @@ struct NotchSurface: View {
         case .github: GitHubPage(model: gitHubModel, date: date)
         case .media: MediaPlaybackPage(model: mediaPlaybackModel)
         case .clock: ClockPage(model: clockModel)
+        case .downloads: DownloadsPage(model: downloadModel)
         }
     }
 
@@ -746,7 +767,8 @@ struct NotchSurface: View {
             agents: agentsHaveActivity,
             github: gitHubHasActivity,
             media: mediaPlaybackModel.isPageActive(at: date),
-            clock: clockModel.status(at: date, includePaused: true) != nil
+            clock: clockModel.status(at: date, includePaused: true) != nil,
+            downloads: !downloadModel.activeDownloads.isEmpty
         ).visiblePages(
             from: preferences.orderedVisiblePages,
             isEnabled: preferences.dynamicPagesEnabled

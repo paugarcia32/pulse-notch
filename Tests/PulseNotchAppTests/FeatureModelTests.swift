@@ -305,6 +305,77 @@ struct FeatureModelTests {
         model.stopMonitoring()
     }
 
+    @Test
+    func downloadModelPublishesUpdatedProgress() async {
+        let provider = DownloadSequenceProvider(snapshots: [
+            [],
+            [DetectedDownload(id: "new", byteCount: 25, totalByteCount: 100)],
+            [DetectedDownload(id: "new", byteCount: 50, totalByteCount: 100)]
+        ])
+        let model = DownloadFeatureModel(provider: provider)
+        await model.startMonitoring(directory: URL(fileURLWithPath: "/Downloads", isDirectory: true))
+
+        await model.refresh()
+        await model.refresh()
+
+        #expect(model.activeDownloads.first?.percentage == 50)
+    }
+
+    @Test
+    func downloadModelShowsHomebrewActivityAlreadyRunningWhenMonitoringStarts() async {
+        let activity = DetectedDownload(
+            id: "homebrew-update",
+            fileName: "Updating Homebrew",
+            byteCount: 0,
+            source: .homebrew
+        )
+        let provider = DownloadSequenceProvider(snapshots: [[activity], [activity]])
+        let model = DownloadFeatureModel(provider: provider)
+
+        await model.startMonitoring(
+            directory: URL(fileURLWithPath: "/Downloads", isDirectory: true),
+            includeHomebrew: true
+        )
+        await model.refresh()
+
+        #expect(model.activeDownloads == [activity])
+    }
+
+    @Test
+    func homebrewProcessParserFindsPackageOperationsWithoutDuplicates() {
+        let downloads = DownloadsDirectoryProvider.homebrewDownloads(from: """
+        100 /opt/homebrew/bin/brew update
+        101 /opt/homebrew/Library/Homebrew/vendor/portable-ruby/current/bin/ruby /opt/homebrew/Library/Homebrew/brew.rb update --auto-update
+        102 /opt/homebrew/bin/brew upgrade ripgrep
+        103 /usr/bin/curl https://example.com/archive.tar.gz
+        """)
+
+        #expect(downloads.map(\.id) == ["homebrew-update", "homebrew-upgrade"])
+        #expect(downloads.allSatisfy { $0.source == .homebrew && $0.percentage == nil })
+    }
+
+    @Test
+    func safariDownloadMetadataProvidesNameLocationAndProgress() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let downloadURL = directory.appendingPathComponent("Archive.zip.download", isDirectory: true)
+        try FileManager.default.createDirectory(at: downloadURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let plist: [String: Any] = [
+            "DownloadEntryProgressBytesSoFar": 75,
+            "DownloadEntryProgressTotalToLoad": 100
+        ]
+        let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
+        try data.write(to: downloadURL.appendingPathComponent("Info.plist"))
+
+        let download = DownloadsDirectoryProvider.download(at: downloadURL)
+
+        #expect(download.fileName == "Archive.zip")
+        #expect(download.directoryURL == directory)
+        #expect(download.byteCount == 75)
+        #expect(download.totalByteCount == 100)
+        #expect(download.percentage == 75)
+    }
+
 
     @Test
     func moreEventsLabelIncludesTheRemainingEventCount() {
@@ -361,6 +432,7 @@ struct FeatureModelTests {
         preferences.setShowBrightnessActivity(false)
         preferences.setShowBluetoothHeadphonesActivity(false)
         preferences.setShowDownloads(false)
+        preferences.setShowHomebrewDownloads(false)
         preferences.setDownloadsDirectoryURL(URL(fileURLWithPath: "/tmp/PulseNotchDownloads", isDirectory: true))
         preferences.setPreferredDisplayID("42")
         preferences.setExternalNotchStyle(.rectangle)
@@ -371,8 +443,8 @@ struct FeatureModelTests {
         preferences.triggerTestingSystemActivity(.volume)
 
         let restoredPreferences = NotchPreferences(defaults: defaults)
-        #expect(restoredPreferences.pageOrder == [.github, .summary, .calendar, .agents, .media, .clock])
-        #expect(restoredPreferences.orderedVisiblePages == [.github, .summary, .calendar, .media, .clock])
+        #expect(restoredPreferences.pageOrder == [.github, .summary, .calendar, .agents, .media, .clock, .downloads])
+        #expect(restoredPreferences.orderedVisiblePages == [.github, .summary, .calendar, .media, .clock, .downloads])
         #expect(restoredPreferences.dynamicPagesEnabled)
         #expect(restoredPreferences.summaryPriorityOrder == [.activeWork, .calendarEvent, .githubAttention, .media, .openPullRequest, .clock])
         #expect(restoredPreferences.page(for: .firstPage) == .github)
@@ -385,6 +457,7 @@ struct FeatureModelTests {
         #expect(!restoredPreferences.showBrightnessActivity)
         #expect(!restoredPreferences.showBluetoothHeadphonesActivity)
         #expect(!restoredPreferences.showDownloads)
+        #expect(!restoredPreferences.showHomebrewDownloads)
         #expect(restoredPreferences.downloadsDirectoryPath == "/tmp/PulseNotchDownloads")
         #expect(restoredPreferences.preferredDisplayID == "42")
         #expect(restoredPreferences.externalNotchStyle == .rectangle)
@@ -402,7 +475,7 @@ struct FeatureModelTests {
     }
 
     @Test
-    func existingPreferencesEnableTheNewClockPageOnce() {
+    func existingPreferencesEnableNewPagesOnce() {
         let suiteName = "PulseNotchTests.\(#function)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -413,7 +486,7 @@ struct FeatureModelTests {
         _ = NotchPreferences(defaults: defaults)
         let restoredPreferences = NotchPreferences(defaults: defaults)
 
-        #expect(restoredPreferences.orderedVisiblePages == [.calendar, .clock])
+        #expect(restoredPreferences.orderedVisiblePages == [.calendar, .clock, .downloads])
 
         defaults.removePersistentDomain(forName: suiteName)
     }
@@ -446,7 +519,7 @@ struct FeatureModelTests {
         #expect(CollapsedNotchIndicatorCategory.githubActions.ownerPage == .github)
         #expect(CollapsedNotchIndicatorCategory.mediaPlayback.ownerPage == .media)
         #expect(CollapsedNotchIndicatorCategory.clock.ownerPage == .clock)
-        #expect(CollapsedNotchIndicatorCategory.downloads.ownerPage == nil)
+        #expect(CollapsedNotchIndicatorCategory.downloads.ownerPage == .downloads)
     }
 
     @Test
@@ -634,7 +707,7 @@ private actor DownloadSequenceProvider: DownloadsProviding {
         self.snapshots = snapshots
     }
 
-    func activeDownloads(in directory: URL) async throws -> [DetectedDownload] {
+    func activeDownloads(in directory: URL, includeHomebrew: Bool) async throws -> [DetectedDownload] {
         snapshots.removeFirst()
     }
 }

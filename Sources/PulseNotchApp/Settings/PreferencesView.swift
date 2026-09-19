@@ -1,237 +1,311 @@
 import AppKit
 import SwiftUI
 
+private enum SettingsDestination: Hashable {
+    case general
+    case notch
+    case pages
+    case page(NotchPage)
+    case shortcuts
+    case advanced
+}
+
 struct PreferencesView: View {
     @ObservedObject var preferences: NotchPreferences
     let displays: [NotchDisplayOption]
+    @State private var selection = SettingsDestination.general
 
     var body: some View {
-        TabView {
-            Form {
-                Section("Startup") {
-                    Toggle("Open at Login", isOn: $preferences.openAtLogin)
-                    if let startupError = preferences.startupError {
-                        Text(startupError)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+        NavigationSplitView {
+            List(selection: $selection) {
+                NavigationLink(value: SettingsDestination.general) {
+                    Label("General", systemImage: "gear")
+                }
+                NavigationLink(value: SettingsDestination.notch) {
+                    Label("Notch", systemImage: "macbook")
+                }
+
+                Section("Pages") {
+                    NavigationLink(value: SettingsDestination.pages) {
+                        Label("Overview", systemImage: "rectangle.3.group")
                     }
-                }
-
-                Section("Presence") {
-                    Toggle("Show in Dock", isOn: showInDock)
-                    Toggle("Show in Menu Bar", isOn: showInMenuBar)
-                }
-
-                Section("Display") {
-                    Picker("Show Pulse Notch on", selection: preferredDisplayID) {
-                        Text("Display under pointer").tag("pointer")
-                        ForEach(displays) { display in
-                            Text(display.name).tag(display.id)
+                    ForEach(preferences.pageOrder) { page in
+                        NavigationLink(value: SettingsDestination.page(page)) {
+                            Label(page.name, systemImage: page.symbolName)
                         }
                     }
-
-                    Picker("External display style", selection: externalNotchStyle) {
-                        Text(ExternalNotchStyle.capsule.name).tag(ExternalNotchStyle.capsule.rawValue)
-                        Text(ExternalNotchStyle.rectangle.name).tag(ExternalNotchStyle.rectangle.rawValue)
-                    }
-                    Text("This setting only affects displays without a physical notch.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
-                Section("Calendar") {
+                Section {
+                    NavigationLink(value: SettingsDestination.shortcuts) {
+                        Label("Shortcuts", systemImage: "command")
+                    }
+                    NavigationLink(value: SettingsDestination.advanced) {
+                        Label("Advanced", systemImage: "gearshape.2")
+                    }
+                }
+            }
+            .listStyle(.sidebar)
+            .navigationTitle("Settings")
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+        } detail: {
+            detail
+        }
+        .frame(minWidth: 760, idealWidth: 820, minHeight: 480, idealHeight: 540)
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        switch selection {
+        case .general: generalSettings
+        case .notch: notchSettings
+        case .pages: pagesOverview
+        case let .page(page): pageSettings(page)
+        case .shortcuts: shortcutSettings
+        case .advanced: advancedSettings
+        }
+    }
+
+    private var generalSettings: some View {
+        Form {
+            Section("Startup") {
+                Toggle("Open at Login", isOn: $preferences.openAtLogin)
+                if let startupError = preferences.startupError {
+                    Text(startupError).font(.caption).foregroundStyle(.red)
+                }
+            }
+            Section("Presence") {
+                Toggle("Show in Dock", isOn: showInDock)
+                Toggle("Show in Menu Bar", isOn: showInMenuBar)
+            }
+            Section("Display") {
+                Picker("Show Pulse Notch on", selection: preferredDisplayID) {
+                    Text("Display under pointer").tag("pointer")
+                    ForEach(displays) { Text($0.name).tag($0.id) }
+                }
+                Picker("External display style", selection: externalNotchStyle) {
+                    ForEach(ExternalNotchStyle.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
+                }
+                Text("This setting only affects displays without a physical notch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("General")
+    }
+
+    private var notchSettings: some View {
+        List {
+            Section {
+                Stepper(value: collapsedIndicatorMaximumPerSide, in: 1...5) {
+                    Text("Maximum items per side: \(preferences.collapsedIndicatorMaximumPerSide)")
+                }
+                Button("Restore Default Colors") { preferences.resetCollapsedIndicatorColors() }
+                    .disabled(!preferences.hasCustomCollapsedIndicatorColors)
+            } header: {
+                Text("Closed notch")
+            } footer: {
+                Text("More than 3 items per side is not recommended. Indicator colors are configured on each page.")
+            }
+            Section {
+                ForEach(Array(preferences.collapsedIndicatorPriorityOrder.enumerated()), id: \.element.id) { index, category in
+                    numberedLabel(index + 1, category.name, symbol: category.symbolName)
+                }
+                .onMove(perform: preferences.moveCollapsedIndicatorPriorities)
+            } header: {
+                Text("Activity priority")
+            } footer: {
+                Text("Drag to decide which activities remain visible when space is limited.")
+            }
+            Section("Temporary system activities") {
+                Toggle("Show charging activity", isOn: showChargingActivity)
+                Toggle("Show volume activity", isOn: showVolumeActivity)
+                Toggle("Show brightness activity", isOn: showBrightnessActivity)
+                Toggle("Show Bluetooth headphones activity", isOn: showBluetoothHeadphonesActivity)
+                Stepper(value: transientSystemActivityDurationSeconds, in: 1...10) {
+                    Text("Show for \(preferences.transientSystemActivityDurationSeconds) seconds")
+                }
+                .disabled(!hasEnabledSystemActivity)
+            }
+        }
+        .listStyle(.inset)
+        .navigationTitle("Notch")
+    }
+
+    private var pagesOverview: some View {
+        List {
+            Section {
+                Toggle("Show pages only when active", isOn: dynamicPagesEnabled)
+            } footer: {
+                Text("When enabled, pages appear only while they have relevant activity. Media remains visible for five minutes after pausing.")
+            }
+            Section {
+                ForEach(Array(preferences.pageOrder.enumerated()), id: \.element.id) { index, page in
+                    HStack(spacing: 10) {
+                        numberedLabel(index + 1, page.name, symbol: page.symbolName)
+                        Spacer()
+                        Text(preferences.isVisible(page) ? "Shown" : "Hidden")
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { selection = .page(page) }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { selection = .page(page) }
+                }
+                .onMove(perform: preferences.movePages)
+            } header: {
+                Text("Page order")
+            } footer: {
+                Text("Drag to reorder. Select a page to configure its visibility and activity.")
+            }
+        }
+        .listStyle(.inset)
+        .navigationTitle("Pages")
+    }
+
+    private func pageSettings(_ page: NotchPage) -> some View {
+        List {
+            Section {
+                Toggle("Show \(page.name) page", isOn: pageVisibility(page))
+                    .disabled(!canHide(page))
+            } header: {
+                Text("Page")
+            } footer: {
+                if !canHide(page) {
+                    Text("At least one page must remain visible.")
+                }
+            }
+
+            if page == .summary {
+                Section {
+                    ForEach(Array(preferences.summaryPriorityOrder.enumerated()), id: \.element.id) { index, priority in
+                        numberedLabel(index + 1, priority.name, symbol: priority.symbolName)
+                    }
+                    .onMove(perform: preferences.moveSummaryPriorities)
+                } header: {
+                    Text("Content priority")
+                } footer: {
+                    Text("The first priority with relevant activity fills the Summary page.")
+                }
+            }
+
+            if page == .calendar {
+                Section("Calendar reminders") {
                     Stepper(value: calendarReminderLeadTimeMinutes, in: 1...60) {
                         Text("Show upcoming events \(preferences.calendarReminderLeadTimeMinutes) minutes before they start")
                     }
                 }
-
-                Section("Closed notch") {
-                    Stepper(value: collapsedIndicatorMaximumPerSide, in: 1...5) {
-                        Text("Maximum items per side: \(preferences.collapsedIndicatorMaximumPerSide)")
-                    }
-                    Text("More than 3 items per side is not recommended.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    ForEach(CollapsedNotchIndicatorCategory.allCases.filter { $0.ownerPage == nil }) { category in
-                        Toggle(category.name, isOn: collapsedIndicatorCategory(category))
-                    }
-                }
-
-                Section("Temporary system activities") {
-                    Toggle("Show charging activity", isOn: showChargingActivity)
-                    Toggle("Show volume activity", isOn: showVolumeActivity)
-                    Toggle("Show brightness activity", isOn: showBrightnessActivity)
-                    Toggle("Show Bluetooth headphones activity", isOn: showBluetoothHeadphonesActivity)
-                    Stepper(value: transientSystemActivityDurationSeconds, in: 1...10) {
-                        Text("Show for \(preferences.transientSystemActivityDurationSeconds) seconds")
-                    }
-                    .disabled(!preferences.showChargingActivity && !preferences.showVolumeActivity && !preferences.showBrightnessActivity && !preferences.showBluetoothHeadphonesActivity)
-                }
-
-                Section("Downloads") {
-                    Toggle("Show active downloads", isOn: showDownloads)
-                    LabeledContent("Watch folder") {
-                        HStack(spacing: 8) {
-                            Text(URL(fileURLWithPath: preferences.downloadsDirectoryPath).lastPathComponent)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Button("Choose…", action: chooseDownloadsDirectory)
-                        }
-                    }
-                    if preferences.downloadsDirectoryURL != defaultDownloadsDirectory {
-                        Button("Use Downloads folder") {
-                            preferences.setDownloadsDirectoryURL(defaultDownloadsDirectory)
-                        }
-                    }
-                    Text("Pulse Notch only detects temporary download files in this folder. File names are never displayed.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Testing") {
-                    Toggle("Enable testing features", isOn: testingFeaturesEnabled)
-                }
             }
-            .formStyle(.grouped)
-            .tabItem { Label("General", systemImage: "gear") }
 
-            Form {
-                Section {
-                    ForEach(preferences.shortcutActions) { action in
-                        ShortcutRow(action: action, preferences: preferences)
-                    }
-                } header: {
-                    Text("Commands")
-                } footer: {
-                    Text("Select +, then press a modifier-key combination. Press Escape to cancel.")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            if page == .downloads {
+                downloadsSettings
             }
-            .formStyle(.grouped)
-            .tabItem { Label("Shortcuts", systemImage: "command") }
 
-            List {
+            if let category = indicatorCategory(for: page) {
                 Section {
-                    Toggle("Show pages only when active", isOn: dynamicPagesEnabled)
-                } footer: {
-                    Text("When enabled, pages appear only while they have relevant activity. Media remains visible for five minutes after pausing.")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Section {
-                    ForEach(Array(preferences.pageOrder.enumerated()), id: \.element.id) { index, page in
-                        PagePreferenceRow(
-                            page: page,
-                            position: index + 1,
-                            preferences: preferences
-                        )
+                    Toggle("Show \(category.name) when notch is closed", isOn: collapsedIndicatorCategory(category))
+                    ColorPicker(selection: collapsedIndicatorColor(category), supportsOpacity: false) {
+                        Label("Indicator color", systemImage: category.symbolName)
                     }
-                    .onMove(perform: preferences.movePages)
                 } header: {
-                    Text("Notch Pages")
+                    Text("Closed notch")
                 } footer: {
-                    Text("Drag a row to change the order. Page visibility and closed-notch activity can be configured independently.")
+                    Text(indicatorColorDescription(for: category))
                 }
-
-                Section {
-                    ForEach(Array(preferences.summaryPriorityOrder.enumerated()), id: \.element.id) { index, priority in
-                        HStack(spacing: 10) {
-                            Text("\(index + 1)")
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .frame(width: 14, alignment: .trailing)
-                            Label(priority.name, systemImage: priority.symbolName)
-                        }
-                        .padding(.vertical, 3)
-                    }
-                    .onMove(perform: preferences.moveSummaryPriorities)
-                } header: {
-                    Text("Summary Priorities")
-                } footer: {
-                    Text("The first priority with relevant activity fills the main Summary panel. Drag to reorder.")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Section {
-                    ForEach(Array(preferences.collapsedIndicatorPriorityOrder.enumerated()), id: \.element.id) { index, category in
-                        HStack(spacing: 10) {
-                            Text("\(index + 1)")
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .frame(width: 14, alignment: .trailing)
-                            Label(category.name, systemImage: category.symbolName)
-                        }
-                        .padding(.vertical, 3)
-                    }
-                    .onMove(perform: preferences.moveCollapsedIndicatorPriorities)
-                } header: {
-                    Text("Closed Notch Priorities")
-                } footer: {
-                    Text("Higher activities stay closer to the notch and remain visible when space is limited. Drag to reorder.")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Section {
-                    ForEach(CollapsedNotchIndicatorCategory.defaultPriorityOrder, id: \.colorPickerID) { category in
-                        ColorPicker(
-                            selection: collapsedIndicatorColor(category),
-                            supportsOpacity: false
-                        ) {
-                            Label(category.name, systemImage: category.symbolName)
-                        }
-                    }
-                    Button("Restore Default Colors") {
-                        preferences.resetCollapsedIndicatorColors()
-                    }
-                    .disabled(!preferences.hasCustomCollapsedIndicatorColors)
-                } header: {
-                    Text("Closed Notch Colors")
-                } footer: {
-                    Text("Colors apply while activity is running. Failures remain red and completed activity remains green.")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .listStyle(.inset)
-            .tabItem { Label("Pages", systemImage: "rectangle.3.group") }
-
-            if preferences.testingFeaturesEnabled {
-                Form {
-                    Section("Closed notch previews") {
-                        Text("Choose sample indicators, then trigger a priority activity to verify that it replaces them temporarily.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        ForEach(CollapsedIndicatorPreview.allCases) { preview in
-                            Stepper(value: collapsedIndicatorPreviewCount(preview), in: 0...preview.maximumPreviewCount) {
-                                Text("\(preview.name): \(preferences.collapsedIndicatorPreviewCount(preview))")
-                            }
-                        }
-                    }
-
-                    Section("Priority activities") {
-                        Button("Show charging activity") {
-                            preferences.triggerTestingSystemActivity(.charging)
-                        }
-                        .disabled(!preferences.showChargingActivity)
-                        .accessibilityHint("Temporarily replaces the closed notch previews")
-                        Button("Show volume activity") {
-                            preferences.triggerTestingSystemActivity(.volume)
-                        }
-                        .disabled(!preferences.showVolumeActivity)
-                        Button("Show brightness activity") {
-                            preferences.triggerTestingSystemActivity(.brightness)
-                        }
-                        .disabled(!preferences.showBrightnessActivity)
-                        Button("Show Bluetooth headphones activity") {
-                            preferences.triggerTestingSystemActivity(.bluetoothHeadphones)
-                        }
-                        .disabled(!preferences.showBluetoothHeadphonesActivity)
-                    }
-                }
-                .formStyle(.grouped)
-                .tabItem { Label("Testing", systemImage: "testtube.2") }
             }
         }
-        .frame(minWidth: 460, idealWidth: 500, minHeight: 340, idealHeight: 380)
+        .listStyle(.inset)
+        .navigationTitle(page.name)
+    }
+
+    private var downloadsSettings: some View {
+        Section {
+            Toggle("Monitor active downloads", isOn: showDownloads)
+            Toggle("Monitor Homebrew activity", isOn: showHomebrewDownloads)
+                .disabled(!preferences.showDownloads)
+            LabeledContent("Watch folder") {
+                HStack(spacing: 8) {
+                    Text(URL(fileURLWithPath: preferences.downloadsDirectoryPath).lastPathComponent)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Button("Choose…", action: chooseDownloadsDirectory)
+                }
+            }
+            .disabled(!preferences.showDownloads)
+            if preferences.downloadsDirectoryURL != defaultDownloadsDirectory {
+                Button("Use Downloads folder") {
+                    preferences.setDownloadsDirectoryURL(defaultDownloadsDirectory)
+                }
+                .disabled(!preferences.showDownloads)
+            }
+        } header: {
+            Text("Download monitoring")
+        } footer: {
+            Text("File names, locations, and Homebrew processes are inspected locally and are not persisted. Homebrew progress is shown as indeterminate.")
+        }
+    }
+
+    private var shortcutSettings: some View {
+        Form {
+            Section {
+                ForEach(preferences.shortcutActions) { action in
+                    ShortcutRow(action: action, preferences: preferences)
+                }
+            } header: {
+                Text("Commands")
+            } footer: {
+                Text("Select +, then press a modifier-key combination. Press Escape to cancel.")
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Shortcuts")
+    }
+
+    private var advancedSettings: some View {
+        Form {
+            Section("Testing") {
+                Toggle("Enable testing features", isOn: testingFeaturesEnabled)
+            }
+            if preferences.testingFeaturesEnabled {
+                Section("Closed notch previews") {
+                    ForEach(CollapsedIndicatorPreview.allCases) { preview in
+                        Stepper(value: collapsedIndicatorPreviewCount(preview), in: 0...preview.maximumPreviewCount) {
+                            Text("\(preview.name): \(preferences.collapsedIndicatorPreviewCount(preview))")
+                        }
+                    }
+                }
+                Section("Priority activities") {
+                    Button("Show charging activity") { preferences.triggerTestingSystemActivity(.charging) }
+                        .disabled(!preferences.showChargingActivity)
+                    Button("Show volume activity") { preferences.triggerTestingSystemActivity(.volume) }
+                        .disabled(!preferences.showVolumeActivity)
+                    Button("Show brightness activity") { preferences.triggerTestingSystemActivity(.brightness) }
+                        .disabled(!preferences.showBrightnessActivity)
+                    Button("Show Bluetooth headphones activity") {
+                        preferences.triggerTestingSystemActivity(.bluetoothHeadphones)
+                    }
+                    .disabled(!preferences.showBluetoothHeadphonesActivity)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Advanced")
+    }
+
+    private func numberedLabel(_ number: Int, _ title: String, symbol: String) -> some View {
+        HStack(spacing: 10) {
+            Text("\(number)")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 14, alignment: .trailing)
+            Label(title, systemImage: symbol)
+        }
+        .padding(.vertical, 3)
     }
 
     private var showInDock: Binding<Bool> {
@@ -288,6 +362,13 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.showDownloads },
             set: { preferences.setShowDownloads($0) }
+        )
+    }
+
+    private var showHomebrewDownloads: Binding<Bool> {
+        Binding(
+            get: { preferences.showHomebrewDownloads },
+            set: { preferences.setShowHomebrewDownloads($0) }
         )
     }
 
@@ -362,40 +443,35 @@ struct PreferencesView: View {
         )
     }
 
-}
+    private var hasEnabledSystemActivity: Bool {
+        preferences.showChargingActivity
+            || preferences.showVolumeActivity
+            || preferences.showBrightnessActivity
+            || preferences.showBluetoothHeadphonesActivity
+    }
 
-private struct PagePreferenceRow: View {
-    let page: NotchPage
-    let position: Int
-    @ObservedObject var preferences: NotchPreferences
+    private func pageVisibility(_ page: NotchPage) -> Binding<Bool> {
+        Binding(
+            get: { preferences.isVisible(page) },
+            set: { preferences.setVisible(page, isVisible: $0) }
+        )
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Text("\(position)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 14, alignment: .trailing)
-                Label(page.name, systemImage: page.symbolName)
-                    .foregroundStyle(preferences.isVisible(page) ? .primary : .secondary)
-                Spacer()
-                Toggle("Show \(page.name)", isOn: Binding(
-                    get: { preferences.isVisible(page) },
-                    set: { preferences.setVisible(page, isVisible: $0) }
-                ))
-                .labelsHidden()
-            }
+    private func canHide(_ page: NotchPage) -> Bool {
+        !preferences.isVisible(page) || preferences.visiblePages.count > 1
+    }
 
-            ForEach(CollapsedNotchIndicatorCategory.allCases.filter { $0.ownerPage == page }) { category in
-                Toggle("Show \(category.name) when notch is closed", isOn: Binding(
-                    get: { preferences.isCollapsedIndicatorCategoryEnabled(category) },
-                    set: { preferences.setCollapsedIndicatorCategory(category, isVisible: $0) }
-                ))
-                .controlSize(.small)
-                .padding(.leading, 24)
-            }
+    private func indicatorCategory(for page: NotchPage) -> CollapsedNotchIndicatorCategory? {
+        CollapsedNotchIndicatorCategory.allCases.first { $0.ownerPage == page }
+    }
+
+    private func indicatorColorDescription(for category: CollapsedNotchIndicatorCategory) -> String {
+        switch category {
+        case .codingAgents, .githubActions:
+            "Failures remain red and completed activity remains green."
+        default:
+            "This color is used while the activity is active."
         }
-        .padding(.vertical, 3)
     }
 }
 

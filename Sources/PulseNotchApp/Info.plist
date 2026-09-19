@@ -23,6 +23,6 @@
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Pulse Notch uses Bluetooth connection state to temporarily show when headphones connect near the display notch.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
-	<string>Pulse Notch watches temporary download files to show active downloads near the display notch. File names are never displayed.</string>
+	<string>Pulse Notch watches temporary download files to show their names, locations, and progress near the display notch.</string>
 </dict>
 </plist>
