@@ -5,6 +5,15 @@ import Testing
 
 struct CollapsedNotchIndicatorsTests {
     @Test
+    func agentIconUsesThePackagedResourceDirectory() {
+        let resources = URL(fileURLWithPath: "/Pulse Notch.app/Contents/Resources", isDirectory: true)
+
+        let iconURL = AgentIconResource.url(for: .codex, resourceDirectory: resources)
+
+        #expect(iconURL?.path == "/Pulse Notch.app/Contents/Resources/PulseNotch_PulseNotchApp.bundle/codex.png")
+    }
+
+    @Test
     func createsAllRelevantIndicatorsBeforeLayoutAppliesItsLimit() {
         let now = Date(timeIntervalSince1970: 1_000)
         let schedule = CalendarEventSchedule(events: [CalendarEvent(

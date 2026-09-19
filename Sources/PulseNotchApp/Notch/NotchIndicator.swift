@@ -496,7 +496,19 @@ struct AgentMark: View {
     }
 
     private var iconURL: URL? {
-        Bundle.module.url(forResource: kind.rawValue, withExtension: "png")
+        AgentIconResource.url(for: kind)
+    }
+}
+
+enum AgentIconResource {
+    static func url(
+        for kind: CodingAgentKind,
+        resourceDirectory: URL? = Bundle.main.resourceURL
+    ) -> URL? {
+        resourceDirectory?
+            .appendingPathComponent("PulseNotch_PulseNotchApp.bundle", isDirectory: true)
+            .appendingPathComponent(kind.rawValue)
+            .appendingPathExtension("png")
     }
 }
 
