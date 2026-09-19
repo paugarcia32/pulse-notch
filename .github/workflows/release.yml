@@ -32,6 +32,15 @@ jobs:
 
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
+      - name: Check Homebrew tap credentials
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [[ -z "$HOMEBREW_TAP_TOKEN" ]]; then
+            echo "Missing HOMEBREW_TAP_TOKEN repository secret" >&2
+            exit 1
+          fi
+
       - name: Test
         run: swift test
 
@@ -42,9 +51,51 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "dist/PulseNotch-$VERSION.dmg" \
-            "dist/PulseNotch-$VERSION.dmg.sha256" \
-            --verify-tag \
-            --title "Pulse Notch $VERSION" \
-            --generate-notes
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" \
+              "dist/PulseNotch-$VERSION.dmg" \
+              "dist/PulseNotch-$VERSION.dmg.sha256" \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              "dist/PulseNotch-$VERSION.dmg" \
+              "dist/PulseNotch-$VERSION.dmg.sha256" \
+              --verify-tag \
+              --title "Pulse Notch $VERSION" \
+              --generate-notes
+          fi
+
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v7
+        with:
+          repository: paugarcia32/homebrew-tap
+          ref: main
+          path: homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update Homebrew cask
+        run: |
+          cask_path=homebrew-tap/Casks/pulse-notch.rb
+          dmg_sha256=$(awk 'NR == 1 { print $1 }' "dist/PulseNotch-$VERSION.dmg.sha256")
+
+          if [[ ! "$dmg_sha256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Invalid DMG SHA-256: $dmg_sha256" >&2
+            exit 1
+          fi
+
+          sed -i '' -E "s/^  version \".*\"$/  version \"$VERSION\"/" "$cask_path"
+          sed -i '' -E "s/^  sha256 \".*\"$/  sha256 \"$dmg_sha256\"/" "$cask_path"
+          ruby -c "$cask_path"
+
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/pulse-notch.rb
+
+          if git diff --cached --quiet; then
+            echo "Homebrew cask is already up to date"
+            exit 0
+          fi
+
+          git commit -m "Update Pulse Notch to $VERSION"
+          git push origin main
