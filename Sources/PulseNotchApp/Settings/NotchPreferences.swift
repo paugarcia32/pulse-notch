@@ -174,8 +174,8 @@ final class NotchPreferences: ObservableObject {
         showChargingActivity = defaults.object(forKey: Keys.showChargingActivity) as? Bool ?? true
         showVolumeActivity = defaults.object(forKey: Keys.showVolumeActivity) as? Bool ?? true
         showBrightnessActivity = defaults.object(forKey: Keys.showBrightnessActivity) as? Bool ?? true
-        showBluetoothHeadphonesActivity = defaults.object(forKey: Keys.showBluetoothHeadphonesActivity) as? Bool ?? true
-        showDownloads = defaults.object(forKey: Keys.showDownloads) as? Bool ?? true
+        showBluetoothHeadphonesActivity = defaults.object(forKey: Keys.showBluetoothHeadphonesActivity) as? Bool ?? false
+        showDownloads = defaults.object(forKey: Keys.showDownloads) as? Bool ?? false
         downloadsDirectoryPath = defaults.string(forKey: Keys.downloadsDirectoryPath)
             ?? FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path
             ?? "/Downloads"

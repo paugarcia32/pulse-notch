@@ -17,6 +17,13 @@ struct HorizontalSwipeTrackerTests {
     }
 
     @Test
+    func pageIndicatorOnlyAppearsWhenThereAreMultiplePages() {
+        #expect(!shouldShowPageIndicator(for: []))
+        #expect(!shouldShowPageIndicator(for: [.summary]))
+        #expect(shouldShowPageIndicator(for: [.summary, .calendar]))
+    }
+
+    @Test
     func twoFingerHorizontalScrollTriggersOnePageChange() {
         var tracker = HorizontalSwipeTracker()
 

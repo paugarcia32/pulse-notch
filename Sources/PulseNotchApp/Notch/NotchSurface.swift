@@ -101,7 +101,8 @@ struct NotchSurface: View {
                 try? await Task.sleep(for: .seconds(30))
             }
         }
-        .task {
+        .task(id: preferences.showBluetoothHeadphonesActivity) {
+            guard preferences.showBluetoothHeadphonesActivity else { return }
             // Connection state is public through IOBluetooth. Polling avoids an
             // Objective-C callback lifetime while keeping HUD latency below one second.
             while !Task.isCancelled {
@@ -464,7 +465,9 @@ struct NotchSurface: View {
     }
 
     private func expandedContent(at date: Date, pages: [NotchPage]) -> some View {
-        Group {
+        let showsPageIndicator = shouldShowPageIndicator(for: pages)
+
+        return Group {
             if pages.isEmpty {
                 Label("No active pages", systemImage: "checkmark.circle")
                     .font(.callout)
@@ -486,9 +489,11 @@ struct NotchSurface: View {
         }
         .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: pages)
         .clipped()
-        .padding(.top, physicalNotchSize?.height ?? 0)
+        .padding(.top, max(physicalNotchSize?.height ?? 0, showsPageIndicator ? 18 : 0))
         .overlay(alignment: .topTrailing) {
-            pageIndicator(pages: pages).offset(y: (physicalNotchSize?.height ?? 0) - 3)
+            if showsPageIndicator {
+                pageIndicator(pages: pages)
+            }
         }
         .contentShape(Rectangle())
         .background {
@@ -755,6 +760,10 @@ func wrappingPage(in pages: [NotchPage], from selectedPage: NotchPage, offset: I
     guard let selectedIndex = pages.firstIndex(of: selectedPage) else { return nil }
     let index = (selectedIndex + offset) % pages.count
     return pages[index >= 0 ? index : index + pages.count]
+}
+
+func shouldShowPageIndicator(for pages: [NotchPage]) -> Bool {
+    pages.count > 1
 }
 
 private struct AttachedNotchShape: Shape {

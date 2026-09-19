@@ -323,6 +323,26 @@ struct FeatureModelTests {
     }
 
     @Test
+    func permissionGatedFeaturesStartDisabledAndPersistOptIn() {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = NotchPreferences(defaults: defaults)
+
+        #expect(!preferences.showBluetoothHeadphonesActivity)
+        #expect(!preferences.showDownloads)
+
+        preferences.setShowBluetoothHeadphonesActivity(true)
+        preferences.setShowDownloads(true)
+
+        let restoredPreferences = NotchPreferences(defaults: defaults)
+        #expect(restoredPreferences.showBluetoothHeadphonesActivity)
+        #expect(restoredPreferences.showDownloads)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    @Test
     func pagePreferencesPersistOrderAndVisibility() {
         let suiteName = "PulseNotchTests.\(#function)"
         let defaults = UserDefaults(suiteName: suiteName)!
