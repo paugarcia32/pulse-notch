@@ -12,6 +12,7 @@ extension Notification.Name {
     static let pulseNotchShowDownloads = Notification.Name("pulseNotchShowDownloads")
     static let pulseNotchClose = Notification.Name("pulseNotchClose")
     static let pulseNotchDisplayPreferencesChanged = Notification.Name("pulseNotchDisplayPreferencesChanged")
+    static let pulseNotchShortcutsChanged = Notification.Name("pulseNotchShortcutsChanged")
 }
 
 @main
@@ -84,7 +85,7 @@ private struct UpdateMenuItem: View {
     }
 }
 
-private extension Notification.Name {
+extension Notification.Name {
     static func pulseNotchShow(_ page: NotchPage) -> Notification.Name {
         switch page {
         case .summary: .pulseNotchShowSummary

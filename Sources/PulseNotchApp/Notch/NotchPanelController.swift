@@ -71,6 +71,8 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
     private var preferenceObserver: NSObjectProtocol?
+    private var shortcutObserver: NSObjectProtocol?
+    private var shortcutManager: GlobalShortcutManager?
     private var isExpanded = false
     private var displayedScreenID: String?
 
@@ -103,7 +105,18 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             name: .pulseNotchOpen,
             object: nil
         )
+        shortcutObserver = NotificationCenter.default.addObserver(
+            forName: .pulseNotchShortcutsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.registerGlobalShortcuts() }
+        }
         installDismissMonitors()
+        shortcutManager = GlobalShortcutManager { [weak self] action in
+            self?.performShortcut(action)
+        }
+        registerGlobalShortcuts()
         updateModel.startAutomaticCheck()
     }
 
@@ -111,6 +124,8 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         updateModel.cancel()
         [localEventMonitor, globalEventMonitor].compactMap { $0 }.forEach(NSEvent.removeMonitor)
         if let preferenceObserver { NotificationCenter.default.removeObserver(preferenceObserver) }
+        if let shortcutObserver { NotificationCenter.default.removeObserver(shortcutObserver) }
+        shortcutManager?.stop()
     }
 
     func setExpanded(_ expanded: Bool) {
@@ -287,6 +302,18 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             return event
         }
         globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: dismissIfOutside)
+    }
+
+    private func registerGlobalShortcuts() {
+        shortcutManager?.replace(with: preferences.shortcuts)
+    }
+
+    private func performShortcut(_ action: ShortcutAction) {
+        if let page = preferences.page(for: action) {
+            NotificationCenter.default.post(name: .pulseNotchShow(page), object: nil)
+        } else if action == .openNotch {
+            NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
+        }
     }
 }
 

@@ -258,6 +258,7 @@ final class NotchPreferences: ObservableObject {
         shortcuts[action] = shortcut
         guard let data = try? JSONEncoder().encode(shortcuts) else { return }
         defaults.set(data, forKey: Keys.shortcuts)
+        NotificationCenter.default.post(name: .pulseNotchShortcutsChanged, object: nil)
     }
 
     func page(for action: ShortcutAction) -> NotchPage? {

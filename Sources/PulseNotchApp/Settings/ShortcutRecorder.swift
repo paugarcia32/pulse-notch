@@ -4,10 +4,16 @@ import SwiftUI
 struct AppShortcut: Codable, Equatable {
     let key: String
     let modifiers: UInt
+    let keyCode: UInt16?
 
     init(key: String, modifiers: NSEvent.ModifierFlags) {
+        self.init(key: key, modifiers: modifiers, keyCode: nil)
+    }
+
+    init(key: String, modifiers: NSEvent.ModifierFlags, keyCode: UInt16?) {
         self.key = key
         self.modifiers = modifiers.rawValue
+        self.keyCode = keyCode
     }
 
     var keyboardShortcut: KeyboardShortcut {
@@ -93,7 +99,7 @@ final class ShortcutRecorderView: NSView {
             NSSound.beep()
             return
         }
-        onShortcut?(AppShortcut(key: key, modifiers: modifiers))
+        onShortcut?(AppShortcut(key: key, modifiers: modifiers, keyCode: event.keyCode))
     }
 
     override var intrinsicContentSize: NSSize { NSSize(width: 120, height: 32) }
