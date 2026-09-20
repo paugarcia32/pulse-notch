@@ -11,50 +11,113 @@ private enum SettingsDestination: Hashable {
     case advanced
 }
 
+private let settingsSidebarWidth: CGFloat = 200
+
 struct PreferencesView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var preferences: NotchPreferences
     @ObservedObject var updateModel: UpdateFeatureModel
     let displays: [NotchDisplayOption]
     @State private var selection = SettingsDestination.general
+    @State private var isSidebarVisible = true
     @State private var gitHubRepositoryName = ""
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selection) {
-                NavigationLink(value: SettingsDestination.general) {
-                    Label("General", systemImage: "gear")
-                }
-                NavigationLink(value: SettingsDestination.notch) {
-                    Label("Notch", systemImage: "macbook")
-                }
+        settingsLayout
+            .frame(minWidth: 760, idealWidth: 820, minHeight: 480, idealHeight: 540)
+    }
 
-                Section("Pages") {
-                    NavigationLink(value: SettingsDestination.pages) {
-                        Label("Overview", systemImage: "rectangle.3.group")
-                    }
-                    ForEach(preferences.pageOrder) { page in
-                        NavigationLink(value: SettingsDestination.page(page)) {
-                            Label(page.name, systemImage: page.symbolName)
+    private var settingsLayout: some View {
+        HStack(spacing: 0) {
+            if isSidebarVisible {
+                VStack(spacing: 0) {
+                    List(selection: $selection) {
+                        Label("General", systemImage: "gear")
+                            .tag(SettingsDestination.general)
+                        Label("Notch", systemImage: "macbook")
+                            .tag(SettingsDestination.notch)
+
+                        Section("Pages") {
+                            Label("Overview", systemImage: "rectangle.3.group")
+                                .tag(SettingsDestination.pages)
+                            ForEach(preferences.pageOrder) { page in
+                                Label(page.name, systemImage: page.symbolName)
+                                    .tag(SettingsDestination.page(page))
+                            }
+                        }
+
+                        Section {
+                            Label("Shortcuts", systemImage: "command")
+                                .tag(SettingsDestination.shortcuts)
+                            Label("Advanced", systemImage: "gearshape.2")
+                                .tag(SettingsDestination.advanced)
                         }
                     }
-                }
+                    .listStyle(.sidebar)
+                    .scrollContentBackground(.hidden)
 
-                Section {
-                    NavigationLink(value: SettingsDestination.shortcuts) {
-                        Label("Shortcuts", systemImage: "command")
+                    appIdentity
+                }
+                .frame(width: settingsSidebarWidth)
+                .background(.regularMaterial)
+
+                Divider()
+            }
+
+            VStack(spacing: 0) {
+                detail
+            }
+        }
+        .background(
+            SettingsWindowConfigurator(
+                title: selection.title,
+                isSidebarVisible: isSidebarVisible,
+                toggleSidebar: { setSidebarVisible(!isSidebarVisible) }
+            )
+        )
+    }
+
+    private func setSidebarVisible(_ isVisible: Bool) {
+        if reduceMotion {
+            isSidebarVisible = isVisible
+        } else {
+            withAnimation(.smooth(duration: 0.3)) {
+                isSidebarVisible = isVisible
+            }
+        }
+    }
+
+    private var appIdentity: some View {
+        HStack(spacing: 10) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .frame(width: 40, height: 40)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Pulse Notch")
+                    .font(.callout.weight(.semibold))
+                Text("Version \(updateModel.currentVersion.description)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let release = updateModel.availableRelease {
+                    Link(destination: release.pageURL) {
+                        Label(
+                            "Update to \(release.version.description)…",
+                            systemImage: "arrow.down.circle"
+                        )
                     }
-                    NavigationLink(value: SettingsDestination.advanced) {
-                        Label("Advanced", systemImage: "gearshape.2")
-                    }
+                    .font(.caption.weight(.medium))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tint)
+                    .lineLimit(1)
+                    .help("Open the release page to update Pulse Notch")
+                    .accessibilityLabel("Update Pulse Notch to version \(release.version.description)")
                 }
             }
-            .listStyle(.sidebar)
-            .navigationTitle("Settings")
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
-        } detail: {
-            detail
+            Spacer()
         }
-        .frame(minWidth: 760, idealWidth: 820, minHeight: 480, idealHeight: 540)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 14)
     }
 
     @ViewBuilder
@@ -116,7 +179,6 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("General")
     }
 
     @ViewBuilder
@@ -177,7 +239,6 @@ struct PreferencesView: View {
             }
         }
         .listStyle(.inset)
-        .navigationTitle("Notch")
     }
 
     private var pagesOverview: some View {
@@ -212,7 +273,6 @@ struct PreferencesView: View {
             }
         }
         .listStyle(.inset)
-        .navigationTitle("Pages")
     }
 
     private func pageSettings(_ page: NotchPage) -> some View {
@@ -271,7 +331,6 @@ struct PreferencesView: View {
             }
         }
         .listStyle(.inset)
-        .navigationTitle(page.name)
     }
 
     private var downloadsSettings: some View {
@@ -358,7 +417,6 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Shortcuts")
     }
 
     private var advancedSettings: some View {
@@ -389,7 +447,6 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Advanced")
     }
 
     private func numberedLabel(_ number: Int, _ title: String, symbol: String) -> some View {
@@ -568,6 +625,216 @@ struct PreferencesView: View {
             "This color is used while the activity is active."
         }
     }
+}
+
+private extension SettingsDestination {
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .notch: "Notch"
+        case .pages: "Pages"
+        case let .page(page): page.name
+        case .shortcuts: "Shortcuts"
+        case .advanced: "Advanced"
+        }
+    }
+}
+
+private struct SettingsWindowConfigurator: NSViewRepresentable {
+    let title: String
+    let isSidebarVisible: Bool
+    let toggleSidebar: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = SettingsWindowConfigurationView()
+        view.update(
+            title: title,
+            isSidebarVisible: isSidebarVisible,
+            toggleSidebar: toggleSidebar
+        )
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let view = nsView as? SettingsWindowConfigurationView else { return }
+        view.update(
+            title: title,
+            isSidebarVisible: isSidebarVisible,
+            toggleSidebar: toggleSidebar
+        )
+    }
+}
+
+private final class SettingsWindowConfigurationView: NSView {
+    private var title = ""
+    private var isSidebarVisible = true
+    private var toggleSidebar: () -> Void = {}
+    private weak var titlebarControls: SettingsTitlebarControlsView?
+    private var mouseMonitor: Any?
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil {
+            removeMouseMonitor()
+        }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window else {
+            removeMouseMonitor()
+            return
+        }
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.styleMask.formUnion([.fullSizeContentView, .miniaturizable, .resizable])
+        window.toolbar = nil
+        window.isMovableByWindowBackground = true
+        updateTitlebarControls()
+        installMouseMonitor()
+    }
+
+    func update(title: String, isSidebarVisible: Bool, toggleSidebar: @escaping () -> Void) {
+        self.title = title
+        self.isSidebarVisible = isSidebarVisible
+        self.toggleSidebar = toggleSidebar
+        updateTitlebarControls()
+    }
+
+    private func updateTitlebarControls() {
+        guard
+            let closeButton = window?.standardWindowButton(.closeButton),
+            let windowFrameView = window?.contentView?.superview
+        else { return }
+        let controls = titlebarControls ?? makeTitlebarControls(in: windowFrameView)
+        controls.controlCenterY = (closeButton.bounds.height / 2) + 8
+        controls.update(
+            title: title,
+            isSidebarVisible: isSidebarVisible,
+            toggleSidebar: toggleSidebar
+        )
+    }
+
+    private func makeTitlebarControls(in windowFrameView: NSView) -> SettingsTitlebarControlsView {
+        let controls = SettingsTitlebarControlsView(frame: windowFrameView.bounds)
+        controls.autoresizingMask = [.width, .height]
+        windowFrameView.addSubview(controls, positioned: .above, relativeTo: nil)
+        titlebarControls = controls
+        return controls
+    }
+
+    private func installMouseMonitor() {
+        guard mouseMonitor == nil else { return }
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard
+                let self,
+                event.window === window,
+                let titlebarControls,
+                titlebarControls.containsSidebarButton(windowPoint: event.locationInWindow)
+            else { return event }
+
+            titlebarControls.performToggleSidebar()
+            return nil
+        }
+    }
+
+    private func removeMouseMonitor() {
+        guard let mouseMonitor else { return }
+        NSEvent.removeMonitor(mouseMonitor)
+        self.mouseMonitor = nil
+    }
+}
+
+private final class SettingsTitlebarControlsView: NSView {
+    private let sidebarButton: SettingsSidebarButton
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let separator = NSBox()
+    private var isSidebarVisible = true
+    private var toggleSidebar: () -> Void = {}
+    var controlCenterY: CGFloat = 0
+
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        let image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: nil) ?? NSImage()
+        sidebarButton = SettingsSidebarButton(image: image, target: nil, action: nil)
+        super.init(frame: frameRect)
+
+        sidebarButton.isBordered = false
+        sidebarButton.imageScaling = .scaleProportionallyDown
+        sidebarButton.sendAction(on: .leftMouseDown)
+        sidebarButton.target = self
+        sidebarButton.action = #selector(toggleSidebarAction)
+        sidebarButton.setAccessibilityLabel("Hide sidebar")
+        addSubview(sidebarButton)
+
+        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        titleLabel.lineBreakMode = .byTruncatingTail
+        addSubview(titleLabel)
+
+        separator.boxType = .separator
+        addSubview(separator)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    func update(title: String, isSidebarVisible: Bool, toggleSidebar: @escaping () -> Void) {
+        titleLabel.stringValue = title
+        self.isSidebarVisible = isSidebarVisible
+        self.toggleSidebar = toggleSidebar
+        let action = isSidebarVisible ? "Hide sidebar" : "Show sidebar"
+        sidebarButton.toolTip = action
+        sidebarButton.setAccessibilityLabel(action)
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+
+        let buttonSize = NSSize(width: 20, height: 20)
+        sidebarButton.frame = NSRect(
+            x: isSidebarVisible ? settingsSidebarWidth - 34 : 78,
+            y: controlCenterY - (buttonSize.height / 2),
+            width: buttonSize.width,
+            height: buttonSize.height
+        )
+
+        let titleX: CGFloat = isSidebarVisible ? settingsSidebarWidth + 20 : 112
+        let labelHeight = titleLabel.intrinsicContentSize.height
+        titleLabel.frame = NSRect(
+            x: titleX,
+            y: controlCenterY - (labelHeight / 2),
+            width: max(0, bounds.width - titleX - 20),
+            height: labelHeight
+        )
+
+        separator.isHidden = !isSidebarVisible
+        separator.frame = NSRect(x: settingsSidebarWidth - 1, y: 0, width: 1, height: bounds.height)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        sidebarButton.frame.contains(point) ? sidebarButton : nil
+    }
+
+    func containsSidebarButton(windowPoint: NSPoint) -> Bool {
+        sidebarButton.frame.contains(convert(windowPoint, from: nil))
+    }
+
+    func performToggleSidebar() {
+        toggleSidebar()
+    }
+
+    @objc private func toggleSidebarAction() {
+        performToggleSidebar()
+    }
+}
+
+private final class SettingsSidebarButton: NSButton {
+    override var mouseDownCanMoveWindow: Bool { false }
 }
 
 private struct ShortcutRow: View {
