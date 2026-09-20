@@ -16,6 +16,8 @@ struct NotchSurface: View {
     @ObservedObject var preferences: NotchPreferences
     let isExternalDisplay: Bool
     let physicalNotchSize: CGSize?
+    let collapsedSize: CGSize
+    let expandedSize: CGSize
     let onExpansionChanged: (Bool) -> Void
     @State private var isExpanded = false
     @State private var selectedPage = NotchPage.summary
@@ -24,6 +26,7 @@ struct NotchSurface: View {
     @State private var hoverState = NotchHoverState()
     @State private var hoverTask: Task<Void, Never>?
     @State private var hoverRearmTask: Task<Void, Never>?
+    @State private var panelResizeTask: Task<Void, Never>?
     @State private var systemActivityTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -84,7 +87,6 @@ struct NotchSurface: View {
         .onChange(of: preferences.dynamicPagesEnabled) { _, _ in
             handleVisiblePagesChange(displayedPages(at: .now))
         }
-        .onChange(of: isExpanded) { _, expanded in onExpansionChanged(expanded) }
     }
 
     private var activitySurface: some View {
@@ -104,6 +106,7 @@ struct NotchSurface: View {
             systemActivityTask?.cancel()
             hoverTask?.cancel()
             hoverRearmTask?.cancel()
+            panelResizeTask?.cancel()
             volumeModel.stopMonitoring()
             brightnessModel.stopMonitoring()
             downloadModel.stopMonitoring()
@@ -262,24 +265,24 @@ struct NotchSurface: View {
     }
 
     private func notch(at date: Date, pages: [NotchPage]) -> some View {
-        ZStack {
+        let currentIndicators = indicators(at: date)
+        let size = isExpanded ? expandedSize : collapsedSurfaceSize(for: currentIndicators)
+
+        return ZStack {
             if isExpanded {
                 expandedContent(at: date, pages: pages)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                    .transition(.opacity)
             } else {
                 collapsedIndicators(at: date)
                     .transition(.opacity)
             }
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, isExpanded ? 18 : 12)
+        .padding(.horizontal, isExpanded ? 18 : (physicalNotchSize == nil ? 12 : 0))
         .padding(.vertical, isExpanded ? 14 : 0)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(width: size.width, height: size.height, alignment: .top)
         .background { notchBackground }
-        .animation(
-            reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.4),
-            value: isExpanded
-        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: systemActivityModel.activity)
         .onChange(of: isExpanded) { _, isOpen in
             if isOpen { NotchHapticFeedback.performOpen() }
@@ -371,7 +374,6 @@ struct NotchSurface: View {
                 activityLevel(activity)
                     .frame(width: systemActivitySideWidth, height: physicalNotchSize.height)
             }
-            .background { AttachedNotchShape(bottomCornerRadius: 8).fill(.black) }
             .frame(width: physicalNotchSize.width + 2 * systemActivitySideWidth, height: physicalNotchSize.height)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(activity.accessibilityLabel)
@@ -438,7 +440,6 @@ struct NotchSurface: View {
             .padding(.trailing, NotchSurfaceSize.collapsedIndicatorOuterPadding)
             .frame(width: sideWidth, height: notchSize.height, alignment: .leading)
         }
-        .background { AttachedNotchShape(bottomCornerRadius: 8).fill(.black) }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -505,6 +506,24 @@ struct NotchSurface: View {
             + CGFloat(levels.count - 1) * 8
             + NotchSurfaceSize.collapsedIndicatorOuterPadding
             + NotchSurfaceSize.physicalNotchContentSpacing
+    }
+
+    private func collapsedSurfaceSize(for indicators: [NotchIndicator]) -> CGSize {
+        guard let physicalNotchSize else { return collapsedSize }
+        if systemActivityModel.activity != nil {
+            return CGSize(
+                width: physicalNotchSize.width + 2 * systemActivitySideWidth,
+                height: physicalNotchSize.height
+            )
+        }
+        let layout = CollapsedNotchLayout(
+            indicators: indicators,
+            maximumPerSide: preferences.collapsedIndicatorMaximumPerSide
+        )
+        return CGSize(
+            width: physicalNotchSize.width + 2 * collapsedSideWidth(for: layout.levels),
+            height: physicalNotchSize.height
+        )
     }
 
     private func collapsedIndicatorColor(for indicator: NotchIndicator) -> Color {
@@ -595,17 +614,19 @@ struct NotchSurface: View {
 
     private var indicatorSize: CGFloat { isHoveringPageIndicator ? 5 : 3 }
 
-    @ViewBuilder
     private var notchBackground: some View {
-        if isExpanded {
-            AttachedNotchShape(bottomCornerRadius: 18).fill(.black)
-        } else if physicalNotchSize != nil {
-            Color.clear
-        } else if !isExternalDisplay || preferences.externalNotchStyle == .rectangle {
-            AttachedNotchShape(bottomCornerRadius: 8).fill(.black)
-        } else {
-            RoundedRectangle(cornerRadius: cornerRadius).fill(.black)
-        }
+        let topRadius = !isExpanded && isExternalDisplay && preferences.externalNotchStyle == .capsule ? cornerRadius : 0
+        let bottomRadius = isExpanded ? 18 : (isExternalDisplay && preferences.externalNotchStyle == .capsule ? cornerRadius : 8)
+        return UnevenRoundedRectangle(
+            cornerRadii: RectangleCornerRadii(
+                topLeading: topRadius,
+                bottomLeading: bottomRadius,
+                bottomTrailing: bottomRadius,
+                topTrailing: topRadius
+            ),
+            style: .continuous
+        )
+        .fill(.black)
     }
 
     private var cornerRadius: CGFloat {
@@ -707,7 +728,11 @@ struct NotchSurface: View {
 
     private func openNotch() {
         guard !isExpanded else { return }
-        isExpanded = true
+        panelResizeTask?.cancel()
+        onExpansionChanged(true)
+        withAnimation(reduceMotion ? nil : NotchMotion.animation) {
+            isExpanded = true
+        }
         codingAgentModel.acknowledgeCompletedSessions()
         gitHubModel.acknowledgeCompletedActions()
     }
@@ -717,6 +742,7 @@ struct NotchSurface: View {
     }
 
     private func closeNotch() {
+        guard isExpanded else { return }
         hoverState.notchClosed()
         hoverRearmTask?.cancel()
         hoverRearmTask = Task { @MainActor in
@@ -724,7 +750,19 @@ struct NotchSurface: View {
             guard !Task.isCancelled else { return }
             hoverState.finishClosing()
         }
-        isExpanded = false
+        panelResizeTask?.cancel()
+        withAnimation(reduceMotion ? nil : NotchMotion.animation) {
+            isExpanded = false
+        }
+        guard !reduceMotion else {
+            onExpansionChanged(false)
+            return
+        }
+        panelResizeTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(NotchMotion.duration + 1 / 60))
+            guard !Task.isCancelled, !isExpanded else { return }
+            onExpansionChanged(false)
+        }
     }
 
     private func handleHover(_ hovering: Bool) {
@@ -907,21 +945,4 @@ func wrappingPage(in pages: [NotchPage], from selectedPage: NotchPage, offset: I
 
 func shouldShowPageIndicator(for pages: [NotchPage]) -> Bool {
     pages.count > 1
-}
-
-private struct AttachedNotchShape: Shape {
-    let bottomCornerRadius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let radius = min(bottomCornerRadius, rect.width / 2, rect.height)
-        return Path { path in
-            path.move(to: rect.origin)
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - radius))
-            path.addQuadCurve(to: CGPoint(x: rect.maxX - radius, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX + radius, y: rect.maxY))
-            path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - radius), control: CGPoint(x: rect.minX, y: rect.maxY))
-            path.closeSubpath()
-        }
-    }
 }

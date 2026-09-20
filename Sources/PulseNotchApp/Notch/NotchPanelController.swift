@@ -35,6 +35,11 @@ struct NotchSurfaceSize: Equatable {
     }
 }
 
+enum NotchMotion {
+    static let duration: TimeInterval = 0.3
+    static let animation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: duration)
+}
+
 struct NotchDisplayOption: Identifiable {
     let id: String
     let name: String
@@ -131,7 +136,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     func setExpanded(_ expanded: Bool) {
         guard isExpanded != expanded else { return }
         isExpanded = expanded
-        resizePanel(animated: true)
+        resizePanel()
         if expanded {
             NSApp.activate()
             panel?.makeKeyAndOrderFront(nil)
@@ -153,13 +158,13 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     @objc private func screenParametersDidChange() {
         guard let panel, let screen = displayedScreen() ?? preferredScreen() else { return }
         updateSurface(for: screen)
-        position(panel, on: screen, size: isExpanded ? geometry(for: screen).expanded : geometry(for: screen).collapsed, animated: false)
+        position(panel, on: screen, size: isExpanded ? geometry(for: screen).expanded : geometry(for: screen).collapsed)
     }
 
     @objc private func movePanelToPointerScreen() {
         guard let panel, let screen = preferredScreen() else { return }
         updateSurface(for: screen)
-        position(panel, on: screen, size: geometry(for: screen).collapsed, animated: false)
+        position(panel, on: screen, size: geometry(for: screen).collapsed)
     }
 
     private func applyDisplayPreferences() {
@@ -167,7 +172,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         NotificationCenter.default.post(name: .pulseNotchClose, object: nil)
         isExpanded = false
         updateSurface(for: screen)
-        position(panel, on: screen, size: geometry(for: screen).collapsed, animated: true)
+        position(panel, on: screen, size: geometry(for: screen).collapsed)
     }
 
     private func notchSurface(for screen: NSScreen) -> NotchSurface {
@@ -187,6 +192,8 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),
             physicalNotchSize: size.physicalNotchSize,
+            collapsedSize: size.collapsed,
+            expandedSize: size.expanded,
             onExpansionChanged: setExpanded
         )
     }
@@ -209,6 +216,8 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             preferences: preferences,
             isExternalDisplay: !hasPhysicalNotch(screen: screen),
             physicalNotchSize: size.physicalNotchSize,
+            collapsedSize: size.collapsed,
+            expandedSize: size.expanded,
             onExpansionChanged: setExpanded
         )
     }
@@ -229,29 +238,18 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func resizePanel(animated: Bool) {
+    private func resizePanel() {
         guard let panel else { return }
         guard let screen = displayedScreen() ?? panel.screen ?? preferredScreen() else { return }
         let size = isExpanded ? geometry(for: screen).expanded : geometry(for: screen).collapsed
-        position(panel, on: screen, size: size, animated: animated)
+        position(panel, on: screen, size: size)
     }
 
-    private func position(_ panel: NSPanel, on screen: NSScreen, size: CGSize, animated: Bool) {
+    private func position(_ panel: NSPanel, on screen: NSScreen, size: CGSize) {
         let targetFrame = frame(for: size, on: screen)
-        let changes = {
-            panel.setFrame(targetFrame, display: true)
-            panel.orderFrontRegardless()
-        }
         displayedScreenID = displayID(for: screen)
-        guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
-            changes()
-            return
-        }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.4
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0, 0.2, 1)
-            panel.animator().setFrame(targetFrame, display: true)
-        }
+        panel.setFrame(targetFrame, display: true)
+        panel.orderFrontRegardless()
     }
 
     private func frame(for size: CGSize, on screen: NSScreen) -> NSRect {
