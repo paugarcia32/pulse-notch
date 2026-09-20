@@ -4,10 +4,16 @@ import SwiftUI
 
 struct MediaPlaybackPage: View {
     @ObservedObject var model: MediaPlaybackFeatureModel
+    let testingPlayback: MediaPlaybackStatus?
+
+    init(model: MediaPlaybackFeatureModel, testingPlayback: MediaPlaybackStatus? = nil) {
+        self.model = model
+        self.testingPlayback = testingPlayback
+    }
 
     var body: some View {
         Group {
-            switch model.state {
+            switch testingPlayback.map(MediaPlaybackFeatureModel.State.loaded) ?? model.state {
             case .loading:
                 placeholder("Looking for media…", symbol: "waveform")
             case let .loaded(playback):

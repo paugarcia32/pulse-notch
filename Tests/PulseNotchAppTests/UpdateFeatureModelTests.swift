@@ -49,6 +49,25 @@ struct UpdateFeatureModelTests {
     }
 
     @Test
+    func testingReleaseAppearsAsAnAvailableUpdate() {
+        let model = UpdateFeatureModel(
+            provider: ReleaseProviderFake(release: nil),
+            currentVersion: AppVersion(major: 1, minor: 2, patch: 3),
+            defaults: makeDefaults()
+        )
+
+        model.showTestingAvailableRelease()
+
+        #expect(model.availableRelease?.version == AppVersion(major: 1, minor: 2, patch: 4))
+        #expect(model.availableRelease?.pageURL.absoluteString == "https://github.com/paugarcia32/pulse-notch/releases")
+
+        model.hideTestingAvailableRelease()
+
+        #expect(model.state == .idle)
+        #expect(!model.isTestingReleaseShown)
+    }
+
+    @Test
     func automaticChecksRunAtMostOncePerDay() async {
         let provider = ReleaseProviderFake(
             release: AppRelease(

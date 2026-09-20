@@ -2,7 +2,13 @@ import SwiftUI
 
 struct ClockPage: View {
     @ObservedObject var model: ClockFeatureModel
+    let testingStatus: ClockStatus?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(model: ClockFeatureModel, testingStatus: ClockStatus? = nil) {
+        self.model = model
+        self.testingStatus = testingStatus
+    }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: model.selectedMode == .stopwatch ? 0.1 : 1)) { context in
@@ -16,22 +22,25 @@ struct ClockPage: View {
     }
 
     private func controls(at date: Date) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let selectedMode = testingStatus?.mode ?? model.selectedMode
+        let time = testingStatus?.time ?? model.time(at: date)
+        let isRunning = testingStatus?.isRunning ?? model.isRunning
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 4) {
-                ForEach(ClockMode.allCases) { mode in
-                    Button { model.selectMode(mode) } label: {
-                        Label(mode.name, systemImage: mode.symbolName)
+                ForEach(ClockMode.allCases) { candidate in
+                    Button { model.selectMode(candidate) } label: {
+                        Label(candidate.name, systemImage: candidate.symbolName)
                             .font(.caption.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)
                             .background(
-                                model.selectedMode == mode ? .orange.opacity(0.24) : .white.opacity(0.07),
+                                selectedMode == candidate ? .orange.opacity(0.24) : .white.opacity(0.07),
                                 in: RoundedRectangle(cornerRadius: 7)
                             )
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(model.selectedMode == mode ? Color.orange : Color.white.opacity(0.65))
-                    .accessibilityAddTraits(model.selectedMode == mode ? .isSelected : [])
+                    .foregroundStyle(selectedMode == candidate ? Color.orange : Color.white.opacity(0.65))
+                    .accessibilityAddTraits(selectedMode == candidate ? .isSelected : [])
                 }
             }
             .frame(width: 220)
@@ -39,15 +48,15 @@ struct ClockPage: View {
             .accessibilityLabel("Clock mode")
 
             Text(ClockTimeFormatter.display(
-                model.time(at: date),
-                showsTenths: model.selectedMode == .stopwatch
+                time,
+                showsTenths: selectedMode == .stopwatch
             ))
             .font(.system(size: 38, weight: .medium, design: .rounded))
             .monospacedDigit()
             .contentTransition(reduceMotion ? .identity : .numericText())
             .accessibilityLabel(ClockTimeFormatter.accessible(model.time(at: date)))
 
-            if model.selectedMode == .timer, !model.isRunning {
+            if selectedMode == .timer, !isRunning {
                 HStack(spacing: 6) {
                     ForEach([1, 5, 10, 25], id: \.self) { minutes in
                         Button("\(minutes)m") { model.setTimerDuration(minutes: minutes) }
@@ -58,14 +67,14 @@ struct ClockPage: View {
             }
 
             HStack(spacing: 8) {
-                Button(model.isRunning ? "Pause" : "Start") { model.startOrPause(at: date) }
+                Button(isRunning ? "Pause" : "Start") { model.startOrPause(at: date) }
                     .buttonStyle(.borderedProminent)
                     .tint(.orange)
                     .keyboardShortcut(.space, modifiers: [])
                 Button("Reset") { model.reset() }
                     .buttonStyle(.bordered)
                     .keyboardShortcut("r", modifiers: [.command])
-                if model.selectedMode == .stopwatch {
+                if selectedMode == .stopwatch {
                     Button("Lap") { model.recordLap(at: date) }
                         .buttonStyle(.bordered)
                         .disabled(!model.isRunning)
@@ -77,15 +86,18 @@ struct ClockPage: View {
 
     @ViewBuilder
     private func activityDetail(at date: Date) -> some View {
-        if model.selectedMode == .timer {
+        let mode = testingStatus?.mode ?? model.selectedMode
+        let time = testingStatus?.time ?? model.time(at: date)
+        let isRunning = testingStatus?.isRunning ?? model.isRunning
+        if mode == .timer {
             ZStack {
                 Circle().stroke(.white.opacity(0.1), lineWidth: 9)
                 Circle()
-                    .trim(from: 0, to: model.timerDuration > 0 ? model.time(at: date) / model.timerDuration : 0)
+                    .trim(from: 0, to: model.timerDuration > 0 ? time / model.timerDuration : 0)
                     .stroke(.orange, style: StrokeStyle(lineWidth: 9, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                    .animation(reduceMotion ? nil : .linear(duration: 1), value: model.time(at: date))
-                Image(systemName: model.isRunning ? "pause.fill" : "timer")
+                    .animation(reduceMotion ? nil : .linear(duration: 1), value: time)
+                Image(systemName: isRunning ? "pause.fill" : "timer")
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.orange)
             }

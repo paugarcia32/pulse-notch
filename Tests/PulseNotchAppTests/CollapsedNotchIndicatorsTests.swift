@@ -5,6 +5,18 @@ import Testing
 
 struct CollapsedNotchIndicatorsTests {
     @Test
+    func testingPreviewsProvideDataForTheirExpandedPages() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let event = try #require(CollapsedIndicatorPreview.calendar.testingCalendarEvent(instance: 0, at: now))
+        let session = try #require(CollapsedIndicatorPreview.codex.testingAgentSession(instance: 0, at: now))
+
+        #expect(event.startsAt == now.addingTimeInterval(31 * 60))
+        #expect(session.kind == .codex)
+        #expect(session.status == .running)
+        #expect(CollapsedIndicatorPreview.download.testingAgentSession(instance: 0, at: now) == nil)
+    }
+
+    @Test
     func agentIconUsesThePackagedResourceDirectory() {
         let resources = URL(fileURLWithPath: "/Pulse Notch.app/Contents/Resources", isDirectory: true)
 

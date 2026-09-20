@@ -506,6 +506,17 @@ struct PreferencesView: View {
                     }
                     .disabled(!preferences.showBluetoothHeadphonesActivity)
                 }
+                Section("Other previews") {
+                    if updateModel.isTestingReleaseShown {
+                        Button("Hide update preview") {
+                            updateModel.hideTestingAvailableRelease()
+                        }
+                    } else {
+                        Button("Show update available") {
+                            updateModel.showTestingAvailableRelease()
+                        }
+                    }
+                }
             }
         }
         .formStyle(.grouped)

@@ -27,6 +27,15 @@ struct NotchSurface: View {
     @State private var systemActivityTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private struct TestingPreviewData {
+        let schedule: CalendarEventSchedule?
+        let sessions: [CodingAgentSession]?
+        let actions: [GitHubActionSession]?
+        let downloads: [DetectedDownload]?
+        let media: MediaPlaybackStatus?
+        let clock: ClockStatus?
+    }
+
     var body: some View {
         activitySurface
     }
@@ -752,6 +761,7 @@ struct NotchSurface: View {
         at date: Date,
         availablePages: Set<NotchPage>
     ) -> some View {
+        let testingData = testingPreviewData(at: date)
         switch page {
         case .summary:
             SummaryPage(
@@ -763,26 +773,32 @@ struct NotchSurface: View {
                 priorities: preferences.summaryPriorityOrder,
                 date: date,
                 availablePages: availablePages,
-                onSelectPage: { selectPage($0) }
+                onSelectPage: { selectPage($0) },
+                testingSchedule: testingData.schedule,
+                testingSessions: testingData.sessions,
+                testingActions: testingData.actions,
+                testingMedia: testingData.media,
+                testingClock: testingData.clock
             )
-        case .calendar: CalendarPage(model: calendarModel, date: date)
-        case .agents: CodingAgentsPage(model: codingAgentModel, date: date)
-        case .github: GitHubPage(model: gitHubModel, date: date)
-        case .media: MediaPlaybackPage(model: mediaPlaybackModel)
-        case .clock: ClockPage(model: clockModel)
-        case .downloads: DownloadsPage(model: downloadModel)
+        case .calendar: CalendarPage(model: calendarModel, date: date, testingSchedule: testingData.schedule)
+        case .agents: CodingAgentsPage(model: codingAgentModel, date: date, testingSessions: testingData.sessions)
+        case .github: GitHubPage(model: gitHubModel, date: date, testingActionSessions: testingData.actions)
+        case .media: MediaPlaybackPage(model: mediaPlaybackModel, testingPlayback: testingData.media)
+        case .clock: ClockPage(model: clockModel, testingStatus: testingData.clock)
+        case .downloads: DownloadsPage(model: downloadModel, testingDownloads: testingData.downloads)
         }
     }
 
     private func displayedPages(at date: Date) -> [NotchPage] {
-        DynamicPageActivity(
-            calendar: calendarHasActivity(at: date),
-            agents: agentsHaveActivity,
+        let testingData = testingPreviewData(at: date)
+        return DynamicPageActivity(
+            calendar: testingData.schedule != nil || calendarHasActivity(at: date),
+            agents: !(testingData.sessions ?? []).isEmpty || agentsHaveActivity,
             agentUsage: usageLimitNeedsAttention,
-            github: gitHubHasActivity,
-            media: mediaPlaybackModel.isPageActive(at: date),
-            clock: clockModel.status(at: date, includePaused: true) != nil,
-            downloads: !downloadModel.activeDownloads.isEmpty
+            github: !(testingData.actions ?? []).isEmpty || gitHubHasActivity,
+            media: testingData.media != nil || mediaPlaybackModel.isPageActive(at: date),
+            clock: testingData.clock != nil || clockModel.status(at: date, includePaused: true) != nil,
+            downloads: !(testingData.downloads ?? []).isEmpty || !downloadModel.activeDownloads.isEmpty
         ).visiblePages(
             from: preferences.orderedVisiblePages,
             isEnabled: preferences.dynamicPagesEnabled
@@ -792,6 +808,41 @@ struct NotchSurface: View {
     private func calendarHasActivity(at date: Date) -> Bool {
         guard case let .loaded(schedule) = calendarModel.state else { return false }
         return !schedule.currentAndUpcoming(on: date, relativeTo: date).isEmpty
+    }
+
+    private func testingPreviewData(at date: Date) -> TestingPreviewData {
+        guard preferences.testingFeaturesEnabled else {
+            return TestingPreviewData(schedule: nil, sessions: nil, actions: nil, downloads: nil, media: nil, clock: nil)
+        }
+
+        let schedule = (0..<preferences.collapsedIndicatorPreviewCount(.calendar)).compactMap {
+            CollapsedIndicatorPreview.calendar.testingCalendarEvent(instance: $0, at: date)
+        }
+        let sessions = CollapsedIndicatorPreview.allCases.flatMap { preview in
+            (0..<preferences.collapsedIndicatorPreviewCount(preview)).compactMap {
+                preview.testingAgentSession(instance: $0, at: date)
+            }
+        }
+        let actions = (0..<preferences.collapsedIndicatorPreviewCount(.githubActions)).compactMap {
+            CollapsedIndicatorPreview.githubActions.testingActionSession(instance: $0, at: date)
+        }
+        let downloads = (0..<preferences.collapsedIndicatorPreviewCount(.download)).compactMap {
+            CollapsedIndicatorPreview.download.testingDownload(instance: $0)
+        }
+        let media = preferences.collapsedIndicatorPreviewCount(.mediaPlayback) > 0
+            ? CollapsedIndicatorPreview.mediaPlayback.testingPlayback()
+            : nil
+        let clock = preferences.collapsedIndicatorPreviewCount(.clock) > 0
+            ? CollapsedIndicatorPreview.clock.testingClockStatus()
+            : nil
+        return TestingPreviewData(
+            schedule: schedule.isEmpty ? nil : CalendarEventSchedule(events: schedule),
+            sessions: sessions.isEmpty ? nil : sessions,
+            actions: actions.isEmpty ? nil : actions,
+            downloads: downloads.isEmpty ? nil : downloads,
+            media: media,
+            clock: clock
+        )
     }
 
     private var agentsHaveActivity: Bool {

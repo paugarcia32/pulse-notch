@@ -116,6 +116,7 @@ final class UpdateFeatureModel: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
+    @Published private(set) var isTestingReleaseShown = false
     @Published var automaticChecksEnabled: Bool {
         didSet {
             defaults.set(automaticChecksEnabled, forKey: automaticChecksEnabledKey)
@@ -162,12 +163,33 @@ final class UpdateFeatureModel: ObservableObject {
         checkTask = nil
     }
 
+    func showTestingAvailableRelease() {
+        guard let pageURL = URL(string: "https://github.com/paugarcia32/pulse-notch/releases") else { return }
+        let version = AppVersion(
+            major: currentVersion.major,
+            minor: currentVersion.minor,
+            patch: currentVersion.patch + 1
+        )
+        state = .available(AppRelease(
+            version: version,
+            pageURL: pageURL
+        ))
+        isTestingReleaseShown = true
+    }
+
+    func hideTestingAvailableRelease() {
+        guard isTestingReleaseShown else { return }
+        state = .idle
+        isTestingReleaseShown = false
+    }
+
     func refresh(force: Bool, at date: Date) async {
         guard force || shouldRunAutomaticCheck(at: date) else {
             return
         }
 
         let previousState = state
+        isTestingReleaseShown = false
         state = .checking
         defaults.set(date, forKey: lastCheckDateKey)
 

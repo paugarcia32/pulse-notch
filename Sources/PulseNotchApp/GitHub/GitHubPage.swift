@@ -4,13 +4,28 @@ import SwiftUI
 struct GitHubPage: View {
     @ObservedObject var model: GitHubFeatureModel
     let date: Date
+    let testingPullRequests: [GitHubPullRequest]?
+    let testingActionSessions: [GitHubActionSession]?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
 
+    init(
+        model: GitHubFeatureModel,
+        date: Date,
+        testingPullRequests: [GitHubPullRequest]? = nil,
+        testingActionSessions: [GitHubActionSession]? = nil
+    ) {
+        self.model = model
+        self.date = date
+        self.testingPullRequests = testingPullRequests
+        self.testingActionSessions = testingActionSessions
+    }
+
     var body: some View {
         Group {
-            switch model.state {
+            switch testingPullRequests.map(GitHubFeatureModel.State.loaded)
+                ?? (testingActionSessions == nil ? model.state : .loaded([])) {
             case .loading:
                 placeholder { ProgressView().controlSize(.small) }
             case let .loaded(pullRequests):
@@ -30,7 +45,7 @@ struct GitHubPage: View {
             sectionHeader(pullRequests)
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 7) {
-                    runningActions(model.actionSessions)
+                    runningActions(testingActionSessions ?? model.actionSessions)
                     if pullRequests.isEmpty {
                         emptyState
                     } else {

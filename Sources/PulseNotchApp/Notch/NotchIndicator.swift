@@ -206,6 +206,83 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
     private func runningAgent(_ kind: CodingAgentKind, instance: Int) -> NotchIndicator {
         NotchIndicator(id: "\(rawValue)-\(instance)", content: .runningAgent(kind), accessibilityLabel: "\(kind.displayName) agent running")
     }
+
+    func testingCalendarEvent(instance: Int, at date: Date) -> CalendarEvent? {
+        guard self == .calendar else { return nil }
+        let startsAt = date.addingTimeInterval(31 * 60)
+        return CalendarEvent(
+            id: "testing-calendar-\(instance)",
+            title: "Testing event",
+            startsAt: startsAt,
+            endsAt: startsAt.addingTimeInterval(60 * 60),
+            calendarName: "Pulse Notch Testing",
+            calendarColor: .orange
+        )
+    }
+
+    func testingAgentSession(instance: Int, at date: Date) -> CodingAgentSession? {
+        let kind: CodingAgentKind
+        switch self {
+        case .codex: kind = .codex
+        case .claude: kind = .claude
+        case .cursor: kind = .cursor
+        case .antigravity: kind = .antigravity
+        case .opencode: kind = .opencode
+        default: return nil
+        }
+
+        return CodingAgentSession(
+            id: "testing-\(rawValue)-\(instance)",
+            kind: kind,
+            title: "Testing session",
+            detectedAt: date,
+            workingDirectory: "/tmp/pulse-notch-testing",
+            gitBranch: "testing",
+            startedAt: date.addingTimeInterval(-5 * 60),
+            status: .running
+        )
+    }
+
+    func testingActionSession(instance: Int, at date: Date) -> GitHubActionSession? {
+        guard self == .githubActions else { return nil }
+        let run = GitHubActionRun(
+            id: "testing-action-\(instance)",
+            repository: "pulse-notch/pulse-notch",
+            name: "Testing workflow",
+            event: "workflow_dispatch",
+            ref: "testing",
+            url: URL(string: "https://github.com/pulse-notch/pulse-notch/actions"),
+            updatedAt: date,
+            status: .running
+        )
+        return GitHubActionSession(run: run, detectedAt: date, status: .running)
+    }
+
+    func testingDownload(instance: Int) -> DetectedDownload? {
+        guard self == .download else { return nil }
+        return DetectedDownload(
+            id: "/tmp/pulse-notch-testing/download-\(instance).zip",
+            byteCount: 42 * 1_024 * 1_024,
+            totalByteCount: 100 * 1_024 * 1_024
+        )
+    }
+
+    func testingPlayback() -> MediaPlaybackStatus? {
+        guard self == .mediaPlayback else { return nil }
+        return MediaPlaybackStatus(
+            id: "testing-playback",
+            title: "Testing track",
+            artist: "Pulse Notch",
+            duration: 180,
+            elapsedTime: 42,
+            isPlaying: true
+        )
+    }
+
+    func testingClockStatus() -> ClockStatus? {
+        guard self == .clock else { return nil }
+        return ClockStatus(mode: .timer, time: 4 * 60 + 32, isRunning: true)
+    }
 }
 
 enum CollapsedNotchIndicators {

@@ -4,13 +4,20 @@ import SwiftUI
 struct CodingAgentsPage: View {
     @ObservedObject var model: CodingAgentFeatureModel
     let date: Date
+    let testingSessions: [CodingAgentSession]?
 
     @State private var showsSetup = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    init(model: CodingAgentFeatureModel, date: Date, testingSessions: [CodingAgentSession]? = nil) {
+        self.model = model
+        self.date = date
+        self.testingSessions = testingSessions
+    }
+
     var body: some View {
         Group {
-            switch model.state {
+            switch testingSessions.map(CodingAgentFeatureModel.State.loaded) ?? model.state {
             case .loading:
                 placeholder { ProgressView().controlSize(.small) }
             case let .loaded(sessions):

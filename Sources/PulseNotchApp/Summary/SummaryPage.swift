@@ -116,8 +116,45 @@ struct SummaryPage: View {
     let date: Date
     let availablePages: Set<NotchPage>
     let onSelectPage: (NotchPage) -> Void
+    let testingSchedule: CalendarEventSchedule?
+    let testingSessions: [CodingAgentSession]?
+    let testingActions: [GitHubActionSession]?
+    let testingMedia: MediaPlaybackStatus?
+    let testingClock: ClockStatus?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(
+        calendarModel: CalendarFeatureModel,
+        codingAgentModel: CodingAgentFeatureModel,
+        gitHubModel: GitHubFeatureModel,
+        mediaPlaybackModel: MediaPlaybackFeatureModel,
+        clockModel: ClockFeatureModel,
+        priorities: [SummaryPriority],
+        date: Date,
+        availablePages: Set<NotchPage>,
+        onSelectPage: @escaping (NotchPage) -> Void,
+        testingSchedule: CalendarEventSchedule? = nil,
+        testingSessions: [CodingAgentSession]? = nil,
+        testingActions: [GitHubActionSession]? = nil,
+        testingMedia: MediaPlaybackStatus? = nil,
+        testingClock: ClockStatus? = nil
+    ) {
+        self.calendarModel = calendarModel
+        self.codingAgentModel = codingAgentModel
+        self.gitHubModel = gitHubModel
+        self.mediaPlaybackModel = mediaPlaybackModel
+        self.clockModel = clockModel
+        self.priorities = priorities
+        self.date = date
+        self.availablePages = availablePages
+        self.onSelectPage = onSelectPage
+        self.testingSchedule = testingSchedule
+        self.testingSessions = testingSessions
+        self.testingActions = testingActions
+        self.testingMedia = testingMedia
+        self.testingClock = testingClock
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -137,16 +174,17 @@ struct SummaryPage: View {
             schedule: schedule,
             pullRequests: pullRequests,
             agents: agentSessions,
-            actions: gitHubModel.actionSessions,
-            media: mediaPlaybackModel.playback,
+            actions: testingActions ?? gitHubModel.actionSessions,
+            media: testingMedia ?? mediaPlaybackModel.playback,
             usage: usageAvailability,
-            clock: clockModel.status(at: date, includePaused: true),
+            clock: testingClock ?? clockModel.status(at: date, includePaused: true),
             priorities: priorities,
             at: date
         )
     }
 
     private var schedule: CalendarEventSchedule? {
+        if let testingSchedule { return testingSchedule }
         guard case let .loaded(schedule) = calendarModel.state else { return nil }
         return schedule
     }
@@ -157,6 +195,7 @@ struct SummaryPage: View {
     }
 
     private var agentSessions: [CodingAgentSession] {
+        if let testingSessions { return testingSessions }
         guard case let .loaded(sessions) = codingAgentModel.state else { return [] }
         return sessions
     }

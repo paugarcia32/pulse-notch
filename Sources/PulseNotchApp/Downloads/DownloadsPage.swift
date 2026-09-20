@@ -3,11 +3,18 @@ import SwiftUI
 
 struct DownloadsPage: View {
     @ObservedObject var model: DownloadFeatureModel
+    let testingDownloads: [DetectedDownload]?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    init(model: DownloadFeatureModel, testingDownloads: [DetectedDownload]? = nil) {
+        self.model = model
+        self.testingDownloads = testingDownloads
+    }
+
     var body: some View {
+        let downloads = testingDownloads ?? model.activeDownloads
         ZStack(alignment: .topLeading) {
-            if model.activeDownloads.isEmpty {
+            if downloads.isEmpty {
                 ContentUnavailableView(
                     "No active downloads",
                     systemImage: "arrow.down.circle",
@@ -21,10 +28,10 @@ struct DownloadsPage: View {
                     .font(.headline)
                     .foregroundStyle(.blue)
 
-                if !model.activeDownloads.isEmpty {
+                if !downloads.isEmpty {
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 10) {
-                            ForEach(model.activeDownloads) { download in
+                            ForEach(downloads) { download in
                                 downloadCard(download)
                             }
                         }

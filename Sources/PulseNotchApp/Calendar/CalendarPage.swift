@@ -4,21 +4,23 @@ import SwiftUI
 struct CalendarPage: View {
     @ObservedObject var model: CalendarFeatureModel
     let date: Date
+    let testingSchedule: CalendarEventSchedule?
 
     @State private var selectedDate: Date
     @State private var showsAllEvents = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
 
-    init(model: CalendarFeatureModel, date: Date) {
+    init(model: CalendarFeatureModel, date: Date, testingSchedule: CalendarEventSchedule? = nil) {
         self.model = model
         self.date = date
+        self.testingSchedule = testingSchedule
         _selectedDate = State(initialValue: date)
     }
 
     var body: some View {
         Group {
-            switch model.state {
+            switch testingSchedule.map(CalendarFeatureModel.State.loaded) ?? model.state {
             case .loading:
                 placeholder { ProgressView().controlSize(.small) }
             case let .loaded(schedule):
