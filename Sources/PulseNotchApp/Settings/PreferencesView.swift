@@ -21,6 +21,7 @@ struct PreferencesView: View {
     @State private var selection = SettingsDestination.general
     @State private var isSidebarVisible = true
     @State private var gitHubRepositoryName = ""
+    @State private var gitHubRepositoryError: String?
 
     var body: some View {
         settingsLayout
@@ -261,7 +262,7 @@ struct PreferencesView: View {
     }
 
     private var pagesOverview: some View {
-        List {
+        Form {
             Section {
                 Toggle("Show pages only when active", isOn: dynamicPagesEnabled)
             } footer: {
@@ -274,6 +275,12 @@ struct PreferencesView: View {
                         Spacer()
                         Text(preferences.isVisible(page) ? "Shown" : "Hidden")
                             .foregroundStyle(.secondary)
+                        reorderButtons(
+                            index: index,
+                            count: preferences.pageOrder.count,
+                            itemName: page.name,
+                            move: movePage
+                        )
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.tertiary)
@@ -284,18 +291,17 @@ struct PreferencesView: View {
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction { selection = .page(page) }
                 }
-                .onMove(perform: preferences.movePages)
             } header: {
                 Text("Page order")
             } footer: {
-                Text("Drag to reorder. Select a page to configure its visibility and activity.")
+                Text("Use the arrows to reorder. Select a page to configure its visibility and activity.")
             }
         }
-        .listStyle(.inset)
+        .formStyle(.grouped)
     }
 
     private func pageSettings(_ page: NotchPage) -> some View {
-        List {
+        Form {
             Section {
                 Toggle("Show \(page.name) page", isOn: pageVisibility(page))
                     .disabled(!canHide(page))
@@ -310,13 +316,21 @@ struct PreferencesView: View {
             if page == .summary {
                 Section {
                     ForEach(Array(preferences.summaryPriorityOrder.enumerated()), id: \.element.id) { index, priority in
-                        numberedLabel(index + 1, priority.name, symbol: priority.symbolName)
+                        HStack(spacing: 10) {
+                            numberedLabel(index + 1, priority.name, symbol: priority.symbolName)
+                            Spacer(minLength: 12)
+                            reorderButtons(
+                                index: index,
+                                count: preferences.summaryPriorityOrder.count,
+                                itemName: priority.name,
+                                move: moveSummaryPriority
+                            )
+                        }
                     }
-                    .onMove(perform: preferences.moveSummaryPriorities)
                 } header: {
                     Text("Content priority")
                 } footer: {
-                    Text("The first priority with relevant activity fills the Summary page.")
+                    Text("Use the arrows to decide which content fills the Summary page first.")
                 }
             }
 
@@ -349,7 +363,7 @@ struct PreferencesView: View {
                 }
             }
         }
-        .listStyle(.inset)
+        .formStyle(.grouped)
     }
 
     private var downloadsSettings: some View {
@@ -363,14 +377,13 @@ struct PreferencesView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Button("Choose…", action: chooseDownloadsDirectory)
+                        .buttonStyle(.bordered)
                 }
             }
-            .disabled(!preferences.showDownloads)
             if preferences.downloadsDirectoryURL != defaultDownloadsDirectory {
                 Button("Use Downloads folder") {
                     preferences.setDownloadsDirectoryURL(defaultDownloadsDirectory)
                 }
-                .disabled(!preferences.showDownloads)
             }
         } header: {
             Text("Download monitoring")
@@ -382,10 +395,16 @@ struct PreferencesView: View {
     private var gitHubSettings: some View {
         Section {
             HStack {
-                TextField("owner/repository", text: $gitHubRepositoryName)
+                TextField("owner/repository or GitHub URL", text: $gitHubRepositoryName)
                     .onSubmit(addGitHubRepository)
                 Button("Add", action: addGitHubRepository)
-                    .disabled(!canAddGitHubRepository)
+                    .buttonStyle(.bordered)
+            }
+
+            if let gitHubRepositoryError {
+                Text(gitHubRepositoryError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
             }
 
             if preferences.monitoredGitHubRepositories.isEmpty {
@@ -413,14 +432,38 @@ struct PreferencesView: View {
         }
     }
 
-    private var canAddGitHubRepository: Bool {
-        guard let repository = GitHubRepository(nameWithOwner: gitHubRepositoryName) else { return false }
-        return !preferences.monitoredGitHubRepositories.contains { $0.id == repository.id }
+    private func addGitHubRepository() {
+        guard let repository = gitHubRepository else {
+            gitHubRepositoryError = "Enter a repository as owner/repository or a GitHub URL."
+            return
+        }
+        guard preferences.addMonitoredGitHubRepository(named: repository.nameWithOwner) else {
+            gitHubRepositoryError = "This repository is already being monitored."
+            return
+        }
+        gitHubRepositoryError = nil
+        gitHubRepositoryName = ""
     }
 
-    private func addGitHubRepository() {
-        guard preferences.addMonitoredGitHubRepository(named: gitHubRepositoryName) else { return }
-        gitHubRepositoryName = ""
+    private var gitHubRepository: GitHubRepository? {
+        let input = gitHubRepositoryName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let compactInput = input.replacingOccurrences(of: " ", with: "")
+        if let repository = GitHubRepository(nameWithOwner: compactInput) {
+            return repository
+        }
+
+        guard
+            let url = URL(string: input),
+            let host = url.host?.lowercased(),
+            host == "github.com" || host == "www.github.com"
+        else { return nil }
+
+        var components = url.path.split(separator: "/").map(String.init)
+        guard components.count == 2 else { return nil }
+        if components[1].hasSuffix(".git") {
+            components[1].removeLast(4)
+        }
+        return GitHubRepository(nameWithOwner: components.joined(separator: "/"))
     }
 
     private var shortcutSettings: some View {
@@ -483,6 +526,46 @@ struct PreferencesView: View {
         let destination = direction < 0 ? index - 1 : index + 2
         guard destination >= 0, destination <= preferences.collapsedIndicatorPriorityOrder.count else { return }
         preferences.moveCollapsedIndicatorPriorities(from: IndexSet(integer: index), to: destination)
+    }
+
+    private func movePage(at index: Int, direction: Int) {
+        let destination = direction < 0 ? index - 1 : index + 2
+        guard destination >= 0, destination <= preferences.pageOrder.count else { return }
+        preferences.movePages(from: IndexSet(integer: index), to: destination)
+    }
+
+    private func moveSummaryPriority(at index: Int, direction: Int) {
+        let destination = direction < 0 ? index - 1 : index + 2
+        guard destination >= 0, destination <= preferences.summaryPriorityOrder.count else { return }
+        preferences.moveSummaryPriorities(from: IndexSet(integer: index), to: destination)
+    }
+
+    private func reorderButtons(
+        index: Int,
+        count: Int,
+        itemName: String,
+        move: @escaping (Int, Int) -> Void
+    ) -> some View {
+        HStack(spacing: 4) {
+            Button {
+                move(index, -1)
+            } label: {
+                Image(systemName: "chevron.up")
+            }
+            .buttonStyle(.borderless)
+            .disabled(index == 0)
+            .accessibilityLabel("Move \(itemName) up")
+
+            Button {
+                move(index, 1)
+            } label: {
+                Image(systemName: "chevron.down")
+            }
+            .buttonStyle(.borderless)
+            .disabled(index == count - 1)
+            .accessibilityLabel("Move \(itemName) down")
+        }
+        .controlSize(.small)
     }
 
     private var showInDock: Binding<Bool> {
