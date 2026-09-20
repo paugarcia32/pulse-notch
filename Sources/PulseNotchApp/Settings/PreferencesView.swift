@@ -205,7 +205,7 @@ struct PreferencesView: View {
     }
 
     private var notchSettings: some View {
-        List {
+        Form {
             Section {
                 Stepper(value: collapsedIndicatorMaximumPerSide, in: 1...5) {
                     Text("Maximum items per side: \(preferences.collapsedIndicatorMaximumPerSide)")
@@ -219,13 +219,32 @@ struct PreferencesView: View {
             }
             Section {
                 ForEach(Array(preferences.collapsedIndicatorPriorityOrder.enumerated()), id: \.element.id) { index, category in
-                    numberedLabel(index + 1, category.name, symbol: category.symbolName)
+                    HStack(spacing: 10) {
+                        numberedLabel(index + 1, category.name, symbol: category.symbolName)
+                        Spacer(minLength: 12)
+                        Button {
+                            moveCollapsedIndicatorPriority(at: index, direction: -1)
+                        } label: {
+                            Image(systemName: "chevron.up")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(index == 0)
+                        .accessibilityLabel("Move \(category.name) up")
+
+                        Button {
+                            moveCollapsedIndicatorPriority(at: index, direction: 1)
+                        } label: {
+                            Image(systemName: "chevron.down")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(index == preferences.collapsedIndicatorPriorityOrder.count - 1)
+                        .accessibilityLabel("Move \(category.name) down")
+                    }
                 }
-                .onMove(perform: preferences.moveCollapsedIndicatorPriorities)
             } header: {
                 Text("Activity priority")
             } footer: {
-                Text("Drag to decide which activities remain visible when space is limited.")
+                Text("Use the arrows to decide which activities remain visible when space is limited.")
             }
             Section("Temporary system activities") {
                 Toggle("Show charging activity", isOn: showChargingActivity)
@@ -238,7 +257,7 @@ struct PreferencesView: View {
                 .disabled(!hasEnabledSystemActivity)
             }
         }
-        .listStyle(.inset)
+        .formStyle(.grouped)
     }
 
     private var pagesOverview: some View {
@@ -458,6 +477,12 @@ struct PreferencesView: View {
             Label(title, systemImage: symbol)
         }
         .padding(.vertical, 3)
+    }
+
+    private func moveCollapsedIndicatorPriority(at index: Int, direction: Int) {
+        let destination = direction < 0 ? index - 1 : index + 2
+        guard destination >= 0, destination <= preferences.collapsedIndicatorPriorityOrder.count else { return }
+        preferences.moveCollapsedIndicatorPriorities(from: IndexSet(integer: index), to: destination)
     }
 
     private var showInDock: Binding<Bool> {
@@ -708,7 +733,7 @@ private final class SettingsWindowConfigurationView: NSView {
             let windowFrameView = window?.contentView?.superview
         else { return }
         let controls = titlebarControls ?? makeTitlebarControls(in: windowFrameView)
-        controls.controlCenterY = (closeButton.bounds.height / 2) + 8
+        controls.controlCenterY = (closeButton.bounds.height / 2) + 16
         controls.update(
             title: title,
             isSidebarVisible: isSidebarVisible,
