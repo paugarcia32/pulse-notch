@@ -35,6 +35,8 @@ struct NotchSurface: View {
         let schedule: CalendarEventSchedule?
         let sessions: [CodingAgentSession]?
         let actions: [GitHubActionSession]?
+        let pullRequests: [GitHubPullRequest]?
+        let usage: [CodingAgentUsageAvailability]?
         let downloads: [DetectedDownload]?
         let media: MediaPlaybackStatus?
         let clock: ClockStatus?
@@ -836,6 +838,8 @@ struct NotchSurface: View {
                 testingSchedule: testingData.schedule,
                 testingSessions: testingData.sessions,
                 testingActions: testingData.actions,
+                testingPullRequests: testingData.pullRequests,
+                testingUsage: testingData.usage,
                 testingMedia: testingData.media,
                 testingClock: testingData.clock
             )
@@ -871,7 +875,16 @@ struct NotchSurface: View {
 
     private func testingPreviewData(at date: Date) -> TestingPreviewData {
         guard preferences.testingFeaturesEnabled else {
-            return TestingPreviewData(schedule: nil, sessions: nil, actions: nil, downloads: nil, media: nil, clock: nil)
+            return TestingPreviewData(
+                schedule: nil,
+                sessions: nil,
+                actions: nil,
+                pullRequests: nil,
+                usage: nil,
+                downloads: nil,
+                media: nil,
+                clock: nil
+            )
         }
 
         let schedule = (0..<preferences.collapsedIndicatorPreviewCount(.calendar)).compactMap {
@@ -888,6 +901,14 @@ struct NotchSurface: View {
         let downloads = (0..<preferences.collapsedIndicatorPreviewCount(.download)).compactMap {
             CollapsedIndicatorPreview.download.testingDownload(instance: $0)
         }
+        let pullRequests: [GitHubPullRequest] = SummaryPreview.allCases.compactMap { preview in
+            guard preferences.summaryPreviewCount(preview) > 0 else { return nil }
+            return preview.testingPullRequest(at: date)
+        }
+        let usage: [CodingAgentUsageAvailability] = SummaryPreview.allCases.reduce(into: []) { result, preview in
+            guard preferences.summaryPreviewCount(preview) > 0 else { return }
+            result += preview.testingUsage(at: date) ?? []
+        }
         let media = preferences.collapsedIndicatorPreviewCount(.mediaPlayback) > 0
             ? CollapsedIndicatorPreview.mediaPlayback.testingPlayback()
             : nil
@@ -898,6 +919,8 @@ struct NotchSurface: View {
             schedule: schedule.isEmpty ? nil : CalendarEventSchedule(events: schedule),
             sessions: sessions.isEmpty ? nil : sessions,
             actions: actions.isEmpty ? nil : actions,
+            pullRequests: pullRequests.isEmpty ? nil : pullRequests,
+            usage: usage.isEmpty ? nil : usage,
             downloads: downloads.isEmpty ? nil : downloads,
             media: media,
             clock: clock

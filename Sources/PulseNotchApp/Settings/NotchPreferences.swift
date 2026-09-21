@@ -119,6 +119,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var preferredDisplayID: String?
     @Published private(set) var externalNotchStyle: ExternalNotchStyle
     @Published private(set) var collapsedIndicatorPreviewCounts: [CollapsedIndicatorPreview: Int] = [:]
+    @Published private(set) var summaryPreviewCounts: [SummaryPreview: Int] = [:]
     @Published private(set) var collapsedIndicatorMaximumPerSide: Int
     @Published private(set) var collapsedIndicatorPriorityOrder: [CollapsedNotchIndicatorCategory]
     @Published private var collapsedIndicatorColors: [CollapsedNotchIndicatorCategory: CollapsedIndicatorColor]
@@ -384,13 +385,25 @@ final class NotchPreferences: ObservableObject {
     func setTestingFeaturesEnabled(_ isEnabled: Bool) {
         guard testingFeaturesEnabled != isEnabled else { return }
         testingFeaturesEnabled = isEnabled
-        if !isEnabled { collapsedIndicatorPreviewCounts.removeAll() }
+        if !isEnabled {
+            collapsedIndicatorPreviewCounts.removeAll()
+            summaryPreviewCounts.removeAll()
+        }
         defaults.set(isEnabled, forKey: Keys.testingFeaturesEnabled)
     }
 
     func setCollapsedIndicatorPreviewCount(_ count: Int, for preview: CollapsedIndicatorPreview) {
         guard testingFeaturesEnabled else { return }
         collapsedIndicatorPreviewCounts[preview] = min(max(count, 0), preview.maximumPreviewCount)
+    }
+
+    func summaryPreviewCount(_ preview: SummaryPreview) -> Int {
+        summaryPreviewCounts[preview, default: 0]
+    }
+
+    func setSummaryPreviewCount(_ count: Int, for preview: SummaryPreview) {
+        guard testingFeaturesEnabled else { return }
+        summaryPreviewCounts[preview] = min(max(count, 0), preview.maximumPreviewCount)
     }
 
     func triggerTestingSystemActivity(_ activity: TestingSystemActivity) {

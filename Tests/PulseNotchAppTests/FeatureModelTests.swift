@@ -499,7 +499,7 @@ struct FeatureModelTests {
         #expect(restoredPreferences.pageOrder == [.github, .summary, .calendar, .agents, .media, .clock, .downloads])
         #expect(restoredPreferences.orderedVisiblePages == [.github, .summary, .calendar, .media, .clock, .downloads])
         #expect(restoredPreferences.dynamicPagesEnabled)
-        #expect(restoredPreferences.summaryPriorityOrder == [.activeWork, .calendarEvent, .githubAttention, .media, .openPullRequest, .clock, .usageLimits])
+        #expect(restoredPreferences.summaryPriorityOrder == [.media, .calendarEvent, .githubAttention, .openPullRequest, .clock, .usageLimits])
         #expect(restoredPreferences.page(for: .firstPage) == .github)
         #expect(restoredPreferences.shortcut(for: .firstPage).displayName == "⌥⌘G")
         #expect(restoredPreferences.calendarReminderLeadTimeMinutes == 5)

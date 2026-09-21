@@ -35,7 +35,7 @@ struct SummaryPageTests {
     }
 
     @Test
-    func activeWorkReplacesMissingEvent() {
+    func runningAgentsDoNotReplaceMissingSummaryContent() {
         let agent = CodingAgentSession(
             id: "agent",
             kind: .codex,
@@ -52,7 +52,7 @@ struct SummaryPageTests {
             media: nil,
             priorities: SummaryPriority.allCases,
             at: now
-        ) == .activeWork(agentCount: 1, actionCount: 0))
+        ) == .allClear)
     }
 
     @Test
@@ -78,9 +78,9 @@ struct SummaryPageTests {
             agents: [agent],
             actions: [],
             media: nil,
-            priorities: [.calendarEvent, .activeWork],
+            priorities: [.calendarEvent],
             at: now
-        ) == .activeWork(agentCount: 1, actionCount: 0))
+        ) == .allClear)
     }
 
     @Test
@@ -113,7 +113,7 @@ struct SummaryPageTests {
     }
 
     @Test
-    func configuredPriorityOrderChoosesActiveWorkBeforeCalendar() {
+    func configuredPriorityOrderChoosesCalendarContent() {
         let event = CalendarEvent(
             id: "event",
             title: "Design review",
@@ -134,9 +134,9 @@ struct SummaryPageTests {
             agents: [agent],
             actions: [],
             media: nil,
-            priorities: [.activeWork, .calendarEvent],
+            priorities: [.calendarEvent],
             at: now
-        ) == .activeWork(agentCount: 1, actionCount: 0))
+        ) == .event(event))
     }
 
     @Test
@@ -185,5 +185,47 @@ struct SummaryPageTests {
             priorities: [.usageLimits],
             at: now
         ) == .allClear)
+    }
+
+    @Test
+    func summaryPreviewsProduceTheirExpectedHighlight() throws {
+        let attention = try #require(SummaryPreview.githubAttention.testingPullRequest(at: now))
+        #expect(SummaryHighlight.select(
+            schedule: nil,
+            pullRequests: [attention],
+            agents: [],
+            actions: [],
+            media: nil,
+            priorities: [.githubAttention],
+            at: now
+        ) == .pullRequest(attention))
+
+        let open = try #require(SummaryPreview.openPullRequest.testingPullRequest(at: now))
+        #expect(SummaryHighlight.select(
+            schedule: nil,
+            pullRequests: [open],
+            agents: [],
+            actions: [],
+            media: nil,
+            priorities: [.openPullRequest],
+            at: now
+        ) == .pullRequest(open))
+
+        let usage = try #require(SummaryPreview.usageLimits.testingUsage(at: now))
+        guard case let .available(codingUsage) = try #require(usage.first) else {
+            Issue.record("Expected an available usage preview")
+            return
+        }
+        let window = try #require(codingUsage.windows.first)
+        #expect(SummaryHighlight.select(
+            schedule: nil,
+            pullRequests: [],
+            agents: [],
+            actions: [],
+            media: nil,
+            usage: usage,
+            priorities: [.usageLimits],
+            at: now
+        ) == .usage(kind: .codex, window: window))
     }
 }

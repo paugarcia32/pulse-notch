@@ -4,7 +4,6 @@ import SwiftUI
 enum SummaryPriority: String, CaseIterable, Identifiable {
     case calendarEvent
     case githubAttention
-    case activeWork
     case media
     case openPullRequest
     case clock
@@ -16,7 +15,6 @@ enum SummaryPriority: String, CaseIterable, Identifiable {
         switch self {
         case .calendarEvent: "Next calendar event"
         case .githubAttention: "GitHub needing attention"
-        case .activeWork: "Agents and Actions running"
         case .media: "Now playing"
         case .openPullRequest: "Open pull request"
         case .clock: "Active timer or stopwatch"
@@ -28,7 +26,6 @@ enum SummaryPriority: String, CaseIterable, Identifiable {
         switch self {
         case .calendarEvent: "calendar"
         case .githubAttention: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90"
-        case .activeWork: "bolt.fill"
         case .media: "waveform"
         case .openPullRequest: "arrow.triangle.pull"
         case .clock: "timer"
@@ -37,10 +34,73 @@ enum SummaryPriority: String, CaseIterable, Identifiable {
     }
 }
 
+enum SummaryPreview: String, CaseIterable, Identifiable {
+    case githubAttention
+    case openPullRequest
+    case usageLimits
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .githubAttention: "GitHub needing attention"
+        case .openPullRequest: "Open pull request"
+        case .usageLimits: "Usage limits running low"
+        }
+    }
+
+    var maximumPreviewCount: Int { 1 }
+
+    func testingPullRequest(at date: Date) -> GitHubPullRequest? {
+        let reviewStatus: GitHubPullRequest.ReviewStatus
+        let title: String
+        switch self {
+        case .githubAttention:
+            reviewStatus = .changesRequested
+            title = "Address review feedback"
+        case .openPullRequest:
+            reviewStatus = .awaitingReview
+            title = "Ready for review"
+        case .usageLimits:
+            return nil
+        }
+
+        guard let url = URL(string: "https://github.com/pulse-notch/pulse-notch/pull/42") else { return nil }
+        return GitHubPullRequest(
+            id: "summary-preview-\(rawValue)",
+            repository: "pulse-notch/pulse-notch",
+            number: 42,
+            title: title,
+            url: url,
+            isDraft: false,
+            reviewStatus: reviewStatus,
+            commentCount: 2
+        )
+    }
+
+    func testingUsage(at date: Date) -> [CodingAgentUsageAvailability]? {
+        guard self == .usageLimits else { return nil }
+        return [
+            .available(
+                CodingAgentUsage(
+                    kind: .codex,
+                    windows: [
+                        .init(
+                            durationMinutes: 300,
+                            label: "5-hour",
+                            usedPercent: 92,
+                            resetsAt: date.addingTimeInterval(60 * 60)
+                        )
+                    ]
+                )
+            )
+        ]
+    }
+}
+
 enum SummaryHighlight: Equatable {
     case event(CalendarEvent)
     case pullRequest(GitHubPullRequest)
-    case activeWork(agentCount: Int, actionCount: Int)
     case media(MediaPlaybackStatus)
     case clock(ClockStatus)
     case usage(kind: CodingAgentKind, window: CodingAgentUsage.Window)
@@ -57,8 +117,6 @@ enum SummaryHighlight: Equatable {
         priorities: [SummaryPriority],
         at date: Date
     ) -> SummaryHighlight {
-        let runningAgents = agents.filter { $0.status == .running }.count
-        let runningActions = actions.filter { $0.status == .running }.count
         let mostDepletedLimit = depletedUsageLimit(in: usage)
 
         for priority in priorities {
@@ -70,10 +128,6 @@ enum SummaryHighlight: Equatable {
             case .githubAttention:
                 if let pullRequest = pullRequests.first(where: { $0.needsAttention }) {
                     return .pullRequest(pullRequest)
-                }
-            case .activeWork:
-                if runningAgents + runningActions > 0 {
-                    return .activeWork(agentCount: runningAgents, actionCount: runningActions)
                 }
             case .media:
                 if let media { return .media(media) }
@@ -119,6 +173,8 @@ struct SummaryPage: View {
     let testingSchedule: CalendarEventSchedule?
     let testingSessions: [CodingAgentSession]?
     let testingActions: [GitHubActionSession]?
+    let testingPullRequests: [GitHubPullRequest]?
+    let testingUsage: [CodingAgentUsageAvailability]?
     let testingMedia: MediaPlaybackStatus?
     let testingClock: ClockStatus?
 
@@ -137,6 +193,8 @@ struct SummaryPage: View {
         testingSchedule: CalendarEventSchedule? = nil,
         testingSessions: [CodingAgentSession]? = nil,
         testingActions: [GitHubActionSession]? = nil,
+        testingPullRequests: [GitHubPullRequest]? = nil,
+        testingUsage: [CodingAgentUsageAvailability]? = nil,
         testingMedia: MediaPlaybackStatus? = nil,
         testingClock: ClockStatus? = nil
     ) {
@@ -152,6 +210,8 @@ struct SummaryPage: View {
         self.testingSchedule = testingSchedule
         self.testingSessions = testingSessions
         self.testingActions = testingActions
+        self.testingPullRequests = testingPullRequests
+        self.testingUsage = testingUsage
         self.testingMedia = testingMedia
         self.testingClock = testingClock
     }
@@ -190,6 +250,7 @@ struct SummaryPage: View {
     }
 
     private var pullRequests: [GitHubPullRequest] {
+        if let testingPullRequests { return testingPullRequests }
         guard case let .loaded(pullRequests) = gitHubModel.state else { return [] }
         return pullRequests
     }
@@ -201,6 +262,7 @@ struct SummaryPage: View {
     }
 
     private var usageAvailability: [CodingAgentUsageAvailability] {
+        if let testingUsage { return testingUsage }
         guard case let .loaded(availability) = codingAgentModel.usageState else { return [] }
         return availability
     }
@@ -210,7 +272,7 @@ struct SummaryPage: View {
     }
 
     private var runningActions: [GitHubActionSession] {
-        gitHubModel.actionSessions.filter { $0.status == .running }
+        (testingActions ?? gitHubModel.actionSessions).filter { $0.status == .running }
     }
 
     @ViewBuilder
@@ -278,6 +340,18 @@ struct SummaryPage: View {
         .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 
+    private func sectionHeader(_ title: String, detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.pink)
+            Spacer(minLength: 6)
+            Text(detail)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private var runningPanel: some View {
         VStack(alignment: .leading, spacing: 9) {
             sectionHeader("RUNNING", detail: "\(runningAgents.count + runningActions.count) active")
@@ -293,18 +367,6 @@ struct SummaryPage: View {
             }
         }
         .padding(.top, 12)
-    }
-
-    private func sectionHeader(_ title: String, detail: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(.pink)
-            Spacer(minLength: 6)
-            Text(detail)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-        }
     }
 
     private var quietState: some View {
@@ -378,6 +440,7 @@ struct SummaryPage: View {
         let name = URL(fileURLWithPath: directory).lastPathComponent
         return name.isEmpty ? directory : name
     }
+
 }
 
 private extension SummaryHighlight {
@@ -385,7 +448,6 @@ private extension SummaryHighlight {
         switch self {
         case .event: .calendar
         case .pullRequest: .github
-        case .activeWork: .summary
         case .media: .media
         case .clock: .clock
         case .usage: .agents
@@ -397,7 +459,6 @@ private extension SummaryHighlight {
         switch self {
         case .event: "UP NEXT"
         case .pullRequest: "GITHUB"
-        case .activeWork: "IN PROGRESS"
         case .media: "NOW PLAYING"
         case .allClear: "SUMMARY"
         case .clock: "CLOCK"
@@ -409,7 +470,6 @@ private extension SummaryHighlight {
         switch self {
         case .event: "calendar"
         case let .pullRequest(pullRequest): pullRequest.needsAttention ? "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90" : "arrow.triangle.pull"
-        case .activeWork: "bolt.fill"
         case .media: "waveform"
         case .allClear: "checkmark"
         case let .clock(status): status.mode.symbolName
@@ -421,7 +481,6 @@ private extension SummaryHighlight {
         switch self {
         case let .event(event): Color(red: event.calendarColor.red, green: event.calendarColor.green, blue: event.calendarColor.blue)
         case let .pullRequest(pullRequest): pullRequest.needsAttention ? .red : .orange
-        case .activeWork: .cyan
         case .media: .purple
         case .allClear: .green
         case .clock: .orange
@@ -433,8 +492,6 @@ private extension SummaryHighlight {
         switch self {
         case let .event(event): event.title
         case let .pullRequest(pullRequest): pullRequest.title
-        case let .activeWork(agentCount, actionCount):
-            Self.workTitle(agentCount: agentCount, actionCount: actionCount)
         case let .media(playback): playback.title
         case .allClear: "All clear"
         case let .clock(status): ClockTimeFormatter.display(status.time, showsTenths: status.mode == .stopwatch)
@@ -446,7 +503,6 @@ private extension SummaryHighlight {
         switch self {
         case let .event(event): event.location ?? event.calendarName
         case let .pullRequest(pullRequest): "\(pullRequest.repository) #\(pullRequest.number)"
-        case .activeWork: "Live work is grouped on the right"
         case let .media(playback): playback.artist.isEmpty ? "Unknown artist" : playback.artist
         case .allClear: "No upcoming events or work needing attention"
         case let .clock(status): status.mode.name
@@ -465,7 +521,6 @@ private extension SummaryHighlight {
             }
             return event.startsAt.formatted(.dateTime.weekday(.abbreviated).hour().minute())
         case let .pullRequest(pullRequest): return pullRequest.needsAttention ? "Needs attention" : "Open"
-        case let .activeWork(agentCount, actionCount): return "\(agentCount + actionCount) active"
         case let .media(playback): return playback.isPlaying ? "Playing" : "Paused"
         case .allClear: return "Quiet"
         case let .clock(status): return status.isRunning ? "Running" : "Paused"
@@ -488,14 +543,6 @@ private extension SummaryHighlight {
     var remainingPercentage: Int? {
         guard case let .usage(_, window) = self else { return nil }
         return Int(window.remainingPercent.rounded())
-    }
-
-    private static func workTitle(agentCount: Int, actionCount: Int) -> String {
-        let agents = agentCount == 1 ? "1 agent" : "\(agentCount) agents"
-        let actions = actionCount == 1 ? "1 Action" : "\(actionCount) Actions"
-        if agentCount == 0 { return actions + " running" }
-        if actionCount == 0 { return agents + " running" }
-        return agents + " and " + actions
     }
 
     private static func windowName(_ window: CodingAgentUsage.Window) -> String {

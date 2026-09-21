@@ -494,6 +494,13 @@ struct PreferencesView: View {
                         }
                     }
                 }
+                Section("Summary previews") {
+                    ForEach(SummaryPreview.allCases) { preview in
+                        Stepper(value: summaryPreviewCount(preview), in: 0...preview.maximumPreviewCount) {
+                            Text("\(preview.name): \(preferences.summaryPreviewCount(preview))")
+                        }
+                    }
+                }
                 Section("Priority activities") {
                     Button("Show charging activity") { preferences.triggerTestingSystemActivity(.charging) }
                         .disabled(!preferences.showChargingActivity)
@@ -676,6 +683,13 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.collapsedIndicatorPreviewCount(preview) },
             set: { preferences.setCollapsedIndicatorPreviewCount($0, for: preview) }
+        )
+    }
+
+    private func summaryPreviewCount(_ preview: SummaryPreview) -> Binding<Int> {
+        Binding(
+            get: { preferences.summaryPreviewCount(preview) },
+            set: { preferences.setSummaryPreviewCount($0, for: preview) }
         )
     }
 
