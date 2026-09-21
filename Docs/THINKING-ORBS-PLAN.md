@@ -53,9 +53,10 @@ new glyphs.
 
 Tasks:
 
-- [ ] Add one independently tuned 14–16 pt preset.
-- [ ] Tune only the existing `working` design.
-- [ ] Compare it with the current `AgentActivityOrbit` in an isolated gallery.
+- [x] Add an independently tuned 20 pt Pulse agent design.
+- [x] Select the final display size after comparing it at 16, 18, and 20 pt.
+- [x] Preserve the upstream `working` design and its public API unchanged.
+- [x] Compare it with the current `AgentActivityOrbit` in an isolated gallery.
 - [ ] Evaluate monochrome white and the existing agent tint.
 - [ ] Capture Reduce Motion and Increase Contrast variants.
 - [ ] Measure frame cost and idle CPU use with one and several visible glyphs.
@@ -117,7 +118,8 @@ For each design:
 - [ ] Test at actual size rather than reviewing only enlarged media.
 - [ ] Reject it if existing native controls communicate the state more clearly.
 
-Do not create a new agent design during this phase; use upstream `working`.
+Do not add another agent design during this phase; use the Pulse-specific agent
+glyph established by the Phase 2 spike.
 
 Exit criteria per design:
 
@@ -129,9 +131,9 @@ Exit criteria per design:
 
 ## Phase 5: integrate one vertical slice
 
-Integrate only the strongest proven design first. The default candidate is
-`working` for active coding-agent rows and the corresponding collapsed agent
-indicator.
+Integrate only the strongest proven design first. The default candidate is the
+Pulse-specific agent activity glyph for active coding-agent rows and the
+corresponding collapsed agent indicator.
 
 Tasks:
 
@@ -166,7 +168,7 @@ Review the first integrated slice in normal daily use before adding more motion.
 
 | Pulse state | Animated design | Static or precise companion |
 | --- | --- | --- |
-| Coding agent running | `working` | Agent identity and session text |
+| Coding agent running | `PulseAgentActivityOrb` | Agent identity and session text |
 | Coding agent completed | None | Checkmark |
 | GitHub Actions running | `pipeline` | Workflow/repository text |
 | GitHub Actions succeeded | None | Checkmark |
@@ -178,7 +180,7 @@ Review the first integrated slice in normal daily use before adding more motion.
 
 ## Validation checklist
 
-- [ ] `swift test` passes for the fork.
+- [x] `swift test` passes for the fork.
 - [ ] `swift test` passes for Pulse Notch.
 - [ ] Relevant Xcode build and test scheme passes when available.
 - [ ] No new warnings.
@@ -192,7 +194,7 @@ Review the first integrated slice in normal daily use before adding more motion.
 
 ## Next action
 
-Begin Phase 2 by adding one independently tuned 14–16 pt `working` preset in the
-fork's demo gallery, then compare it beside the current `AgentActivityOrbit` at
-the real collapsed-notch scale. That comparison is the go/no-go gate for
-everything else in this plan.
+Review the final 20 pt `PulseAgentActivityOrb` beside the current
+`AgentActivityOrbit` in the fork's demo gallery. Check both white and the
+default cyan agent tint. That comparison is the go/no-go gate for everything
+else in this plan.

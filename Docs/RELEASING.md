@@ -10,7 +10,18 @@ Create a fine-grained GitHub personal access token with access only to
 
 ## Publish a release
 
-For example, to publish version `0.1.1`:
+Prepare a major, minor, or patch release with:
+
+```sh
+./Scripts/prepare-release.sh
+```
+
+The script updates `CFBundleShortVersionString` and `CFBundleVersion`, runs the
+tests, commits and pushes `main`, then creates and pushes the release tag. It
+must run from `main` with no pending changes to `Info.plist` and asks for
+confirmation before making changes.
+
+For example, to publish version `0.1.1` manually:
 
 1. Update both values in `Sources/PulseNotchApp/Info.plist`:
 
