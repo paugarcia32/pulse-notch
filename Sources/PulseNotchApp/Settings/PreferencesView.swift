@@ -804,10 +804,10 @@ private final class SettingsWindowConfigurationView: NSView {
             removeMouseMonitor()
             return
         }
+        window.styleMask.formUnion([.fullSizeContentView, .miniaturizable, .resizable])
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
-        window.styleMask.formUnion([.fullSizeContentView, .miniaturizable, .resizable])
         window.toolbar = nil
         window.isMovableByWindowBackground = true
         updateTitlebarControls()
