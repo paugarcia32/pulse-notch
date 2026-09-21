@@ -35,6 +35,7 @@ final class GlobalShortcutManager {
         hotKeys.removeAll(keepingCapacity: true)
 
         for (index, action) in ShortcutAction.allCases.enumerated() {
+            guard action == .openNotch else { continue }
             guard let shortcut = shortcuts[action], let keyCode = shortcut.carbonKeyCode else { continue }
             var ref: EventHotKeyRef?
             let result = RegisterEventHotKey(
@@ -74,7 +75,11 @@ private func globalShortcutEventHandler(
     guard result == noErr else { return result }
 
     let manager = Unmanaged<GlobalShortcutManager>.fromOpaque(userData).takeUnretainedValue()
-    Task { @MainActor in manager.handle(hotKeyID: hotKeyID.id) }
+    let hotKeyIDValue = hotKeyID.id
+    Task { @MainActor in
+        try? await Task.sleep(for: .milliseconds(50))
+        manager.handle(hotKeyID: hotKeyIDValue)
+    }
     return noErr
 }
 

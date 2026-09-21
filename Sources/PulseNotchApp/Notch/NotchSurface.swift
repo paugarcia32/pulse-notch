@@ -20,13 +20,14 @@ struct NotchSurface: View {
     let expandedSize: CGSize
     let onExpansionChanged: (Bool) -> Void
     @State private var isExpanded = false
+    @State private var expansionProgress: CGFloat = 0
     @State private var selectedPage = NotchPage.summary
     @State private var pageDragOffset: CGFloat = 0
     @State private var isHoveringPageIndicator = false
     @State private var hoverState = NotchHoverState()
     @State private var hoverTask: Task<Void, Never>?
     @State private var hoverRearmTask: Task<Void, Never>?
-    @State private var panelResizeTask: Task<Void, Never>?
+    @State private var transitionTask: Task<Void, Never>?
     @State private var systemActivityTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -39,8 +40,16 @@ struct NotchSurface: View {
         let clock: ClockStatus?
     }
 
+    @ViewBuilder
     var body: some View {
-        activitySurface
+        if #available(macOS 15.0, *) {
+            activitySurface
+                .frame(width: expandedSize.width, height: expandedSize.height)
+                .windowResizeBehavior(.disabled)
+        } else {
+            activitySurface
+                .frame(width: expandedSize.width, height: expandedSize.height)
+        }
     }
 
     private var navigationSurface: some View {
@@ -51,7 +60,7 @@ struct NotchSurface: View {
         .onChange(of: gitHubModel.actionSessions) { _, _ in
             acknowledgeCompletedActivity()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchOpen)) { _ in toggleNotch() }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchOpenSurface)) { _ in openNotch() }
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchClose)) { _ in closeNotch() }
         .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowSummary)) { _ in
             openNotch()
@@ -106,7 +115,7 @@ struct NotchSurface: View {
             systemActivityTask?.cancel()
             hoverTask?.cancel()
             hoverRearmTask?.cancel()
-            panelResizeTask?.cancel()
+            transitionTask?.cancel()
             volumeModel.stopMonitoring()
             brightnessModel.stopMonitoring()
             downloadModel.stopMonitoring()
@@ -266,23 +275,28 @@ struct NotchSurface: View {
 
     private func notch(at date: Date, pages: [NotchPage]) -> some View {
         let currentIndicators = indicators(at: date)
-        let size = isExpanded ? expandedSize : collapsedSurfaceSize(for: currentIndicators)
+        let collapsedSurfaceSize = collapsedSurfaceSize(for: currentIndicators)
 
-        return ZStack {
-            if isExpanded {
-                expandedContent(at: date, pages: pages)
-                    .transition(.opacity)
-            } else {
-                collapsedIndicators(at: date)
-                    .transition(.opacity)
-            }
+        return ZStack(alignment: .top) {
+            notchBackground(collapsedSize: collapsedSurfaceSize)
+
+            expandedContent(at: date, pages: pages)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+                .frame(width: expandedSize.width, height: expandedSize.height, alignment: .top)
+                .opacity(expansionProgress)
+                .allowsHitTesting(isExpanded)
+                .accessibilityHidden(!isExpanded)
+
+            collapsedIndicators(at: date)
+                .padding(.horizontal, physicalNotchSize == nil ? 12 : 0)
+                .frame(width: collapsedSurfaceSize.width, height: collapsedSurfaceSize.height, alignment: .top)
+                .opacity(1 - expansionProgress)
+                .allowsHitTesting(!isExpanded)
+                .accessibilityHidden(isExpanded)
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, isExpanded ? 18 : (physicalNotchSize == nil ? 12 : 0))
-        .padding(.vertical, isExpanded ? 14 : 0)
-        .frame(width: size.width, height: size.height, alignment: .top)
-        .background { notchBackground }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(width: expandedSize.width, height: expandedSize.height, alignment: .top)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: systemActivityModel.activity)
         .onChange(of: isExpanded) { _, isOpen in
             if isOpen { NotchHapticFeedback.performOpen() }
@@ -614,17 +628,18 @@ struct NotchSurface: View {
 
     private var indicatorSize: CGFloat { isHoveringPageIndicator ? 5 : 3 }
 
-    private var notchBackground: some View {
-        let topRadius = !isExpanded && isExternalDisplay && preferences.externalNotchStyle == .capsule ? cornerRadius : 0
-        let bottomRadius = isExpanded ? 18 : (isExternalDisplay && preferences.externalNotchStyle == .capsule ? cornerRadius : 8)
-        return UnevenRoundedRectangle(
-            cornerRadii: RectangleCornerRadii(
-                topLeading: topRadius,
-                bottomLeading: bottomRadius,
-                bottomTrailing: bottomRadius,
-                topTrailing: topRadius
+    private func notchBackground(collapsedSize: CGSize) -> some View {
+        let collapsedTopRadius = isExternalDisplay && preferences.externalNotchStyle == .capsule ? cornerRadius : 0
+        let collapsedBottomRadius = isExternalDisplay && preferences.externalNotchStyle == .capsule ? cornerRadius : 8
+        let topRadius = interpolated(from: collapsedTopRadius, to: 0)
+        let bottomRadius = interpolated(from: collapsedBottomRadius, to: 18)
+        return NotchBackgroundShape(
+            size: CGSize(
+                width: interpolated(from: collapsedSize.width, to: expandedSize.width),
+                height: interpolated(from: collapsedSize.height, to: expandedSize.height)
             ),
-            style: .continuous
+            topRadius: topRadius,
+            bottomRadius: bottomRadius
         )
         .fill(.black)
     }
@@ -728,21 +743,15 @@ struct NotchSurface: View {
 
     private func openNotch() {
         guard !isExpanded else { return }
-        panelResizeTask?.cancel()
+        isExpanded = true
         onExpansionChanged(true)
-        withAnimation(reduceMotion ? nil : NotchMotion.animation) {
-            isExpanded = true
-        }
-        codingAgentModel.acknowledgeCompletedSessions()
-        gitHubModel.acknowledgeCompletedActions()
-    }
-
-    private func toggleNotch() {
-        isExpanded ? closeNotch() : openNotch()
+        animateExpansion(to: 1)
+        acknowledgeCompletedActivity()
     }
 
     private func closeNotch() {
         guard isExpanded else { return }
+        isExpanded = false
         hoverState.notchClosed()
         hoverRearmTask?.cancel()
         hoverRearmTask = Task { @MainActor in
@@ -750,19 +759,31 @@ struct NotchSurface: View {
             guard !Task.isCancelled else { return }
             hoverState.finishClosing()
         }
-        panelResizeTask?.cancel()
-        withAnimation(reduceMotion ? nil : NotchMotion.animation) {
-            isExpanded = false
-        }
-        guard !reduceMotion else {
+        animateExpansion(to: 0) {
             onExpansionChanged(false)
+        }
+    }
+
+    private func animateExpansion(to target: CGFloat, completion: (@MainActor () -> Void)? = nil) {
+        transitionTask?.cancel()
+        guard !reduceMotion else {
+            expansionProgress = target
+            completion?()
             return
         }
-        panelResizeTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(NotchMotion.duration + 1 / 60))
-            guard !Task.isCancelled, !isExpanded else { return }
-            onExpansionChanged(false)
+
+        withAnimation(NotchMotion.animation) {
+            expansionProgress = target
         }
+        transitionTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(NotchMotion.duration + 1 / 60))
+            guard !Task.isCancelled else { return }
+            completion?()
+        }
+    }
+
+    private func interpolated(from start: CGFloat, to end: CGFloat) -> CGFloat {
+        start + (end - start) * expansionProgress
     }
 
     private func handleHover(_ hovering: Bool) {
@@ -912,6 +933,45 @@ struct NotchSurface: View {
 
     private func previousPage(in pages: [NotchPage]) -> NotchPage {
         wrappingPage(in: pages, from: selectedPage, offset: -1) ?? selectedPage
+    }
+}
+
+private struct NotchBackgroundShape: Shape {
+    var size: CGSize
+    var topRadius: CGFloat
+    var bottomRadius: CGFloat
+
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<CGFloat, CGFloat>> {
+        get {
+            AnimatablePair(
+                AnimatablePair(size.width, size.height),
+                AnimatablePair(topRadius, bottomRadius)
+            )
+        }
+        set {
+            size = CGSize(width: newValue.first.first, height: newValue.first.second)
+            topRadius = newValue.second.first
+            bottomRadius = newValue.second.second
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let shapeRect = CGRect(
+            x: rect.midX - size.width / 2,
+            y: rect.minY,
+            width: size.width,
+            height: size.height
+        )
+        return UnevenRoundedRectangle(
+            cornerRadii: RectangleCornerRadii(
+                topLeading: topRadius,
+                bottomLeading: bottomRadius,
+                bottomTrailing: bottomRadius,
+                topTrailing: topRadius
+            ),
+            style: .continuous
+        )
+        .path(in: shapeRect)
     }
 }
 

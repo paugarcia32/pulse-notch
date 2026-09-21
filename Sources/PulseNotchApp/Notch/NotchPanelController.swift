@@ -38,6 +38,7 @@ struct NotchSurfaceSize: Equatable {
 enum NotchMotion {
     static let duration: TimeInterval = 0.3
     static let animation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: duration)
+    static let toggleDebounce: TimeInterval = duration + 0.1
 }
 
 struct NotchDisplayOption: Identifiable {
@@ -67,6 +68,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     )
 
     private var panel: NotchPanel?
+    private var hostingView: NotchHostingView<NotchSurface>?
 
     private static func makeMediaPlaybackProvider() -> any MediaPlaybackProviding {
         if let provider = MediaRemoteAdapterPlaybackProvider() { return provider }
@@ -75,11 +77,14 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     }
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
+    private var localMouseMoveMonitor: Any?
+    private var globalMouseMoveMonitor: Any?
     private var preferenceObserver: NSObjectProtocol?
     private var shortcutObserver: NSObjectProtocol?
     private var shortcutManager: GlobalShortcutManager?
     private var isExpanded = false
     private var displayedScreenID: String?
+    private var lastToggleRequestTime: TimeInterval = -.infinity
 
     var availableDisplays: [NotchDisplayOption] {
         NSScreen.screens.compactMap { screen in
@@ -127,7 +132,9 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         updateModel.cancel()
-        [localEventMonitor, globalEventMonitor].compactMap { $0 }.forEach(NSEvent.removeMonitor)
+        [localEventMonitor, globalEventMonitor, localMouseMoveMonitor, globalMouseMoveMonitor]
+            .compactMap { $0 }
+            .forEach(NSEvent.removeMonitor)
         if let preferenceObserver { NotificationCenter.default.removeObserver(preferenceObserver) }
         if let shortcutObserver { NotificationCenter.default.removeObserver(shortcutObserver) }
         shortcutManager?.stop()
@@ -136,35 +143,63 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     func setExpanded(_ expanded: Bool) {
         guard isExpanded != expanded else { return }
         isExpanded = expanded
-        resizePanel()
-        if expanded {
-            NSApp.activate()
-            panel?.makeKeyAndOrderFront(nil)
-        } else {
-            panel?.resignKey()
-        }
+        updateMouseEventHandling()
     }
 
     func showPanel(on screen: NSScreen?) {
         guard let screen else { return }
-        let size = geometry(for: screen).collapsed
+        let size = geometry(for: screen).expanded
         let panel = NotchPanel(contentRect: frame(for: size, on: screen))
-        panel.contentView = NSHostingView(rootView: notchSurface(for: screen))
+        panel.minSize = size
+        panel.maxSize = size
+        panel.contentMinSize = size
+        panel.contentMaxSize = size
+        let hostingView = NotchHostingView(rootView: notchSurface(for: screen), fixedSize: size)
+        // The controller is the sole owner of panel geometry. Letting the
+        // hosting view derive window constraints from animated SwiftUI content
+        // can resize the window reentrantly during AppKit's display cycle.
+        hostingView.sizingOptions = []
+        hostingView.safeAreaRegions = []
+        hostingView.sceneBridgingOptions = []
+        let container = NSView(frame: NSRect(origin: .zero, size: size))
+        hostingView.frame = container.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        container.addSubview(hostingView)
+        panel.contentView = container
         panel.orderFrontRegardless()
         self.panel = panel
+        self.hostingView = hostingView
         displayedScreenID = displayID(for: screen)
+        updateMouseEventHandling()
     }
 
     @objc private func screenParametersDidChange() {
         guard let panel, let screen = displayedScreen() ?? preferredScreen() else { return }
         updateSurface(for: screen)
-        position(panel, on: screen, size: isExpanded ? geometry(for: screen).expanded : geometry(for: screen).collapsed)
+        position(panel, on: screen, size: geometry(for: screen).expanded)
     }
 
     @objc private func movePanelToPointerScreen() {
-        guard let panel, let screen = preferredScreen() else { return }
-        updateSurface(for: screen)
-        position(panel, on: screen, size: geometry(for: screen).collapsed)
+        let requestTime = ProcessInfo.processInfo.systemUptime
+        guard requestTime - lastToggleRequestTime > NotchMotion.toggleDebounce else { return }
+        lastToggleRequestTime = requestTime
+
+        if isExpanded {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .pulseNotchClose, object: nil)
+            }
+            return
+        }
+
+        if let panel,
+           let screen = preferredScreen(),
+           displayID(for: screen) != displayedScreenID {
+            updateSurface(for: screen)
+            position(panel, on: screen, size: geometry(for: screen).expanded)
+        }
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .pulseNotchOpenSurface, object: nil)
+        }
     }
 
     private func applyDisplayPreferences() {
@@ -172,7 +207,8 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         NotificationCenter.default.post(name: .pulseNotchClose, object: nil)
         isExpanded = false
         updateSurface(for: screen)
-        position(panel, on: screen, size: geometry(for: screen).collapsed)
+        position(panel, on: screen, size: geometry(for: screen).expanded)
+        updateMouseEventHandling()
     }
 
     private func notchSurface(for screen: NSScreen) -> NotchSurface {
@@ -199,7 +235,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     }
 
     private func updateSurface(for screen: NSScreen) {
-        guard let hostingView = panel?.contentView as? NSHostingView<NotchSurface> else { return }
+        guard let hostingView else { return }
         let size = geometry(for: screen)
         hostingView.rootView = NotchSurface(
             calendarModel: calendarModel,
@@ -238,18 +274,12 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func resizePanel() {
-        guard let panel else { return }
-        guard let screen = displayedScreen() ?? panel.screen ?? preferredScreen() else { return }
-        let size = isExpanded ? geometry(for: screen).expanded : geometry(for: screen).collapsed
-        position(panel, on: screen, size: size)
-    }
-
     private func position(_ panel: NSPanel, on screen: NSScreen, size: CGSize) {
         let targetFrame = frame(for: size, on: screen)
         displayedScreenID = displayID(for: screen)
         panel.setFrame(targetFrame, display: true)
         panel.orderFrontRegardless()
+        updateMouseEventHandling()
     }
 
     private func frame(for size: CGSize, on screen: NSScreen) -> NSRect {
@@ -300,6 +330,25 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             return event
         }
         globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: dismissIfOutside)
+
+        let updateMouseEvents: (NSEvent) -> Void = { [weak self] _ in
+            self?.updateMouseEventHandling()
+        }
+        localMouseMoveMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { event in
+            updateMouseEvents(event)
+            return event
+        }
+        globalMouseMoveMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved, handler: updateMouseEvents)
+    }
+
+    private func updateMouseEventHandling() {
+        guard let panel, let screen = displayedScreen() ?? panel.screen ?? preferredScreen() else { return }
+        let interactiveFrame = frame(for: geometry(for: screen).collapsed, on: screen)
+        panel.ignoresMouseEvents = shouldIgnoreMouseEvents(
+            isExpanded: isExpanded,
+            interactiveFrame: interactiveFrame,
+            pointerLocation: NSEvent.mouseLocation
+        )
     }
 
     private func registerGlobalShortcuts() {
@@ -315,7 +364,35 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     }
 }
 
+final class NotchHostingView<Content: View>: NSHostingView<Content> {
+    private var fixedSize = NSSize.zero
+
+    init(rootView: Content, fixedSize: NSSize) {
+        super.init(rootView: rootView)
+        self.fixedSize = fixedSize
+    }
+
+    required init(rootView: Content) {
+        super.init(rootView: rootView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override var intrinsicContentSize: NSSize {
+        fixedSize == .zero ? super.intrinsicContentSize : fixedSize
+    }
+}
+
+func shouldIgnoreMouseEvents(isExpanded: Bool, interactiveFrame: NSRect, pointerLocation: NSPoint) -> Bool {
+    !isExpanded && !interactiveFrame.contains(pointerLocation)
+}
+
 final class NotchPanel: NSPanel {
+    private var lockedSize: NSSize?
+
     init(contentRect: NSRect) {
         super.init(
             contentRect: contentRect,
@@ -328,10 +405,23 @@ final class NotchPanel: NSPanel {
         // The black SwiftUI surface supplies the physical notch edge. A panel
         // shadow adds a light halo in Dark Mode around this borderless window.
         hasShadow = false
+        animationBehavior = .none
         level = .statusBar
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         hidesOnDeactivate = false
         isMovable = false
+        acceptsMouseMovedEvents = true
+        lockedSize = contentRect.size
+    }
+
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        guard lockedSize == nil || frameRect.size == lockedSize else { return }
+        super.setFrame(frameRect, display: flag)
+    }
+
+    override func setFrame(_ frameRect: NSRect, display flag: Bool, animate animateFlag: Bool) {
+        guard lockedSize == nil || frameRect.size == lockedSize else { return }
+        super.setFrame(frameRect, display: flag, animate: animateFlag)
     }
 
     override var canBecomeKey: Bool { true }

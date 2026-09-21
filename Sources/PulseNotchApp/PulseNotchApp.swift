@@ -3,6 +3,7 @@ import SwiftUI
 
 extension Notification.Name {
     static let pulseNotchOpen = Notification.Name("pulseNotchOpen")
+    static let pulseNotchOpenSurface = Notification.Name("pulseNotchOpenSurface")
     static let pulseNotchShowSummary = Notification.Name("pulseNotchShowSummary")
     static let pulseNotchShowCalendar = Notification.Name("pulseNotchShowCalendar")
     static let pulseNotchShowAgents = Notification.Name("pulseNotchShowAgents")
@@ -32,7 +33,6 @@ struct PulseNotchApp: App {
                 Button("Open Notch") {
                     NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
                 }
-                .keyboardShortcut(notchController.preferences.shortcut(for: .openNotch).keyboardShortcut)
 
                 Button("Close Notch") {
                     NotificationCenter.default.post(name: .pulseNotchClose, object: nil)
