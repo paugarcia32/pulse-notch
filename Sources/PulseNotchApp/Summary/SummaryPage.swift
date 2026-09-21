@@ -292,6 +292,7 @@ struct SummaryPage: View {
                 }
             }
         }
+        .padding(.top, 12)
     }
 
     private func sectionHeader(_ title: String, detail: String) -> some View {
@@ -479,6 +480,7 @@ private extension SummaryHighlight {
     }
 
     var usesCompactTitle: Bool {
+        if case .event = self { return true }
         if case .usage = self { return true }
         return false
     }
