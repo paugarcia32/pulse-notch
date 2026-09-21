@@ -290,7 +290,7 @@ struct NotchSurface: View {
                 .allowsHitTesting(isExpanded)
                 .accessibilityHidden(!isExpanded)
                 .onHover { hovering in
-                    guard isExpanded else { return }
+                    guard shouldHandleHover(from: .expanded, isExpanded: isExpanded) else { return }
                     handleHover(hovering)
                 }
 
@@ -309,7 +309,10 @@ struct NotchSurface: View {
                         height: physicalNotchSize?.height ?? collapsedSize.height
                     )
                     .contentShape(Rectangle())
-                    .onHover(perform: handleHover)
+                    .onHover { hovering in
+                        guard shouldHandleHover(from: .collapsed, isExpanded: isExpanded) else { return }
+                        handleHover(hovering)
+                    }
                     .onTapGesture {
                         hoverState.update(isHovering: true)
                         openNotch()
@@ -1031,6 +1034,18 @@ struct NotchHoverState {
     mutating func finishClosing() {
         isClosing = false
         if !isHovering { canOpen = true }
+    }
+}
+
+enum NotchHoverSurface {
+    case collapsed
+    case expanded
+}
+
+func shouldHandleHover(from surface: NotchHoverSurface, isExpanded: Bool) -> Bool {
+    switch surface {
+    case .collapsed: !isExpanded
+    case .expanded: isExpanded
     }
 }
 

@@ -65,6 +65,14 @@ struct NotchPanelTests {
     }
 
     @Test
+    func hoverEventsOnlyComeFromTheSurfaceMatchingTheExpansionState() {
+        #expect(shouldHandleHover(from: .collapsed, isExpanded: false))
+        #expect(!shouldHandleHover(from: .collapsed, isExpanded: true))
+        #expect(!shouldHandleHover(from: .expanded, isExpanded: false))
+        #expect(shouldHandleHover(from: .expanded, isExpanded: true))
+    }
+
+    @Test
     func explicitCloseWhileHoveredRequiresPointerExitBeforeHoverCanReopen() {
         var state = NotchHoverState()
 
