@@ -143,6 +143,10 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     func setExpanded(_ expanded: Bool) {
         guard isExpanded != expanded else { return }
         isExpanded = expanded
+        if expanded {
+            NSApp.activate(ignoringOtherApps: true)
+            panel?.makeKeyAndOrderFront(nil)
+        }
         updateMouseEventHandling()
     }
 
