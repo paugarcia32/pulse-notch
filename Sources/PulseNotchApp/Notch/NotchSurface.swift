@@ -289,6 +289,10 @@ struct NotchSurface: View {
                 .opacity(expansionProgress)
                 .allowsHitTesting(isExpanded)
                 .accessibilityHidden(!isExpanded)
+                .onHover { hovering in
+                    guard isExpanded else { return }
+                    handleHover(hovering)
+                }
 
             collapsedIndicators(at: date)
                 .padding(.horizontal, physicalNotchSize == nil ? 12 : 0)
@@ -297,16 +301,26 @@ struct NotchSurface: View {
                 .allowsHitTesting(!isExpanded)
                 .accessibilityHidden(isExpanded)
         }
+        .overlay(alignment: .top) {
+            if !isExpanded {
+                Color.clear
+                    .frame(
+                        width: physicalNotchSize?.width ?? collapsedSize.width,
+                        height: physicalNotchSize?.height ?? collapsedSize.height
+                    )
+                    .contentShape(Rectangle())
+                    .onHover(perform: handleHover)
+                    .onTapGesture {
+                        hoverState.update(isHovering: true)
+                        openNotch()
+                    }
+            }
+        }
         .foregroundStyle(.white)
         .frame(width: expandedSize.width, height: expandedSize.height, alignment: .top)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: systemActivityModel.activity)
         .onChange(of: isExpanded) { _, isOpen in
             if isOpen { NotchHapticFeedback.performOpen() }
-        }
-        .onHover(perform: handleHover)
-        .onTapGesture {
-            hoverState.update(isHovering: true)
-            openNotch()
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pulse Notch")

@@ -79,6 +79,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     private var globalEventMonitor: Any?
     private var localMouseMoveMonitor: Any?
     private var globalMouseMoveMonitor: Any?
+    private var mouseEventUpdateTimer: Timer?
     private var preferenceObserver: NSObjectProtocol?
     private var shortcutObserver: NSObjectProtocol?
     private var shortcutManager: GlobalShortcutManager?
@@ -123,6 +124,10 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             Task { @MainActor in self?.registerGlobalShortcuts() }
         }
         installDismissMonitors()
+        // Once the panel ignores mouse events it cannot receive the tracking update that re-enables it.
+        mouseEventUpdateTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateMouseEventHandling() }
+        }
         shortcutManager = GlobalShortcutManager { [weak self] action in
             self?.performShortcut(action)
         }
@@ -135,6 +140,8 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         [localEventMonitor, globalEventMonitor, localMouseMoveMonitor, globalMouseMoveMonitor]
             .compactMap { $0 }
             .forEach(NSEvent.removeMonitor)
+        mouseEventUpdateTimer?.invalidate()
+        mouseEventUpdateTimer = nil
         if let preferenceObserver { NotificationCenter.default.removeObserver(preferenceObserver) }
         if let shortcutObserver { NotificationCenter.default.removeObserver(shortcutObserver) }
         shortcutManager?.stop()
@@ -347,7 +354,8 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
 
     private func updateMouseEventHandling() {
         guard let panel, let screen = displayedScreen() ?? panel.screen ?? preferredScreen() else { return }
-        let interactiveFrame = frame(for: geometry(for: screen).collapsed, on: screen)
+        let surfaceSize = geometry(for: screen)
+        let interactiveFrame = frame(for: collapsedInteractiveSize(for: surfaceSize), on: screen)
         panel.ignoresMouseEvents = shouldIgnoreMouseEvents(
             isExpanded: isExpanded,
             interactiveFrame: interactiveFrame,
@@ -388,6 +396,10 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
     override var intrinsicContentSize: NSSize {
         fixedSize == .zero ? super.intrinsicContentSize : fixedSize
     }
+}
+
+func collapsedInteractiveSize(for surfaceSize: NotchSurfaceSize) -> CGSize {
+    surfaceSize.physicalNotchSize ?? surfaceSize.collapsed
 }
 
 func shouldIgnoreMouseEvents(isExpanded: Bool, interactiveFrame: NSRect, pointerLocation: NSPoint) -> Bool {
