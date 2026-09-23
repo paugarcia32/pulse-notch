@@ -67,6 +67,9 @@ SwiftPM executable.
 - Upcoming Calendar events, including meeting links and configurable reminders.
 - Running and recently completed Codex, Claude Code, Cursor Agent, Antigravity,
   and OpenCode sessions.
+  OpenCode desktop activity is detected by read-only checks of unfinished responses
+  in its local session database while the app is open. Pulse Notch stores no copy;
+  closing OpenCode stops detection, and no extra permission is needed.
 - Open pull requests, reviews, checks, and Actions from repositories selected in
   Settings, including workflows triggered by pushes and tags.
 - Active browser downloads and Homebrew operations.

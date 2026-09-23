@@ -7,13 +7,23 @@ actor LocalCodingAgentProvider: CodingAgentProviding {
 
     func activeAgents() throws -> [DetectedCodingAgent] {
         let date = Date()
+        let processList = try CommandOutput.read(
+            executable: "/bin/ps",
+            arguments: ["-axo", "pid=,etime=,command="]
+        )
         var agents = LocalCodingAgentProcessParser.parse(
-            try CommandOutput.read(
-                executable: "/bin/ps",
-                arguments: ["-axo", "pid=,etime=,command="]
-            ),
+            processList,
             at: date
         )
+
+        if let desktopStartedAt = OpenCodeDesktopSessionReader.launchDate(
+            in: processList,
+            at: date
+        ) {
+            agents.append(contentsOf: (try? OpenCodeDesktopSessionReader.activeSessions(
+                launchedAt: desktopStartedAt
+            )) ?? [])
+        }
 
         let codexSessions = (try? CodexSessionReader.activeSessions()) ?? []
         if !codexSessions.isEmpty {
@@ -91,6 +101,81 @@ actor LocalCodingAgentProvider: CodingAgentProviding {
         let nonEmptyBranch = branch?.isEmpty == false ? branch : nil
         branchCache[directory] = (nonEmptyBranch, date)
         return nonEmptyBranch
+    }
+}
+
+enum OpenCodeDesktopSessionReader {
+    private struct ActiveSession: Decodable {
+        let id: String
+        let title: String
+        let directory: String
+        let startedAt: TimeInterval
+    }
+
+    static func launchDate(in processList: String, at date: Date) -> Date? {
+        processList.split(separator: "\n").compactMap { line -> Date? in
+            let fields = line.split(maxSplits: 2, whereSeparator: \.isWhitespace)
+            guard fields.count == 3,
+                  fields[2].hasSuffix("/OpenCode.app/Contents/MacOS/OpenCode"),
+                  let elapsed = LocalCodingAgentProcessParser.elapsedDuration(String(fields[1]))
+            else {
+                return nil
+            }
+            return date.addingTimeInterval(-elapsed)
+        }.first
+    }
+
+    static func activeSessions(launchedAt date: Date) throws -> [DetectedCodingAgent] {
+        let database = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: ".local/share/opencode/opencode.db")
+        guard FileManager.default.fileExists(atPath: database.path) else {
+            return []
+        }
+
+        let output = try CommandOutput.read(
+            executable: "/usr/bin/sqlite3",
+            arguments: ["-readonly", "-json", database.path, activeSessionsQuery(launchedAt: date)]
+        )
+        return try parse(output, launchedAt: date)
+    }
+
+    static func parse(_ output: String, launchedAt date: Date) throws -> [DetectedCodingAgent] {
+        guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+        let sessions = try JSONDecoder().decode([ActiveSession].self, from: Data(output.utf8))
+        return sessions.filter {
+            $0.startedAt >= date.addingTimeInterval(-2).timeIntervalSince1970 * 1_000
+        }.map { session in
+            DetectedCodingAgent(
+                id: "opencode-\(session.id)",
+                kind: .opencode,
+                title: session.title,
+                workingDirectory: session.directory,
+                startedAt: Date(timeIntervalSince1970: session.startedAt / 1_000)
+            )
+        }
+    }
+
+    static func activeSessionsQuery(launchedAt date: Date) -> String {
+        let earliestMessage = Int(date.addingTimeInterval(-2).timeIntervalSince1970 * 1_000)
+        return """
+        WITH latest_messages AS (
+          SELECT m.session_id, m.data, m.time_created,
+            ROW_NUMBER() OVER (
+              PARTITION BY m.session_id
+              ORDER BY m.time_created DESC, m.id DESC
+            ) AS recency
+          FROM message m
+          WHERE m.time_created >= \(earliestMessage)
+        )
+        SELECT s.id, s.title, s.directory, m.time_created AS startedAt
+        FROM latest_messages m
+        JOIN session s ON s.id = m.session_id
+        WHERE m.recency = 1
+          AND json_extract(m.data, '$.role') = 'assistant'
+          AND json_extract(m.data, '$.time.completed') IS NULL;
+        """
     }
 }
 
