@@ -67,6 +67,17 @@ brew update
 brew upgrade --cask pulse-notch
 ```
 
+In Settings, the update action checks whether the running app is the unmodified
+Homebrew-installed copy and whether the cask already contains the new release.
+If so, Pulse Notch closes, an independent helper runs the commands above, and
+the app reopens. Otherwise the action opens the GitHub release page. If Homebrew
+fails, the app reopens and shows an error in Settings; users can retry from
+Terminal. This requires a new DMG release containing `PulseNotchUpdater`.
+
+When an update is available, the expanded notch also shows a clickable update
+hint in its upper-left corner. The existing Advanced > Testing update preview
+shows the same hint without requiring a new release.
+
 If the workflow fails while pushing to `homebrew-tap` with HTTP 403, the
 `HOMEBREW_TAP_TOKEN` does not have `Contents: Read and write` access to that
 repository. Replace the Actions secret with a token that has that access, then

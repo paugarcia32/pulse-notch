@@ -3,7 +3,12 @@ import SwiftUI
 
 @MainActor
 final class SettingsWindowController: NSWindowController {
-    init(preferences: NotchPreferences, updateModel: UpdateFeatureModel, displays: [NotchDisplayOption]) {
+    init(
+        preferences: NotchPreferences,
+        updateModel: UpdateFeatureModel,
+        homebrewUpdate: HomebrewUpdateCoordinator = HomebrewUpdateCoordinator(),
+        displays: [NotchDisplayOption]
+    ) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 820, height: 540),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -21,6 +26,7 @@ final class SettingsWindowController: NSWindowController {
         window.contentView = NSHostingView(rootView: PreferencesView(
             preferences: preferences,
             updateModel: updateModel,
+            homebrewUpdate: homebrewUpdate,
             displays: displays
         ))
         window.center()

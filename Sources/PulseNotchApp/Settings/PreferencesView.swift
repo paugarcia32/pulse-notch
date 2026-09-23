@@ -17,6 +17,7 @@ struct PreferencesView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var preferences: NotchPreferences
     @ObservedObject var updateModel: UpdateFeatureModel
+    @ObservedObject var homebrewUpdate: HomebrewUpdateCoordinator
     let displays: [NotchDisplayOption]
     @State private var selection = SettingsDestination.general
     @State private var isSidebarVisible = true
@@ -115,7 +116,9 @@ struct PreferencesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let release = updateModel.availableRelease {
-                    Link(destination: release.pageURL) {
+                    Button {
+                        homebrewUpdate.install(release)
+                    } label: {
                         Label(
                             "Update to \(release.version.description)…",
                             systemImage: "arrow.down.circle"
@@ -125,7 +128,8 @@ struct PreferencesView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.tint)
                     .lineLimit(1)
-                    .help("Open the release page to update Pulse Notch")
+                    .disabled(homebrewUpdate.isPreparing)
+                    .help("Update with Homebrew when available, otherwise open the release page")
                     .accessibilityLabel("Update Pulse Notch to version \(release.version.description)")
                 }
             }
@@ -179,7 +183,19 @@ struct PreferencesView: View {
                 }
 
                 if let release = updateModel.availableRelease {
-                    Link("View Version \(release.version.description)…", destination: release.pageURL)
+                    Button("Update to Version \(release.version.description)…") {
+                        homebrewUpdate.install(release)
+                    }
+                    .disabled(homebrewUpdate.isPreparing)
+                    if homebrewUpdate.isPreparing {
+                        ProgressView("Checking Homebrew…")
+                    }
+                }
+                if let errorMessage = homebrewUpdate.errorMessage {
+                    Text(errorMessage).foregroundStyle(.secondary)
+                    if let release = updateModel.availableRelease {
+                        Link("View release page…", destination: release.pageURL)
+                    }
                 }
             } header: {
                 Text("Updates")
@@ -536,11 +552,11 @@ struct PreferencesView: View {
                 }
                 Section("Other previews") {
                     if updateModel.isTestingReleaseShown {
-                        Button("Hide update preview") {
+                        Button("Hide update preview in notch") {
                             updateModel.hideTestingAvailableRelease()
                         }
                     } else {
-                        Button("Show update available") {
+                        Button("Show update available in notch") {
                             updateModel.showTestingAvailableRelease()
                         }
                     }

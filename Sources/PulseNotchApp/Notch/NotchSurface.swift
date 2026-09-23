@@ -14,6 +14,8 @@ struct NotchSurface: View {
     let bluetoothHeadphonesModel: BluetoothHeadphonesFeatureModel
     @ObservedObject var systemActivityModel: SystemActivityFeatureModel
     @ObservedObject var preferences: NotchPreferences
+    @ObservedObject var updateModel: UpdateFeatureModel
+    @ObservedObject var homebrewUpdate: HomebrewUpdateCoordinator
     let physicalNotchSize: CGSize?
     let collapsedSize: CGSize
     let expandedSize: CGSize
@@ -649,6 +651,11 @@ struct NotchSurface: View {
         .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: pages)
         .clipped()
         .padding(.top, max(physicalNotchSize?.height ?? 0, showsPageIndicator ? 18 : 0))
+        .overlay(alignment: .topLeading) {
+            if let release = updateModel.availableRelease {
+                updateNotice(for: release)
+            }
+        }
         .overlay(alignment: .topTrailing) {
             if showsPageIndicator {
                 pageIndicator(pages: pages)
@@ -674,6 +681,27 @@ struct NotchSurface: View {
                     selectPage($0.translation.width < 0 ? nextPage(in: pages) : previousPage(in: pages), in: pages)
                 }
         )
+    }
+
+    private func updateNotice(for release: AppRelease) -> some View {
+        Button {
+            homebrewUpdate.install(release)
+        } label: {
+            Label("Ready to update", systemImage: "shippingbox")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.white.opacity(0.8))
+                .lineLimit(1)
+                .padding(.horizontal, 5)
+                .frame(height: 18)
+                .frame(
+                    maxWidth: max(0, (expandedSize.width - (physicalNotchSize?.width ?? 0)) / 2 - 18),
+                    alignment: .leading
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(homebrewUpdate.isPreparing)
+        .accessibilityLabel("Update Pulse Notch to version \(release.version.description)")
+        .accessibilityHint("Updates with Homebrew when available, otherwise opens the release page")
     }
 
     private func pageIndicator(pages: [NotchPage]) -> some View {

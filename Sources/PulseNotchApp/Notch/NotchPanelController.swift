@@ -61,6 +61,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
         ) ?? AppVersion(major: 0, minor: 0, patch: 0)
     )
+    let homebrewUpdate = HomebrewUpdateCoordinator()
 
     private var panel: NotchPanel?
     private var hostingView: NotchHostingView<NotchSurface>?
@@ -95,6 +96,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             settingsWindowController = SettingsWindowController(
                 preferences: preferences,
                 updateModel: updateModel,
+                homebrewUpdate: homebrewUpdate,
                 displays: availableDisplays
             )
         }
@@ -245,6 +247,8 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             bluetoothHeadphonesModel: bluetoothHeadphonesModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
+            updateModel: updateModel,
+            homebrewUpdate: homebrewUpdate,
             physicalNotchSize: size.physicalNotchSize,
             collapsedSize: size.collapsed,
             expandedSize: size.expanded,
@@ -268,6 +272,8 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             bluetoothHeadphonesModel: bluetoothHeadphonesModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
+            updateModel: updateModel,
+            homebrewUpdate: homebrewUpdate,
             physicalNotchSize: size.physicalNotchSize,
             collapsedSize: size.collapsed,
             expandedSize: size.expanded,

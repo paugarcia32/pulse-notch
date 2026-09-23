@@ -36,6 +36,11 @@ swift build \
     --configuration "$configuration" \
     --product PulseNotchClaudeBridge
 
+swift build \
+    --package-path "$repository_root" \
+    --configuration "$configuration" \
+    --product PulseNotchUpdater
+
 binary_directory=$(swift build \
     --package-path "$repository_root" \
     --configuration "$configuration" \
@@ -56,6 +61,7 @@ rm -rf "$app_path"
 mkdir -p "$contents_path/MacOS" "$contents_path/Resources"
 install -m 755 "$binary_directory/PulseNotch" "$contents_path/MacOS/PulseNotch"
 install -m 755 "$binary_directory/PulseNotchClaudeBridge" "$contents_path/MacOS/PulseNotchClaudeBridge"
+install -m 755 "$binary_directory/PulseNotchUpdater" "$contents_path/MacOS/PulseNotchUpdater"
 install -m 644 "$info_plist_path" "$contents_path/Info.plist"
 install -m 644 "$icon_path" "$contents_path/Resources/PulseNotch.icns"
 ditto "$resource_bundle_path" "$contents_path/Resources/$resource_bundle_name"
@@ -71,6 +77,12 @@ codesign \
     --sign - \
     --identifier "$bundle_identifier.ClaudeBridge" \
     "$contents_path/MacOS/PulseNotchClaudeBridge"
+
+codesign \
+    --force \
+    --sign - \
+    --identifier "$bundle_identifier.Updater" \
+    "$contents_path/MacOS/PulseNotchUpdater"
 
 codesign \
     --force \

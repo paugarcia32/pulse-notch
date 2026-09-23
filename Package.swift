@@ -19,6 +19,10 @@ let package = Package(
         .executable(
             name: "PulseNotchClaudeBridge",
             targets: ["PulseNotchClaudeBridge"]
+        ),
+        .executable(
+            name: "PulseNotchUpdater",
+            targets: ["PulseNotchUpdater"]
         )
     ],
     dependencies: [
@@ -49,6 +53,9 @@ let package = Package(
         ),
         .executableTarget(
             name: "PulseNotchClaudeBridge"
+        ),
+        .executableTarget(
+            name: "PulseNotchUpdater"
         ),
         .testTarget(
             name: "PulseNotchCoreTests",

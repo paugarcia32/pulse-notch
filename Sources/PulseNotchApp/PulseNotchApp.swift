@@ -36,7 +36,7 @@ struct PulseNotchApp: App {
             Button("Open Notch") {
                 NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
             }
-            UpdateMenuItem(model: notchController.updateModel)
+            UpdateMenuItem(model: notchController.updateModel, homebrewUpdate: notchController.homebrewUpdate)
             Button("Settings…") { notchController.showSettings() }
             Divider()
             Button("Quit Pulse Notch") { NSApplication.shared.terminate(nil) }
@@ -80,12 +80,14 @@ private struct PulseNotchPageCommands: Commands {
 
 private struct UpdateMenuItem: View {
     @ObservedObject var model: UpdateFeatureModel
+    @ObservedObject var homebrewUpdate: HomebrewUpdateCoordinator
 
     var body: some View {
         if let release = model.availableRelease {
-            Button("Version \(release.version.description) Available…") {
-                NSWorkspace.shared.open(release.pageURL)
+            Button("Update to Version \(release.version.description)…") {
+                homebrewUpdate.install(release)
             }
+            .disabled(homebrewUpdate.isPreparing)
         }
     }
 }
