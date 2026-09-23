@@ -347,15 +347,6 @@ struct NotchSurface: View {
             let currentIndicators = indicators(at: date)
             if let physicalNotchSize {
                 physicalNotchIndicators(currentIndicators, notchSize: physicalNotchSize)
-            } else if case let .upcomingCalendarEvent(minutesUntilStart) = currentIndicators.first?.content {
-                CalendarCountdownIndicator(
-                    minutesUntilStart: minutesUntilStart,
-                    color: collapsedIndicatorColor(for: currentIndicators[0]),
-                    reduceMotion: reduceMotion
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(currentIndicators[0].accessibilityLabel)
             } else if case let .mediaPlayback(playback) = currentIndicators.first?.content {
                 HStack(spacing: 10) {
                     MediaArtworkView(data: playback.artworkData, size: 22)
