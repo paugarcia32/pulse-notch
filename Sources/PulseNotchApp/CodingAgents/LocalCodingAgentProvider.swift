@@ -9,7 +9,7 @@ actor LocalCodingAgentProvider: CodingAgentProviding {
         let date = Date()
         let processList = try CommandOutput.read(
             executable: "/bin/ps",
-            arguments: ["-axo", "pid=,etime=,command="]
+            arguments: ["-axo", "pid=,ppid=,etime=,command="]
         )
         var agents = LocalCodingAgentProcessParser.parse(
             processList,
@@ -114,10 +114,10 @@ enum OpenCodeDesktopSessionReader {
 
     static func launchDate(in processList: String, at date: Date) -> Date? {
         processList.split(separator: "\n").compactMap { line -> Date? in
-            let fields = line.split(maxSplits: 2, whereSeparator: \.isWhitespace)
-            guard fields.count == 3,
-                  fields[2].hasSuffix("/OpenCode.app/Contents/MacOS/OpenCode"),
-                  let elapsed = LocalCodingAgentProcessParser.elapsedDuration(String(fields[1]))
+            let fields = line.split(maxSplits: 3, whereSeparator: \.isWhitespace)
+            guard fields.count == 4,
+                  fields[3].hasSuffix("/OpenCode.app/Contents/MacOS/OpenCode"),
+                  let elapsed = LocalCodingAgentProcessParser.elapsedDuration(String(fields[2]))
             else {
                 return nil
             }
@@ -160,7 +160,15 @@ enum OpenCodeDesktopSessionReader {
     static func activeSessionsQuery(launchedAt date: Date) -> String {
         let earliestMessage = Int(date.addingTimeInterval(-2).timeIntervalSince1970 * 1_000)
         return """
-        WITH latest_messages AS (
+        WITH RECURSIVE session_roots AS (
+          SELECT id, id AS root_id
+          FROM session
+          WHERE parent_id IS NULL
+          UNION ALL
+          SELECT child.id, root.root_id
+          FROM session child
+          JOIN session_roots root ON child.parent_id = root.id
+        ), latest_messages AS (
           SELECT m.session_id, m.data, m.time_created,
             ROW_NUMBER() OVER (
               PARTITION BY m.session_id
@@ -169,12 +177,15 @@ enum OpenCodeDesktopSessionReader {
           FROM message m
           WHERE m.time_created >= \(earliestMessage)
         )
-        SELECT s.id, s.title, s.directory, m.time_created AS startedAt
+        SELECT s.id, s.title, s.directory, MIN(m.time_created) AS startedAt
         FROM latest_messages m
-        JOIN session s ON s.id = m.session_id
+        JOIN session_roots root ON root.id = m.session_id
+        JOIN session s ON s.id = root.root_id
         WHERE m.recency = 1
           AND json_extract(m.data, '$.role') = 'assistant'
-          AND json_extract(m.data, '$.time.completed') IS NULL;
+          AND json_extract(m.data, '$.time.completed') IS NULL
+        GROUP BY s.id, s.title, s.directory
+        ORDER BY s.id;
         """
     }
 }
@@ -299,36 +310,47 @@ enum LocalCodingAgentProcessParser {
         _ processList: String,
         at date: Date = Date()
     ) -> [DetectedCodingAgent] {
-        processList.split(separator: "\n").compactMap { line in
-            let fields = line.split(
-                maxSplits: 2,
-                whereSeparator: \Character.isWhitespace
-            )
-            guard
-                fields.count >= 2,
-                let processID = Int(fields[0])
-            else {
-                return nil
-            }
-
-            let elapsed = fields.count == 3
-                ? elapsedDuration(String(fields[1]))
-                : nil
-            let command = elapsed == nil
-                ? fields.dropFirst().joined(separator: " ")
-                : String(fields[2])
+        let processes = processList.split(separator: "\n").compactMap { line -> ProcessEntry? in
+            let fields = line.split(maxSplits: 3, whereSeparator: \Character.isWhitespace)
+            guard fields.count == 4,
+                  let pid = Int(fields[0]),
+                  let parentPID = Int(fields[1]),
+                  let elapsed = elapsedDuration(String(fields[2])) else { return nil }
+            return ProcessEntry(pid: pid, parentPID: parentPID, elapsed: elapsed, command: String(fields[3]))
+        }
+        let parents = Dictionary(uniqueKeysWithValues: processes.map { ($0.pid, $0.parentPID) })
+        let detected = processes.compactMap { process -> DetectedCodingAgent? in
+            let command = process.command
             guard let kind = kind(for: command) else {
                 return nil
             }
 
             return DetectedCodingAgent(
-                id: "\(kind.rawValue)-\(processID)",
+                id: "\(kind.rawValue)-\(process.pid)",
                 kind: kind,
                 title: title(for: command),
-                startedAt: elapsed.map { date.addingTimeInterval(-$0) },
-                processID: processID
+                startedAt: date.addingTimeInterval(-process.elapsed),
+                processID: process.pid
             )
         }
+        let claudePIDs = Set(detected.filter { $0.kind == .claude }.compactMap(\.processID))
+        return detected.filter { agent in
+            guard agent.kind == .claude, let pid = agent.processID else { return true }
+            var ancestor = parents[pid]
+            var visited: Set<Int> = [pid]
+            while let current = ancestor, visited.insert(current).inserted {
+                if claudePIDs.contains(current) { return false }
+                ancestor = parents[current]
+            }
+            return true
+        }
+    }
+
+    private struct ProcessEntry {
+        let pid: Int
+        let parentPID: Int
+        let elapsed: TimeInterval
+        let command: String
     }
 
     static func elapsedDuration(_ value: String) -> TimeInterval? {
@@ -438,23 +460,43 @@ enum CodexSessionReader {
     }
 
     static let activeSessionsQuery = """
-        WITH latest_turns AS (
+        WITH RECURSIVE latest_turns AS (
           SELECT t.*,
             ROW_NUMBER() OVER (
               PARTITION BY t.thread_id
               ORDER BY t.rollout_ordinal DESC
             ) AS recency
           FROM thread_turns t
+        ), relationships AS (
+          SELECT DISTINCT thread_id AS parent_id,
+            json_extract(item_json, '$.agentThreadId') AS child_id
+          FROM thread_items
+          WHERE item_type = 'subAgentActivity'
+        ), ancestors AS (
+          SELECT t.thread_id AS active_id, t.thread_id AS root_id, 0 AS depth
+          FROM latest_turns t
+          WHERE t.recency = 1 AND t.status = 'inProgress'
+          UNION ALL
+          SELECT a.active_id, r.parent_id, a.depth + 1
+          FROM ancestors a
+          JOIN relationships r ON r.child_id = a.root_id
+        ), roots AS (
+          SELECT active_id, root_id,
+            ROW_NUMBER() OVER (PARTITION BY active_id ORDER BY depth DESC) AS recency
+          FROM ancestors
         )
-        SELECT t.thread_id AS id,
+        SELECT r.root_id AS id,
           (SELECT json_extract(i.item_json, '$.cwd')
            FROM thread_items i
-           WHERE i.thread_id = t.thread_id
-             AND json_extract(i.item_json, '$.cwd') IS NOT NULL
+           WHERE i.thread_id = r.root_id
+              AND json_extract(i.item_json, '$.cwd') IS NOT NULL
            ORDER BY i.rollout_ordinal DESC LIMIT 1) AS workingDirectory,
-          t.started_at AS startedAt
-        FROM latest_turns t
-        WHERE t.recency = 1 AND t.status = 'inProgress';
+          MIN(t.started_at) AS startedAt
+        FROM roots r
+        JOIN latest_turns t ON t.thread_id = r.active_id
+        WHERE r.recency = 1 AND t.recency = 1
+        GROUP BY r.root_id
+        ORDER BY r.root_id;
         """
 
 }

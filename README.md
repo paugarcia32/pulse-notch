@@ -67,6 +67,8 @@ SwiftPM executable.
 - Upcoming Calendar events, including meeting links and configurable reminders.
 - Running and recently completed Codex, Claude Code, Cursor Agent, Antigravity,
   and OpenCode sessions.
+  Codex and OpenCode subagents are grouped under their parent session; Claude Code
+  subprocesses are grouped with their ancestor Claude Code process.
   OpenCode desktop activity is detected by read-only checks of unfinished responses
   in its local session database while the app is open. Pulse Notch stores no copy;
   closing OpenCode stops detection, and no extra permission is needed.
