@@ -64,7 +64,7 @@ Tasks:
 Evaluate in:
 
 - A physical MacBook notch.
-- The external-display capsule.
+- The external-display rectangular notch.
 - Collapsed and expanded Pulse surfaces.
 - Light and dark desktop backgrounds behind any translucent expanded content.
 - Standard and increased display scaling.
@@ -185,7 +185,7 @@ Review the first integrated slice in normal daily use before adding more motion.
 - [ ] Relevant Xcode build and test scheme passes when available.
 - [ ] No new warnings.
 - [ ] Collapsed and expanded surfaces are checked manually.
-- [ ] Physical notch and external-display capsule are checked.
+- [ ] Physical notch and external-display rectangular notch are checked.
 - [ ] Reduce Motion, Increase Contrast, VoiceOver, and keyboard behavior are
       checked.
 - [ ] Multiple active integrations do not create excessive motion.

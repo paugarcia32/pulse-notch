@@ -56,18 +56,6 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum ExternalNotchStyle: String, CaseIterable {
-    case capsule
-    case rectangle
-
-    var name: String {
-        switch self {
-        case .capsule: "Compact capsule"
-        case .rectangle: "Rectangular notch"
-        }
-    }
-}
-
 enum TestingSystemActivity: Equatable {
     case charging
     case volume
@@ -118,7 +106,6 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var shortcuts: [ShortcutAction: AppShortcut]
     @Published private(set) var startupError: String?
     @Published private(set) var preferredDisplayID: String?
-    @Published private(set) var externalNotchStyle: ExternalNotchStyle
     @Published private(set) var collapsedIndicatorPreviewCounts: [CollapsedIndicatorPreview: Int] = [:]
     @Published private(set) var summaryPreviewCounts: [SummaryPreview: Int] = [:]
     @Published private(set) var collapsedIndicatorMaximumPerSide: Int
@@ -153,7 +140,6 @@ final class NotchPreferences: ObservableObject {
         static let monitoredGitHubRepositories = "settings.monitoredGitHubRepositories"
         static let shortcuts = "settings.shortcuts"
         static let preferredDisplayID = "settings.preferredDisplayID"
-        static let externalNotchStyle = "settings.externalNotchStyle"
         static let collapsedIndicatorMaximumPerSide = "settings.collapsedIndicatorMaximumPerSide"
         static let collapsedIndicatorPriorityOrder = "settings.collapsedIndicatorPriorityOrder"
         static let collapsedIndicatorColors = "settings.collapsedIndicatorColors"
@@ -212,7 +198,6 @@ final class NotchPreferences: ObservableObject {
             .compactMap(GitHubRepository.init(nameWithOwner:)) ?? []
         shortcuts = Self.shortcuts(from: defaults.data(forKey: Keys.shortcuts))
         preferredDisplayID = defaults.string(forKey: Keys.preferredDisplayID)
-        externalNotchStyle = ExternalNotchStyle(rawValue: defaults.string(forKey: Keys.externalNotchStyle) ?? "") ?? .capsule
         collapsedIndicatorMaximumPerSide = Self.clampedCollapsedIndicatorMaximum(
             defaults.object(forKey: Keys.collapsedIndicatorMaximumPerSide) as? Int ?? 3
         )
@@ -381,13 +366,6 @@ final class NotchPreferences: ObservableObject {
         guard preferredDisplayID != displayID else { return }
         preferredDisplayID = displayID
         defaults.set(displayID, forKey: Keys.preferredDisplayID)
-        NotificationCenter.default.post(name: .pulseNotchDisplayPreferencesChanged, object: nil)
-    }
-
-    func setExternalNotchStyle(_ style: ExternalNotchStyle) {
-        guard externalNotchStyle != style else { return }
-        externalNotchStyle = style
-        defaults.set(style.rawValue, forKey: Keys.externalNotchStyle)
         NotificationCenter.default.post(name: .pulseNotchDisplayPreferencesChanged, object: nil)
     }
 

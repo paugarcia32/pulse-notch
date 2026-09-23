@@ -164,12 +164,6 @@ struct PreferencesView: View {
                     Text("Display under pointer").tag("pointer")
                     ForEach(displays) { Text($0.name).tag($0.id) }
                 }
-                Picker("External display style", selection: externalNotchStyle) {
-                    ForEach(ExternalNotchStyle.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
-                }
-                Text("This setting only affects displays without a physical notch.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Automatically check for updates", isOn: $updateModel.automaticChecksEnabled)
@@ -697,13 +691,6 @@ struct PreferencesView: View {
         Binding(
             get: { preferences.preferredDisplayID ?? "pointer" },
             set: { preferences.setPreferredDisplayID($0 == "pointer" ? nil : $0) }
-        )
-    }
-
-    private var externalNotchStyle: Binding<String> {
-        Binding(
-            get: { preferences.externalNotchStyle.rawValue },
-            set: { preferences.setExternalNotchStyle(ExternalNotchStyle(rawValue: $0) ?? .capsule) }
         )
     }
 

@@ -14,8 +14,7 @@ struct NotchSurfaceSize: Equatable {
     init(
         notchWidth: CGFloat?,
         notchHeight: CGFloat?,
-        externalTopBarHeight: CGFloat = 24,
-        externalStyle: ExternalNotchStyle
+        externalTopBarHeight: CGFloat = 24
     ) {
         if let notchWidth, let notchHeight {
             physicalNotchSize = CGSize(width: notchWidth, height: notchHeight)
@@ -25,11 +24,7 @@ struct NotchSurfaceSize: Equatable {
             )
         } else {
             physicalNotchSize = nil
-            let height = externalTopBarHeight
-            switch externalStyle {
-            case .capsule: collapsed = CGSize(width: 140, height: height)
-            case .rectangle: collapsed = CGSize(width: 190, height: height)
-            }
+            collapsed = CGSize(width: 190, height: externalTopBarHeight)
         }
         expanded = CGSize(width: 500, height: 250)
     }
@@ -250,7 +245,6 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             bluetoothHeadphonesModel: bluetoothHeadphonesModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
-            isExternalDisplay: !hasPhysicalNotch(screen: screen),
             physicalNotchSize: size.physicalNotchSize,
             collapsedSize: size.collapsed,
             expandedSize: size.expanded,
@@ -274,7 +268,6 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             bluetoothHeadphonesModel: bluetoothHeadphonesModel,
             systemActivityModel: systemActivityModel,
             preferences: preferences,
-            isExternalDisplay: !hasPhysicalNotch(screen: screen),
             physicalNotchSize: size.physicalNotchSize,
             collapsedSize: size.collapsed,
             expandedSize: size.expanded,
@@ -284,7 +277,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
 
     private func geometry(for screen: NSScreen?) -> NotchSurfaceSize {
         guard let screen else {
-            return NotchSurfaceSize(notchWidth: nil, notchHeight: nil, externalStyle: preferences.externalNotchStyle)
+            return NotchSurfaceSize(notchWidth: nil, notchHeight: nil)
         }
         let left = screen.auxiliaryTopLeftArea?.width
         let right = screen.auxiliaryTopRightArea?.width
@@ -293,8 +286,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         return NotchSurfaceSize(
             notchWidth: width,
             notchHeight: height,
-            externalTopBarHeight: menuBarHeight(for: screen),
-            externalStyle: preferences.externalNotchStyle
+            externalTopBarHeight: menuBarHeight(for: screen)
         )
     }
 

@@ -5,7 +5,7 @@ import Testing
 struct NotchSurfaceSizeTests {
     @Test
     func usesThePhysicalNotchDimensionsWhenAvailable() {
-        let size = NotchSurfaceSize(notchWidth: 210, notchHeight: 38, externalStyle: .capsule)
+        let size = NotchSurfaceSize(notchWidth: 210, notchHeight: 38)
 
         #expect(size.physicalNotchSize == CGSize(width: 210, height: 38))
         #expect(size.collapsed == CGSize(width: 426, height: 38))
@@ -13,15 +13,10 @@ struct NotchSurfaceSizeTests {
     }
 
     @Test
-    func usesACompactFallbackOnDisplaysWithoutANotch() {
-        let size = NotchSurfaceSize(notchWidth: nil, notchHeight: nil, externalTopBarHeight: 23, externalStyle: .capsule)
+    func usesRectangularNotchOnDisplaysWithoutANotch() {
+        let size = NotchSurfaceSize(notchWidth: nil, notchHeight: nil, externalTopBarHeight: 23)
 
         #expect(size.physicalNotchSize == nil)
-        #expect(size.collapsed == CGSize(width: 140, height: 23))
-    }
-
-    @Test
-    func usesTheSelectedExternalDisplayStyle() {
-        #expect(NotchSurfaceSize(notchWidth: nil, notchHeight: nil, externalTopBarHeight: 23, externalStyle: .rectangle).collapsed == CGSize(width: 190, height: 23))
+        #expect(size.collapsed == CGSize(width: 190, height: 23))
     }
 }

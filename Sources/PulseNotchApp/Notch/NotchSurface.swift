@@ -14,7 +14,6 @@ struct NotchSurface: View {
     let bluetoothHeadphonesModel: BluetoothHeadphonesFeatureModel
     @ObservedObject var systemActivityModel: SystemActivityFeatureModel
     @ObservedObject var preferences: NotchPreferences
-    let isExternalDisplay: Bool
     let physicalNotchSize: CGSize?
     let collapsedSize: CGSize
     let expandedSize: CGSize
@@ -700,23 +699,16 @@ struct NotchSurface: View {
     private var indicatorSize: CGFloat { isHoveringPageIndicator ? 5 : 3 }
 
     private func notchBackground(collapsedSize: CGSize) -> some View {
-        let collapsedTopRadius = isExternalDisplay && preferences.externalNotchStyle == .capsule ? cornerRadius : 0
-        let collapsedBottomRadius = isExternalDisplay && preferences.externalNotchStyle == .capsule ? cornerRadius : 8
-        let topRadius = interpolated(from: collapsedTopRadius, to: 0)
-        let bottomRadius = interpolated(from: collapsedBottomRadius, to: 18)
+        let bottomRadius = interpolated(from: 8, to: 18)
         return NotchBackgroundShape(
             size: CGSize(
                 width: interpolated(from: collapsedSize.width, to: expandedSize.width),
                 height: interpolated(from: collapsedSize.height, to: expandedSize.height)
             ),
-            topRadius: topRadius,
+            topRadius: 0,
             bottomRadius: bottomRadius
         )
         .fill(.black)
-    }
-
-    private var cornerRadius: CGFloat {
-        12
     }
 
     private func indicators(at date: Date) -> [NotchIndicator] {

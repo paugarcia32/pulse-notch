@@ -52,14 +52,14 @@ struct NotchPanelTests {
 
     @Test
     func physicalNotchUsesOnlyTheNotchAsTheCollapsedInteractiveArea() {
-        let surfaceSize = NotchSurfaceSize(notchWidth: 210, notchHeight: 38, externalStyle: .capsule)
+        let surfaceSize = NotchSurfaceSize(notchWidth: 210, notchHeight: 38)
 
         #expect(collapsedInteractiveSize(for: surfaceSize) == CGSize(width: 210, height: 38))
     }
 
     @Test
-    func externalDisplayUsesItsCompactSurfaceAsTheCollapsedInteractiveArea() {
-        let surfaceSize = NotchSurfaceSize(notchWidth: nil, notchHeight: nil, externalStyle: .capsule)
+    func externalDisplayUsesItsRectangularSurfaceAsTheCollapsedInteractiveArea() {
+        let surfaceSize = NotchSurfaceSize(notchWidth: nil, notchHeight: nil)
 
         #expect(collapsedInteractiveSize(for: surfaceSize) == surfaceSize.collapsed)
     }

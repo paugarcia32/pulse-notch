@@ -141,7 +141,7 @@ down is likely to make dots too small or visually muddy.
 
 The fork should therefore add a separately tuned 14–16 pt notch preset with
 fewer, larger dots. The exact diameter must come from visual testing on both a
-physical notch and the external-display capsule.
+physical notch and the external-display rectangular notch.
 
 ### Optional tint
 
