@@ -31,7 +31,7 @@ struct NotchSurface: View {
     @State private var systemActivityTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private struct TestingPreviewData {
+    struct TestingPreviewData {
         let schedule: CalendarEventSchedule?
         let sessions: [CodingAgentSession]?
         let actions: [GitHubActionSession]?
@@ -40,6 +40,65 @@ struct NotchSurface: View {
         let downloads: [DetectedDownload]?
         let media: MediaPlaybackStatus?
         let clock: ClockStatus?
+
+        var hasGitHubActivity: Bool {
+            !(actions ?? []).isEmpty || !(pullRequests ?? []).isEmpty
+        }
+
+        @MainActor
+        static func make(preferences: NotchPreferences, at date: Date) -> Self {
+            guard preferences.testingFeaturesEnabled else {
+                return Self(
+                    schedule: nil,
+                    sessions: nil,
+                    actions: nil,
+                    pullRequests: nil,
+                    usage: nil,
+                    downloads: nil,
+                    media: nil,
+                    clock: nil
+                )
+            }
+
+            let schedule = (0..<preferences.collapsedIndicatorPreviewCount(.calendar)).compactMap {
+                CollapsedIndicatorPreview.calendar.testingCalendarEvent(instance: $0, at: date)
+            }
+            let sessions = CollapsedIndicatorPreview.allCases.flatMap { preview in
+                (0..<preferences.collapsedIndicatorPreviewCount(preview)).compactMap {
+                    preview.testingAgentSession(instance: $0, at: date)
+                }
+            }
+            let actions = (0..<preferences.collapsedIndicatorPreviewCount(.githubActions)).compactMap {
+                CollapsedIndicatorPreview.githubActions.testingActionSession(instance: $0, at: date)
+            }
+            let downloads = (0..<preferences.collapsedIndicatorPreviewCount(.download)).compactMap {
+                CollapsedIndicatorPreview.download.testingDownload(instance: $0)
+            }
+            let pullRequests: [GitHubPullRequest] = SummaryPreview.allCases.compactMap { preview in
+                guard preferences.summaryPreviewCount(preview) > 0 else { return nil }
+                return preview.testingPullRequest(at: date)
+            }
+            let usage: [CodingAgentUsageAvailability] = SummaryPreview.allCases.reduce(into: []) { result, preview in
+                guard preferences.summaryPreviewCount(preview) > 0 else { return }
+                result += preview.testingUsage(at: date) ?? []
+            }
+            let media = preferences.collapsedIndicatorPreviewCount(.mediaPlayback) > 0
+                ? CollapsedIndicatorPreview.mediaPlayback.testingPlayback()
+                : nil
+            let clock = preferences.collapsedIndicatorPreviewCount(.clock) > 0
+                ? CollapsedIndicatorPreview.clock.testingClockStatus()
+                : nil
+            return Self(
+                schedule: schedule.isEmpty ? nil : CalendarEventSchedule(events: schedule),
+                sessions: sessions.isEmpty ? nil : sessions,
+                actions: actions.isEmpty ? nil : actions,
+                pullRequests: pullRequests.isEmpty ? nil : pullRequests,
+                usage: usage.isEmpty ? nil : usage,
+                downloads: downloads.isEmpty ? nil : downloads,
+                media: media,
+                clock: clock
+            )
+        }
     }
 
     @ViewBuilder
@@ -665,7 +724,7 @@ struct NotchSurface: View {
             let previews = CollapsedIndicatorPreview.allCases
                 .flatMap { preview in
                     (0..<preferences.collapsedIndicatorPreviewCount(preview)).map {
-                        preview.indicator(instance: $0)
+                        preview.indicator(instance: $0, at: date)
                     }
                 }
             if !previews.isEmpty {
@@ -855,7 +914,13 @@ struct NotchSurface: View {
             )
         case .calendar: CalendarPage(model: calendarModel, date: date, testingSchedule: testingData.schedule)
         case .agents: CodingAgentsPage(model: codingAgentModel, date: date, testingSessions: testingData.sessions)
-        case .github: GitHubPage(model: gitHubModel, date: date, testingActionSessions: testingData.actions)
+        case .github:
+            GitHubPage(
+                model: gitHubModel,
+                date: date,
+                testingPullRequests: testingData.pullRequests,
+                testingActionSessions: testingData.actions
+            )
         case .media: MediaPlaybackPage(model: mediaPlaybackModel, testingPlayback: testingData.media)
         case .clock: ClockPage(model: clockModel, testingStatus: testingData.clock)
         case .downloads: DownloadsPage(model: downloadModel, testingDownloads: testingData.downloads)
@@ -868,7 +933,7 @@ struct NotchSurface: View {
             calendar: testingData.schedule != nil || calendarHasActivity(at: date),
             agents: !(testingData.sessions ?? []).isEmpty || agentsHaveActivity,
             agentUsage: usageLimitNeedsAttention,
-            github: !(testingData.actions ?? []).isEmpty || gitHubHasActivity,
+            github: testingData.hasGitHubActivity || gitHubHasActivity,
             media: testingData.media != nil || mediaPlaybackModel.isPageActive(at: date),
             clock: testingData.clock != nil || clockModel.status(at: date, includePaused: true) != nil,
             downloads: !(testingData.downloads ?? []).isEmpty || !downloadModel.activeDownloads.isEmpty
@@ -884,57 +949,7 @@ struct NotchSurface: View {
     }
 
     private func testingPreviewData(at date: Date) -> TestingPreviewData {
-        guard preferences.testingFeaturesEnabled else {
-            return TestingPreviewData(
-                schedule: nil,
-                sessions: nil,
-                actions: nil,
-                pullRequests: nil,
-                usage: nil,
-                downloads: nil,
-                media: nil,
-                clock: nil
-            )
-        }
-
-        let schedule = (0..<preferences.collapsedIndicatorPreviewCount(.calendar)).compactMap {
-            CollapsedIndicatorPreview.calendar.testingCalendarEvent(instance: $0, at: date)
-        }
-        let sessions = CollapsedIndicatorPreview.allCases.flatMap { preview in
-            (0..<preferences.collapsedIndicatorPreviewCount(preview)).compactMap {
-                preview.testingAgentSession(instance: $0, at: date)
-            }
-        }
-        let actions = (0..<preferences.collapsedIndicatorPreviewCount(.githubActions)).compactMap {
-            CollapsedIndicatorPreview.githubActions.testingActionSession(instance: $0, at: date)
-        }
-        let downloads = (0..<preferences.collapsedIndicatorPreviewCount(.download)).compactMap {
-            CollapsedIndicatorPreview.download.testingDownload(instance: $0)
-        }
-        let pullRequests: [GitHubPullRequest] = SummaryPreview.allCases.compactMap { preview in
-            guard preferences.summaryPreviewCount(preview) > 0 else { return nil }
-            return preview.testingPullRequest(at: date)
-        }
-        let usage: [CodingAgentUsageAvailability] = SummaryPreview.allCases.reduce(into: []) { result, preview in
-            guard preferences.summaryPreviewCount(preview) > 0 else { return }
-            result += preview.testingUsage(at: date) ?? []
-        }
-        let media = preferences.collapsedIndicatorPreviewCount(.mediaPlayback) > 0
-            ? CollapsedIndicatorPreview.mediaPlayback.testingPlayback()
-            : nil
-        let clock = preferences.collapsedIndicatorPreviewCount(.clock) > 0
-            ? CollapsedIndicatorPreview.clock.testingClockStatus()
-            : nil
-        return TestingPreviewData(
-            schedule: schedule.isEmpty ? nil : CalendarEventSchedule(events: schedule),
-            sessions: sessions.isEmpty ? nil : sessions,
-            actions: actions.isEmpty ? nil : actions,
-            pullRequests: pullRequests.isEmpty ? nil : pullRequests,
-            usage: usage.isEmpty ? nil : usage,
-            downloads: downloads.isEmpty ? nil : downloads,
-            media: media,
-            clock: clock
-        )
+        TestingPreviewData.make(preferences: preferences, at: date)
     }
 
     private var agentsHaveActivity: Bool {

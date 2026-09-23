@@ -31,6 +31,12 @@ struct CalendarPage: View {
                 placeholder { emptyState("Calendar is unavailable", image: "exclamationmark.triangle") }
             }
         }
+        .onChange(of: Calendar.autoupdatingCurrent.startOfDay(for: date)) { previousDay, newDay in
+            if Calendar.autoupdatingCurrent.isDate(selectedDate, inSameDayAs: previousDay) {
+                selectedDate = newDay
+                showsAllEvents = false
+            }
+        }
     }
 
     private func calendarContent(_ schedule: CalendarEventSchedule) -> some View {

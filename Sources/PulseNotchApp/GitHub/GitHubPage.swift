@@ -8,6 +8,7 @@ struct GitHubPage: View {
     let testingActionSessions: [GitHubActionSession]?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.openURL) private var openURL
 
     init(
@@ -41,15 +42,21 @@ struct GitHubPage: View {
     }
 
     private func content(_ pullRequests: [GitHubPullRequest]) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            sectionHeader(pullRequests)
+        let running = (testingActionSessions ?? model.actionSessions).filter { $0.status == .running }
+        return VStack(alignment: .leading, spacing: 9) {
+            sectionHeader(pullRequests: pullRequests.count, running: running.count)
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 7) {
-                    runningActions(testingActionSessions ?? model.actionSessions)
-                    if pullRequests.isEmpty {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    if !running.isEmpty {
+                        sectionLabel("RUNNING ACTIONS")
+                        ForEach(running) { actionRow($0) }
+                    }
+                    if !pullRequests.isEmpty {
+                        sectionLabel("PULL REQUESTS")
+                        ForEach(pullRequests) { pullRequestRow($0) }
+                    }
+                    if running.isEmpty && pullRequests.isEmpty {
                         emptyState
-                    } else {
-                        ForEach(pullRequests) { pullRequest in row(pullRequest) }
                     }
                 }
             }
@@ -59,67 +66,90 @@ struct GitHubPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func sectionHeader(_ pullRequests: [GitHubPullRequest]) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+    private var tileFill: Color { .white.opacity(contrast == .increased ? 0.14 : 0.08) }
+
+    private func sectionHeader(pullRequests: Int, running: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text("GITHUB")
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(.pink)
+                .foregroundStyle(.secondary)
             Spacer(minLength: 6)
-            Text(pullRequests.isEmpty ? "All caught up" : "\(pullRequests.count) open")
+            Text(Self.activityDescription(pullRequests: pullRequests, running: running))
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
+        .frame(height: 16)
+    }
+
+    static func activityDescription(pullRequests: Int, running: Int) -> String {
+        let parts = [
+            pullRequests > 0 ? "\(pullRequests) open" : nil,
+            running > 0 ? "\(running) running" : nil
+        ].compactMap { $0 }
+        return parts.isEmpty ? "All caught up" : parts.joined(separator: " · ")
+    }
+
+    private func sectionLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+            .padding(.top, 2)
     }
 
     private var emptyState: some View {
-        VStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Image(systemName: "checkmark.circle")
-                .font(.title3)
+                .font(.system(size: 20))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text("No open pull requests created by you")
                 .font(.callout.weight(.semibold))
-            Text("You are all caught up")
+            Text("No Actions running either")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(.top, 16)
-        .frame(maxWidth: .infinity)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tileFill, in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
     }
 
-    private func row(_ pullRequest: GitHubPullRequest) -> some View {
-        HStack(spacing: 10) {
-            pullRequestIcon(pullRequest)
-                .frame(width: 24, height: 30)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(pullRequest.title)
-                    .font(.callout.weight(.semibold))
-                    .lineLimit(1)
-                HStack(spacing: 7) {
-                    Text("\(pullRequest.repository) #\(pullRequest.number)")
-                    Label("\(pullRequest.commentCount)", systemImage: "bubble.left")
-                    Label("\(pullRequest.passedCheckCount)", systemImage: "checkmark.circle")
-                    Text(pullRequest.reviewStatusLabel)
-                        .foregroundStyle(pullRequest.reviewStatusColor)
+    private func pullRequestRow(_ pullRequest: GitHubPullRequest) -> some View {
+        Button { openURL(pullRequest.url) } label: {
+            HStack(spacing: 10) {
+                pullRequestIcon(pullRequest)
+                    .frame(width: 30, height: 30)
+                    .background(pullRequest.statusColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(pullRequest.title)
+                        .font(.callout.weight(.semibold))
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text("\(pullRequest.repository) #\(pullRequest.number)")
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Text(pullRequest.statusLabel)
+                            .foregroundStyle(pullRequest.statusColor)
+                            .fixedSize()
+                    }
+                    .font(.caption2.weight(.medium))
                 }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
-            Spacer(minLength: 4)
-            Button { openURL(pullRequest.url) } label: {
                 Image(systemName: "arrow.up.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-                    .background(.white.opacity(0.07), in: Circle())
+                    .accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open pull request \(pullRequest.title) in GitHub")
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tileFill, in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
-        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 10))
-        .accessibilityElement(children: .combine)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open pull request \(pullRequest.title), \(pullRequest.repository) number \(pullRequest.number), \(pullRequest.statusLabel), \(pullRequest.commentCount) comments, \(pullRequest.passedCheckCount) passed checks, in GitHub")
     }
 
     @ViewBuilder
@@ -128,8 +158,7 @@ struct GitHubPage: View {
         case .none:
             Image(systemName: pullRequest.isDraft ? "arrow.triangle.branch" : "arrow.triangle.pull")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(pullRequest.reviewStatusColor)
-                .accessibilityLabel(pullRequest.reviewStatusLabel)
+                .foregroundStyle(pullRequest.statusColor)
         case let status:
             NotchIndicatorView(
                 indicator: NotchIndicator(
@@ -143,45 +172,48 @@ struct GitHubPage: View {
     }
 
     @ViewBuilder
-    private func runningActions(_ sessions: [GitHubActionSession]) -> some View {
-        let running = sessions.filter { $0.status == .running }
-        if !running.isEmpty {
-            ForEach(running) { session in
-                HStack(spacing: 8) {
-                    NotchIndicatorView(
-                        indicator: NotchIndicator(
-                            id: session.id,
-                            content: .githubActions(.running),
-                            accessibilityLabel: "GitHub Action running"
-                        ),
-                        reduceMotion: reduceMotion
-                    )
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(session.run.name)
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                        Text(actionContext(session.run))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 4)
-                    if let url = session.run.url {
-                        Button { openURL(url) } label: {
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Open \(session.run.name) in GitHub")
-                    }
-                }
-                .padding(.horizontal, 9)
-                .padding(.vertical, 6)
-                .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-                .accessibilityElement(children: .combine)
+    private func actionRow(_ session: GitHubActionSession) -> some View {
+        if let url = session.run.url {
+            Button { openURL(url) } label: { actionContent(session, showsLink: true) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open running GitHub Action \(session.run.name), \(actionContext(session.run)), in GitHub")
+        } else {
+            actionContent(session, showsLink: false)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("GitHub Action \(session.run.name) running, \(actionContext(session.run))")
+        }
+    }
+
+    private func actionContent(_ session: GitHubActionSession, showsLink: Bool) -> some View {
+        HStack(spacing: 10) {
+            NotchIndicatorView(
+                indicator: NotchIndicator(
+                    id: session.id,
+                    content: .githubActions(.running),
+                    accessibilityLabel: "GitHub Action running"
+                ),
+                reduceMotion: reduceMotion
+            )
+            .frame(width: 30, height: 30)
+            .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(session.run.name).font(.callout.weight(.semibold)).lineLimit(1)
+                Text(actionContext(session.run)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            if showsLink {
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
             }
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tileFill, in: RoundedRectangle(cornerRadius: 12))
+        .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func placeholder<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -219,6 +251,16 @@ struct GitHubPage: View {
 }
 
 private extension GitHubPullRequest {
+    var statusLabel: String {
+        if case .failed = actionStatus { return "Checks failed" }
+        return reviewStatusLabel
+    }
+
+    var statusColor: Color {
+        if case .failed = actionStatus { return .red }
+        return reviewStatusColor
+    }
+
     var reviewStatusLabel: String {
         if isDraft { return "Draft" }
         return switch reviewStatus {

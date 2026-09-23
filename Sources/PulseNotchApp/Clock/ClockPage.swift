@@ -4,6 +4,7 @@ struct ClockPage: View {
     @ObservedObject var model: ClockFeatureModel
     let testingStatus: ClockStatus?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     init(model: ClockFeatureModel, testingStatus: ClockStatus? = nil) {
         self.model = model
@@ -20,6 +21,8 @@ struct ClockPage: View {
             .padding(.bottom, 12)
         }
     }
+
+    private var tileFill: Color { .white.opacity(contrast == .increased ? 0.14 : 0.08) }
 
     private func controls(at date: Date) -> some View {
         let selectedMode = testingStatus?.mode ?? model.selectedMode
@@ -54,7 +57,7 @@ struct ClockPage: View {
             .font(.system(size: 38, weight: .medium, design: .rounded))
             .monospacedDigit()
             .contentTransition(reduceMotion ? .identity : .numericText())
-            .accessibilityLabel(ClockTimeFormatter.accessible(model.time(at: date)))
+            .accessibilityLabel(ClockStatus(mode: selectedMode, time: time, isRunning: isRunning).accessibilityLabel)
 
             if selectedMode == .timer, !isRunning {
                 HStack(spacing: 6) {
@@ -91,10 +94,10 @@ struct ClockPage: View {
         let isRunning = testingStatus?.isRunning ?? model.isRunning
         if mode == .timer {
             ZStack {
-                Circle().stroke(.white.opacity(0.1), lineWidth: 9)
+                Circle().stroke(.white.opacity(0.1), lineWidth: 7)
                 Circle()
-                    .trim(from: 0, to: model.timerDuration > 0 ? time / model.timerDuration : 0)
-                    .stroke(.orange, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                    .trim(from: 0, to: model.timerDuration > 0 ? min(max(time / model.timerDuration, 0), 1) : 0)
+                    .stroke(.orange, style: StrokeStyle(lineWidth: 7, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(reduceMotion ? nil : .linear(duration: 1), value: time)
                 Image(systemName: isRunning ? "pause.fill" : "timer")
@@ -103,27 +106,55 @@ struct ClockPage: View {
             }
             .padding(12)
             .frame(width: 154, height: 154)
-            .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 20))
+            .background(.orange.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
             .accessibilityHidden(true)
         } else {
             VStack(alignment: .leading, spacing: 7) {
-                Text("LAPS")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.orange)
+                HStack {
+                    Text("LAPS")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.orange)
+                    Spacer(minLength: 0)
+                    if !model.laps.isEmpty {
+                        Text("\(model.laps.count) recorded")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(height: 16)
                 if model.laps.isEmpty {
-                    ContentUnavailableView("No laps yet", systemImage: "flag", description: Text("Record a lap while the stopwatch is running"))
-                        .controlSize(.small)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Image(systemName: "flag")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Text("No laps yet").font(.callout.weight(.semibold))
+                        Text("Record a lap while running")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(tileFill, in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityElement(children: .combine)
                 } else {
-                    ForEach(Array(model.laps.prefix(4).enumerated()), id: \.offset) { index, lap in
-                        HStack {
-                            Text("Lap \(model.laps.count - index)")
-                            Spacer()
-                            Text(ClockTimeFormatter.display(lap, showsTenths: true)).monospacedDigit()
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 6) {
+                            ForEach(Array(model.lapDurations.enumerated()), id: \.offset) { index, duration in
+                                HStack {
+                                    Text("Lap \(model.laps.count - index)")
+                                    Spacer(minLength: 4)
+                                    Text(ClockTimeFormatter.display(duration, showsTenths: true))
+                                        .monospacedDigit()
+                                }
+                                .font(.caption)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 7)
+                                .background(tileFill, in: RoundedRectangle(cornerRadius: 10))
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("Lap \(model.laps.count - index), \(ClockTimeFormatter.accessible(duration))")
+                            }
                         }
-                        .font(.caption)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
             }

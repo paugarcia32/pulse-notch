@@ -36,6 +36,12 @@ final class ClockFeatureModel: ObservableObject {
         selectedMode == .stopwatch ? stopwatchStartedAt != nil : timerEndsAt != nil
     }
 
+    var lapDurations: [TimeInterval] {
+        laps.enumerated().map { index, elapsed in
+            max(0, elapsed - (index + 1 < laps.count ? laps[index + 1] : 0))
+        }
+    }
+
     func selectMode(_ mode: ClockMode, at date: Date = .now) {
         guard mode != selectedMode else { return }
         if isRunning { startOrPause(at: date) }

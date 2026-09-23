@@ -506,19 +506,27 @@ struct PreferencesView: View {
                 Toggle("Enable testing features", isOn: testingFeaturesEnabled)
             }
             if preferences.testingFeaturesEnabled {
-                Section("Closed notch previews") {
+                Section {
                     ForEach(CollapsedIndicatorPreview.allCases) { preview in
                         Stepper(value: collapsedIndicatorPreviewCount(preview), in: 0...preview.maximumPreviewCount) {
                             Text("\(preview.name): \(preferences.collapsedIndicatorPreviewCount(preview))")
                         }
                     }
+                } header: {
+                    Text("Closed notch previews")
+                } footer: {
+                    Text("The calendar countdown also appears in Summary and Calendar.")
                 }
-                Section("Summary previews") {
+                Section {
                     ForEach(SummaryPreview.allCases) { preview in
                         Stepper(value: summaryPreviewCount(preview), in: 0...preview.maximumPreviewCount) {
                             Text("\(preview.name): \(preferences.summaryPreviewCount(preview))")
                         }
                     }
+                } header: {
+                    Text("Summary previews")
+                } footer: {
+                    Text("Pull request previews also appear on the GitHub page.")
                 }
                 Section("Priority activities") {
                     Button("Show charging activity") { preferences.triggerTestingSystemActivity(.charging) }

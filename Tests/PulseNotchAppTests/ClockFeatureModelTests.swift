@@ -48,6 +48,22 @@ struct ClockFeatureModelTests {
     }
 
     @Test
+    func lapRowsShowIndividualIntervalsInsteadOfCumulativeStopwatchTime() {
+        let model = ClockFeatureModel()
+        model.selectMode(.stopwatch, at: start)
+        model.startOrPause(at: start)
+        model.recordLap(at: start.addingTimeInterval(5.5))
+        model.recordLap(at: start.addingTimeInterval(8))
+        model.recordLap(at: start.addingTimeInterval(12.2))
+
+        #expect(model.lapDurations.count == 3)
+        #expect(abs(model.lapDurations[0] - 4.2) < 0.001)
+        #expect(ClockTimeFormatter.display(model.lapDurations[0], showsTenths: true) == "00:04.2")
+        #expect(model.lapDurations[1] == 2.5)
+        #expect(model.lapDurations[2] == 5.5)
+    }
+
+    @Test
     func switchingModesPausesTheRunningClock() {
         let model = ClockFeatureModel()
         model.startOrPause(at: start)

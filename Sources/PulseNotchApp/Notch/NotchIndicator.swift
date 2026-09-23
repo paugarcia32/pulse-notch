@@ -171,10 +171,16 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
         self == .calendar || self == .clock ? 1 : 5
     }
 
-    func indicator(instance: Int) -> NotchIndicator {
+    func indicator(instance: Int, at date: Date = .now) -> NotchIndicator {
         switch self {
         case .calendar:
-            return NotchIndicator(id: "\(rawValue)-\(instance)", content: .upcomingCalendarEvent(minutesUntilStart: 31), accessibilityLabel: "Next calendar event starts in 31 minutes")
+            let minutes = testingCalendarEvent(instance: instance, at: date)
+                .map { max(1, Int(($0.startsAt.timeIntervalSince(date) / 60).rounded(.up))) } ?? 31
+            return NotchIndicator(
+                id: "\(rawValue)-\(instance)",
+                content: .upcomingCalendarEvent(minutesUntilStart: minutes),
+                accessibilityLabel: "Next calendar event starts in \(minutes) \(minutes == 1 ? "minute" : "minutes")"
+            )
         case .githubActions:
             return NotchIndicator(id: "\(rawValue)-\(instance)", content: .githubActions(.running), accessibilityLabel: "GitHub Actions running")
         case .codex: return runningAgent(.codex, instance: instance)
@@ -209,7 +215,10 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
 
     func testingCalendarEvent(instance: Int, at date: Date) -> CalendarEvent? {
         guard self == .calendar else { return nil }
-        let startsAt = date.addingTimeInterval(31 * 60)
+        let dayEnd = Calendar.autoupdatingCurrent.dateInterval(of: .day, for: date)?.end
+        let remainingToday = dayEnd?.timeIntervalSince(date) ?? 31 * 60
+        let leadTime = min(31 * 60, max(remainingToday - 1, remainingToday / 2))
+        let startsAt = date.addingTimeInterval(leadTime)
         return CalendarEvent(
             id: "testing-calendar-\(instance)",
             title: "Testing event",
@@ -262,6 +271,7 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
         guard self == .download else { return nil }
         return DetectedDownload(
             id: "/tmp/pulse-notch-testing/download-\(instance).zip",
+            fileName: "Sample download \(instance + 1).zip",
             byteCount: 42 * 1_024 * 1_024,
             totalByteCount: 100 * 1_024 * 1_024
         )
@@ -589,9 +599,10 @@ enum AgentIconResource {
     }
 }
 
-private struct AgentActivityOrbit: View {
+struct AgentActivityOrbit: View {
     let color: Color
     let reduceMotion: Bool
+    var size: CGFloat = 14
 
     var body: some View {
         if reduceMotion {
@@ -606,14 +617,14 @@ private struct AgentActivityOrbit: View {
     private func orbit(progress: Double) -> some View {
         ZStack {
             Circle()
-                .stroke(color.opacity(0.3), lineWidth: 1.3)
+                .stroke(color.opacity(0.3), lineWidth: size > 14 ? 1.5 : 1.3)
             Circle()
                 .fill(color)
-                .frame(width: 3.5, height: 3.5)
-                .offset(y: -5.2)
+                .frame(width: size * 0.25, height: size * 0.25)
+                .offset(y: -size * 0.37)
                 .rotationEffect(.degrees(progress * 360))
         }
-        .frame(width: 14, height: 14)
+        .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
 }

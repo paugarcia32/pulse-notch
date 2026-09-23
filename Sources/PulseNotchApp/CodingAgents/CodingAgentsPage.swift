@@ -8,6 +8,7 @@ struct CodingAgentsPage: View {
 
     @State private var showsSetup = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     init(model: CodingAgentFeatureModel, date: Date, testingSessions: [CodingAgentSession]? = nil) {
         self.model = model
@@ -34,7 +35,7 @@ struct CodingAgentsPage: View {
     private func content(_ sessions: [CodingAgentSession]) -> some View {
         let activeSessions = sessions.filter { $0.status == .running }
 
-        return HStack(alignment: .top, spacing: 14) {
+        return HStack(alignment: .top, spacing: 12) {
             agentsPanel(activeSessions)
             usagePanel()
         }
@@ -45,7 +46,7 @@ struct CodingAgentsPage: View {
 
     private func agentsPanel(_ sessions: [CodingAgentSession]) -> some View {
         VStack(alignment: .leading, spacing: 9) {
-            sectionHeader("ACTIVE AGENTS", detail: sessions.isEmpty ? "Watching" : "\(sessions.count) running")
+            sectionHeader("AGENTS", detail: sessions.isEmpty ? "Idle" : "\(sessions.count) running")
             if sessions.isEmpty {
                 emptyState
             } else {
@@ -59,95 +60,95 @@ struct CodingAgentsPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    private var tileFill: Color { .white.opacity(contrast == .increased ? 0.14 : 0.08) }
+
     private func sectionHeader(_ title: String, detail: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(title)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(.pink)
+                .foregroundStyle(.secondary)
             Spacer(minLength: 6)
             Text(detail)
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
+        .frame(height: 16)
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 6) {
             Image(systemName: "terminal")
-                .font(.title3)
+                .font(.system(size: 20))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text("No agents running").font(.callout.weight(.semibold))
             Text("Watching this Mac for coding sessions").font(.caption).foregroundStyle(.secondary)
         }
-        .padding(.top, 12)
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-
-    private func agentRow(_ session: CodingAgentSession) -> some View {
-        let running = session.status == .running
-        return HStack(spacing: 10) {
-            statusIcon(session, running: running)
-                .frame(width: 24, height: 32)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(session.title).font(.callout.weight(.semibold)).lineLimit(1)
-                HStack(spacing: 7) {
-                    Label(workspaceName(session) ?? session.kind.displayName,
-                          systemImage: workspaceName(session) == nil ? "cpu" : "folder")
-                    if let branch = session.gitBranch {
-                        Label(branch, systemImage: "arrow.triangle.branch")
-                    }
-                    Label(duration(session), systemImage: "clock")
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
-        }
-        .padding(9)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(tileFill, in: RoundedRectangle(cornerRadius: 14))
         .accessibilityElement(children: .combine)
     }
 
-    private func statusIcon(_ session: CodingAgentSession, running: Bool) -> some View {
-        NotchIndicatorView(
-            indicator: NotchIndicator(
-                id: session.id,
-                content: running ? .runningAgent(session.kind) : .completedAgent(session.kind),
-                accessibilityLabel: running ? "Running" : "Completed"
-            ),
-            reduceMotion: reduceMotion
-        )
+    private func agentRow(_ session: CodingAgentSession) -> some View {
+        let workspace = workspaceName(session)
+        return HStack(spacing: 10) {
+            AgentActivityOrbit(color: session.kind.notchColor, reduceMotion: reduceMotion, size: 22)
+                .frame(width: 32, height: 32)
+                .background(session.kind.notchColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(session.title)
+                        .font(.callout.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(duration(session))
+                        .font(.caption2.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                }
+                Text([workspace ?? session.kind.displayName, session.gitBranch].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tileFill, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(session.kind.displayName) running, \(session.title), \(workspace ?? session.kind.displayName)\(session.gitBranch.map { ", branch \($0)" } ?? ""), \(duration(session))")
     }
 
     @ViewBuilder
     private func usagePanel() -> some View {
         VStack(alignment: .leading, spacing: 9) {
-            sectionHeader("USAGE", detail: "Live limits")
+            sectionHeader("LIMITS", detail: "Remaining")
             switch model.usageState {
             case .loading:
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
             case let .loaded(availability):
-                if availability.isEmpty {
-                    Text("No usage data available")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 9) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(alignment: .leading, spacing: 7) {
+                        if availability.isEmpty {
+                            usageMessage("No usage data available", symbol: "gauge.with.dots.needle.67percent")
+                        } else {
                             ForEach(availability) { status in
                                 switch status {
                                 case let .available(usage): usageRow(usage)
                                 case let .unavailable(kind): unavailableUsageRow(kind)
                                 }
                             }
-                            setupOptions(excluding: Set(availability.map(\.kind)))
                         }
+                        setupOptions(excluding: Set(availability.map(\.kind)))
                     }
                 }
             case .unavailable:
-                Label("Usage limits are unavailable", systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                usageMessage("Usage limits are unavailable", symbol: "exclamationmark.triangle")
             }
         }
         .frame(width: 204)
@@ -167,34 +168,63 @@ struct CodingAgentsPage: View {
     }
 
     private func unavailableUsageRow(_ kind: CodingAgentKind) -> some View {
-        HStack(spacing: 12) {
-            AgentMark(kind: kind, size: 15)
-                .frame(width: 24, height: 24)
-            Text(kind.displayName).font(.callout.weight(.semibold))
-            Spacer(minLength: 8)
-            Text(unavailableDescription(kind)).font(.caption2).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                AgentMark(kind: kind, size: 15)
+                Text(kind.displayName).font(.caption.weight(.semibold)).lineLimit(1)
+            }
+            Text(unavailableDescription(kind))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tileFill, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
     }
 
     private func usageGauge(_ window: CodingAgentUsage.Window, kind: CodingAgentKind) -> some View {
-        let used = Int(window.usedPercent.rounded())
-        return VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 4) {
+        let remaining = Int(window.remainingPercent.rounded())
+        let reset = Self.resetDescription(window, at: date)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("\(kind.displayName) · \(windowName(window))")
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                Text(usageDetail(window, used: used))
+                Text("\(remaining)%")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundStyle(kind.notchColor)
+                    .monospacedDigit()
+                    .fixedSize()
+            }
+            ProgressView(value: window.remainingPercent, total: 100)
+                .tint(kind.notchColor)
+                .scaleEffect(x: 1, y: 0.65, anchor: .center)
+                .accessibilityHidden(true)
+            if !reset.isEmpty {
+                Text(reset)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
                     .lineLimit(1)
             }
-            ProgressView(value: window.usedPercent, total: 100)
-                .tint(kind.notchColor)
-                .scaleEffect(x: 1, y: 0.7, anchor: .center)
         }
-        .accessibilityLabel("\(kind.displayName), \(windowName(window)) limit, \(used) percent used\(resetDescription(window).isEmpty ? "" : ", \(resetDescription(window))")")
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tileFill, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(kind.displayName), \(windowName(window)) limit, \(remaining) percent remaining\(reset.isEmpty ? "" : ", \(reset)")")
+    }
+
+    private func usageMessage(_ message: String, symbol: String) -> some View {
+        Label(message, systemImage: symbol)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tileFill, in: RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder
@@ -252,18 +282,16 @@ struct CodingAgentsPage: View {
         }
     }
 
-    private func usageDetail(_ window: CodingAgentUsage.Window, used: Int) -> String {
-        let reset = resetDescription(window)
-        return reset.isEmpty ? "\(used)%" : "\(used)% · \(reset)"
-    }
-
-    private func resetDescription(_ window: CodingAgentUsage.Window) -> String {
+    static func resetDescription(_ window: CodingAgentUsage.Window, at date: Date) -> String {
         guard let resetsAt = window.resetsAt else { return "" }
         let seconds = Int(resetsAt.timeIntervalSince(date))
         guard seconds > 0 else { return "resets soon" }
         let days = seconds / 86_400
         let hours = (seconds % 86_400) / 3_600
-        return days > 0 ? "resets in \(days)d \(hours)h" : "resets in \(max(hours, 1))h"
+        if days > 0 { return "resets in \(days)d \(hours)h" }
+        if hours > 0 { return "resets in \(hours)h" }
+        let minutes = seconds / 60
+        return minutes > 0 ? "resets in \(minutes)m" : "resets soon"
     }
 
     private func unavailableDescription(_ kind: CodingAgentKind) -> String {

@@ -54,22 +54,25 @@ enum SummaryPreview: String, CaseIterable, Identifiable {
     func testingPullRequest(at date: Date) -> GitHubPullRequest? {
         let reviewStatus: GitHubPullRequest.ReviewStatus
         let title: String
+        let number: Int
         switch self {
         case .githubAttention:
             reviewStatus = .changesRequested
             title = "Address review feedback"
+            number = 42
         case .openPullRequest:
             reviewStatus = .awaitingReview
             title = "Ready for review"
+            number = 43
         case .usageLimits:
             return nil
         }
 
-        guard let url = URL(string: "https://github.com/pulse-notch/pulse-notch/pull/42") else { return nil }
+        guard let url = URL(string: "https://github.com/pulse-notch/pulse-notch/pull/\(number)") else { return nil }
         return GitHubPullRequest(
             id: "summary-preview-\(rawValue)",
             repository: "pulse-notch/pulse-notch",
-            number: 42,
+            number: number,
             title: title,
             url: url,
             isDraft: false,
@@ -179,6 +182,7 @@ struct SummaryPage: View {
     let testingClock: ClockStatus?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
     init(
         calendarModel: CalendarFeatureModel,
@@ -218,15 +222,17 @@ struct SummaryPage: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            highlightCard
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(alignment: .leading, spacing: 9) {
+                sectionHeader(highlight.eyebrow, detail: highlight.detail(at: date), color: highlight.color)
+                highlightCard
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             runningPanel
                 .frame(width: 204)
                 .frame(maxHeight: .infinity, alignment: .topLeading)
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 12)
-        .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: highlight)
     }
 
     private var highlight: SummaryHighlight {
@@ -296,65 +302,75 @@ struct SummaryPage: View {
     }
 
     private var highlightContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(highlight.eyebrow, detail: highlight.detail(at: date))
+        VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 0)
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: highlight.symbolName)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(highlight.color)
-                    .frame(width: 38, height: 38)
-                    .background(highlight.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
-                VStack(alignment: .leading, spacing: 3) {
+                    .frame(width: 30, height: 30)
+                    .background(highlight.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 9))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
                     Text(highlight.title)
-                        .font(highlight.usesCompactTitle ? .callout.weight(.semibold) : .title3.weight(.semibold))
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
                         .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .minimumScaleFactor(0.85)
+                        .monospacedDigit()
                     Text(highlight.subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
-                }
-                Spacer(minLength: 0)
-                if let percentage = highlight.remainingPercentage {
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text("\(percentage)%")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(highlight.color)
-                            .monospacedDigit()
-                        Text("left")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                if canNavigateToHighlight {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.leading)
                 }
             }
             Spacer(minLength: 0)
+            if let percentage = highlight.remainingPercentage {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(percentage)%")
+                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(highlight.color)
+                    Text("left")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 8)
+            }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
-        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(tileFill, in: RoundedRectangle(cornerRadius: 14))
+        .contentShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private func sectionHeader(_ title: String, detail: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+    private var tileFill: Color { .white.opacity(contrast == .increased ? 0.14 : 0.08) }
+
+    private func sectionHeader(_ title: String, detail: String, color: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(title)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(.pink)
+                .foregroundStyle(color)
+                .lineLimit(1)
             Spacer(minLength: 6)
             Text(detail)
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
+        .frame(height: 16)
     }
 
     private var runningPanel: some View {
         VStack(alignment: .leading, spacing: 9) {
-            sectionHeader("RUNNING", detail: "\(runningAgents.count + runningActions.count) active")
+            sectionHeader(
+                "ACTIVITY",
+                detail: runningAgents.isEmpty && runningActions.isEmpty
+                    ? "Idle" : "\(runningAgents.count + runningActions.count) running",
+                color: .secondary
+            )
             if runningAgents.isEmpty && runningActions.isEmpty {
                 quietState
             } else {
@@ -366,65 +382,94 @@ struct SummaryPage: View {
                 }
             }
         }
-        .padding(.top, 12)
     }
 
     private var quietState: some View {
-        VStack(spacing: 5) {
-            Image(systemName: "pause.circle")
-                .font(.title3)
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 20))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text("Nothing running")
                 .font(.callout.weight(.semibold))
-            Text("Agents and Actions will appear here")
-                .font(.caption2)
+            Text("Agents and Actions are idle")
+                .font(.caption)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(tileFill, in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
     }
 
     private func agentRow(_ session: CodingAgentSession) -> some View {
         Button { onSelectPage(.agents) } label: {
-            HStack(spacing: 8) {
-                AgentMark(kind: session.kind, size: 14)
-                    .frame(width: 22, height: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(session.title).font(.caption.weight(.semibold)).lineLimit(1)
-                    Text(workspaceName(session) ?? session.kind.displayName)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
+            activityRow(color: session.kind.notchColor) {
+                AgentActivityOrbit(color: session.kind.notchColor, reduceMotion: reduceMotion, size: 22)
+                    .accessibilityHidden(true)
+            } title: {
+                session.title
+            } subtitle: {
+                workspaceName(session) ?? session.kind.displayName
             }
-            .padding(8)
-            .background(session.kind.notchColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(session.kind.displayName) agent running, \(session.title)")
+        .disabled(!availablePages.contains(.agents))
+        .accessibilityLabel("\(session.kind.displayName) agent running, \(session.title), \(workspaceName(session) ?? session.kind.displayName)")
+        .accessibilityHint(availablePages.contains(.agents) ? "Opens the agents page" : "")
     }
 
     private func actionRow(_ session: GitHubActionSession) -> some View {
         Button { onSelectPage(.github) } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.orange)
-                    .frame(width: 22, height: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(session.run.name).font(.caption.weight(.semibold)).lineLimit(1)
-                    Text(actionContext(session.run))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
+            activityRow(color: .orange) {
+                NotchIndicatorView(
+                    indicator: NotchIndicator(
+                        id: session.id,
+                        content: .githubActions(.running),
+                        accessibilityLabel: "Running"
+                    ),
+                    reduceMotion: reduceMotion
+                )
+                .frame(width: 28, height: 28)
+                .accessibilityHidden(true)
+            } title: {
+                session.run.name
+            } subtitle: {
+                actionContext(session.run)
             }
-            .padding(8)
-            .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("GitHub Action \(session.run.name) running")
+        .disabled(!availablePages.contains(.github))
+        .accessibilityLabel("GitHub Action \(session.run.name) running, \(actionContext(session.run))")
+        .accessibilityHint(availablePages.contains(.github) ? "Opens the GitHub page" : "")
+    }
+
+    private func activityRow<Icon: View>(
+        color: Color,
+        @ViewBuilder icon: () -> Icon,
+        title: () -> String,
+        subtitle: () -> String
+    ) -> some View {
+        HStack(spacing: 9) {
+            icon()
+                .frame(width: 30, height: 30)
+                .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title())
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                Text(subtitle())
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tileFill, in: RoundedRectangle(cornerRadius: 12))
+        .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func actionContext(_ run: GitHubActionRun) -> String {
@@ -532,12 +577,6 @@ private extension SummaryHighlight {
         [eyebrow, title, remainingPercentage.map { "\($0) percent left" }, detail(at: date), subtitle]
             .compactMap { $0 }
             .joined(separator: ", ")
-    }
-
-    var usesCompactTitle: Bool {
-        if case .event = self { return true }
-        if case .usage = self { return true }
-        return false
     }
 
     var remainingPercentage: Int? {
