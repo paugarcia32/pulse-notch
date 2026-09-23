@@ -21,14 +21,32 @@ struct PulseNotchApp: App {
     @NSApplicationDelegateAdaptor(NotchPanelController.self) private var notchController
 
     var body: some Scene {
-        Settings {
-            PreferencesView(
-                preferences: notchController.preferences,
-                updateModel: notchController.updateModel,
-                displays: notchController.availableDisplays
+        MenuBarExtra(
+            "Pulse Notch",
+            systemImage: "waveform.path.ecg",
+            isInserted: Binding(
+                get: { !notchController.preferences.hideFromMenuBar },
+                set: { isInserted in
+                    let shouldHide = !isInserted
+                    guard notchController.preferences.hideFromMenuBar != shouldHide else { return }
+                    notchController.preferences.hideFromMenuBar = shouldHide
+                }
             )
+        ) {
+            Button("Open Notch") {
+                NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
+            }
+            UpdateMenuItem(model: notchController.updateModel)
+            Button("Settings…") { notchController.showSettings() }
+            Divider()
+            Button("Quit Pulse Notch") { NSApplication.shared.terminate(nil) }
         }
         .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { notchController.showSettings() }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
+
             CommandMenu("Pulse Notch") {
                 Button("Open Notch") {
                     NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
@@ -48,27 +66,6 @@ struct PulseNotchApp: App {
                     .keyboardShortcut(notchController.preferences.shortcut(for: .page(at: index)).keyboardShortcut)
                 }
             }
-        }
-
-        MenuBarExtra(
-            "Pulse Notch",
-            systemImage: "waveform.path.ecg",
-            isInserted: Binding(
-                get: { !notchController.preferences.hideFromMenuBar },
-                set: { isInserted in
-                    let shouldHide = !isInserted
-                    guard notchController.preferences.hideFromMenuBar != shouldHide else { return }
-                    notchController.preferences.hideFromMenuBar = shouldHide
-                }
-            )
-        ) {
-            Button("Open Notch") {
-                NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
-            }
-            UpdateMenuItem(model: notchController.updateModel)
-            SettingsLink { Text("Settings…") }
-            Divider()
-            Button("Quit Pulse Notch") { NSApplication.shared.terminate(nil) }
         }
     }
 }

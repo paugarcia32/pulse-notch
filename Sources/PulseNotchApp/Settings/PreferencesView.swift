@@ -24,8 +24,23 @@ struct PreferencesView: View {
     @State private var gitHubRepositoryError: String?
 
     var body: some View {
-        settingsLayout
-            .frame(minWidth: 760, idealWidth: 820, minHeight: 480, idealHeight: 540)
+        GeometryReader { geometry in
+            settingsLayout
+                .padding(.top, geometry.safeAreaInsets.top)
+                .background {
+                    HStack(spacing: 0) {
+                        if isSidebarVisible {
+                            Rectangle()
+                                .fill(.regularMaterial)
+                                .frame(width: settingsSidebarWidth)
+                            Divider()
+                        }
+                        Color(nsColor: .underPageBackgroundColor)
+                    }
+                }
+                .ignoresSafeArea(edges: .top)
+        }
+        .frame(minWidth: 760, idealWidth: 820, minHeight: 480, idealHeight: 540)
     }
 
     private var settingsLayout: some View {
@@ -60,7 +75,6 @@ struct PreferencesView: View {
                     appIdentity
                 }
                 .frame(width: settingsSidebarWidth)
-                .background(.regularMaterial)
 
                 Divider()
             }
@@ -180,6 +194,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
@@ -259,6 +274,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     private var pagesOverview: some View {
@@ -298,6 +314,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     private func pageSettings(_ page: NotchPage) -> some View {
@@ -364,6 +381,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     private var downloadsSettings: some View {
@@ -479,6 +497,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     private var advancedSettings: some View {
@@ -527,6 +546,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     private func numberedLabel(_ number: Int, _ title: String, symbol: String) -> some View {
@@ -814,16 +834,10 @@ private final class SettingsWindowConfigurationView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        guard let window else {
+        guard window != nil else {
             removeMouseMonitor()
             return
         }
-        window.styleMask.formUnion([.fullSizeContentView, .miniaturizable, .resizable])
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.titlebarSeparatorStyle = .none
-        window.toolbar = nil
-        window.isMovableByWindowBackground = true
         updateTitlebarControls()
         installMouseMonitor()
     }

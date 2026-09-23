@@ -69,6 +69,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
 
     private var panel: NotchPanel?
     private var hostingView: NotchHostingView<NotchSurface>?
+    private var settingsWindowController: SettingsWindowController?
 
     private static func makeMediaPlaybackProvider() -> any MediaPlaybackProviding {
         if let provider = MediaRemoteAdapterPlaybackProvider() { return provider }
@@ -92,6 +93,18 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             guard let id = displayID(for: screen) else { return nil }
             return NotchDisplayOption(id: id, name: screen.localizedName)
         }
+    }
+
+    func showSettings() {
+        if settingsWindowController == nil {
+            settingsWindowController = SettingsWindowController(
+                preferences: preferences,
+                updateModel: updateModel,
+                displays: availableDisplays
+            )
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindowController?.showWindow(nil)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

@@ -102,6 +102,10 @@ or Downloads access only when the corresponding feature needs it.
 
 ## Development
 
+Settings use an AppKit window created by `SettingsWindowController` before its
+SwiftUI content is installed. This lets the sidebar and detail backgrounds extend
+behind the transparent titlebar; the menu bar item and ⌘, open that window.
+
 Build and open the app without launching it automatically:
 
 ```sh
