@@ -220,14 +220,11 @@ struct NotchSurface: View {
             }
         }
         .task { await volumeModel.startMonitoring() }
-        .task {
-            await brightnessModel.startMonitoring()
-            // ponytail: CoreBrightness has no public observation API. This
-            // keeps unsupported systems responsive while notifications cover
-            // the usual immediate path.
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(250))
-                await brightnessModel.refresh()
+        .task(id: preferences.showBrightnessActivity) {
+            if preferences.showBrightnessActivity {
+                brightnessModel.startMonitoring()
+            } else {
+                brightnessModel.stopMonitoring()
             }
         }
         .task(id: gitHubMonitoringID) {
@@ -355,7 +352,7 @@ struct NotchSurface: View {
                 }
 
             collapsedIndicators(at: date)
-                .padding(.horizontal, physicalNotchSize == nil ? 12 : 0)
+                .padding(.horizontal, physicalNotchSize == nil && systemActivityModel.activity == nil ? 12 : 0)
                 .frame(width: collapsedSurfaceSize.width, height: collapsedSurfaceSize.height, alignment: .top)
                 .opacity(1 - expansionProgress)
                 .allowsHitTesting(!isExpanded)
@@ -462,19 +459,26 @@ struct NotchSurface: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(activity.accessibilityLabel)
         } else {
-            HStack(spacing: 8) {
+            HStack(spacing: 0) {
                 Image(systemName: activity.symbolName)
+                    .frame(width: systemActivitySideWidth, height: collapsedSize.height)
+
+                Color.clear
+                    .frame(width: SystemActivityLayout.externalCenterWidth(for: collapsedSize.width), height: collapsedSize.height)
+                    .accessibilityHidden(true)
+
                 activityLevel(activity)
+                    .frame(width: systemActivitySideWidth, height: collapsedSize.height)
             }
             .font(.system(size: 14, weight: .semibold, design: .rounded))
             .foregroundStyle(activity.color)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: collapsedSize.width, height: collapsedSize.height)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(activity.accessibilityLabel)
         }
     }
 
-    private var systemActivitySideWidth: CGFloat { 38 }
+    private var systemActivitySideWidth: CGFloat { SystemActivityLayout.sideWidth }
 
     @ViewBuilder
     private func activityLevel(_ activity: SystemActivityFeatureModel.Activity) -> some View {
@@ -973,6 +977,14 @@ struct NotchSurface: View {
 
     private func previousPage(in pages: [NotchPage]) -> NotchPage {
         wrappingPage(in: pages, from: selectedPage, offset: -1) ?? selectedPage
+    }
+}
+
+enum SystemActivityLayout {
+    static let sideWidth: CGFloat = 38
+
+    static func externalCenterWidth(for collapsedWidth: CGFloat) -> CGFloat {
+        max(0, collapsedWidth - 2 * sideWidth)
     }
 }
 

@@ -22,25 +22,42 @@ struct SystemVolumeProvider: SystemVolumeProviding {
             throw CocoaError(.fileReadUnknown)
         }
 
-        var volume: Float32 = 0
-        var volumeSize = UInt32(MemoryLayout<Float32>.size)
-        var volumeAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyVolumeScalar,
-            mScope: kAudioDevicePropertyScopeOutput,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        guard AudioObjectGetPropertyData(deviceID, &volumeAddress, 0, nil, &volumeSize, &volume) == noErr else {
+        let volume = VolumeChannelReading.volume { channel in
+            var value: Float32 = 0
+            var size = UInt32(MemoryLayout<Float32>.size)
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyVolumeScalar,
+                mScope: kAudioDevicePropertyScopeOutput,
+                mElement: channel
+            )
+            guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value) == noErr else { return nil }
+            return value
+        }
+        guard let volume else {
             throw CocoaError(.fileReadUnknown)
         }
 
-        var muted: UInt32 = 0
-        var muteSize = UInt32(MemoryLayout<UInt32>.size)
-        var muteAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyMute,
-            mScope: kAudioDevicePropertyScopeOutput,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        let isMuted = AudioObjectGetPropertyData(deviceID, &muteAddress, 0, nil, &muteSize, &muted) == noErr && muted != 0
+        let isMuted = VolumeChannelReading.channels.contains { channel in
+            var muted: UInt32 = 0
+            var size = UInt32(MemoryLayout<UInt32>.size)
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyMute,
+                mScope: kAudioDevicePropertyScopeOutput,
+                mElement: channel
+            )
+            return AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &muted) == noErr && muted != 0
+        }
         return SystemVolumeStatus(level: Int((volume * 100).rounded()), isMuted: isMuted)
+    }
+}
+
+enum VolumeChannelReading {
+    static let channels: [AudioObjectPropertyElement] = [kAudioObjectPropertyElementMain, 1, 2]
+
+    static func volume(read: (AudioObjectPropertyElement) -> Float32?) -> Float32? {
+        if let main = read(kAudioObjectPropertyElementMain) { return main }
+        let values = [read(1), read(2)].compactMap { $0 }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Float32(values.count)
     }
 }

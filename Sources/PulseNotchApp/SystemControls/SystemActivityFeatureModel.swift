@@ -19,6 +19,7 @@ final class SystemActivityFeatureModel: ObservableObject {
     @Published private(set) var activity: Activity?
 
     func present(kind: Kind, level: Int) {
+        if case .brightness = kind, let activity, !activity.kind.matches(.brightness) { return }
         activity = Activity(kind: kind, level: level)
     }
 

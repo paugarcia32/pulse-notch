@@ -105,18 +105,15 @@ final class VolumeChangeMonitor {
     }
 
     private var outputDeviceAddresses: [AudioObjectPropertyAddress] {
-        [
-            AudioObjectPropertyAddress(
-                mSelector: kAudioDevicePropertyVolumeScalar,
-                mScope: kAudioDevicePropertyScopeOutput,
-                mElement: kAudioObjectPropertyElementMain
-            ),
-            AudioObjectPropertyAddress(
-                mSelector: kAudioDevicePropertyMute,
-                mScope: kAudioDevicePropertyScopeOutput,
-                mElement: kAudioObjectPropertyElementMain
-            )
-        ]
+        VolumeChannelReading.channels.flatMap { channel in
+            [kAudioDevicePropertyVolumeScalar, kAudioDevicePropertyMute].map { selector in
+                AudioObjectPropertyAddress(
+                    mSelector: selector,
+                    mScope: kAudioDevicePropertyScopeOutput,
+                    mElement: channel
+                )
+            }
+        }
     }
 }
 

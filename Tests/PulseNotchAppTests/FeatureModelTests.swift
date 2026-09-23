@@ -121,18 +121,76 @@ struct FeatureModelTests {
     }
 
     @Test
-    func brightnessModelShowsAnActivityWhenBrightnessChanges() async {
+    func brightnessModelShowsAnActivityOnlyForBrightnessKeyPresses() async {
         let provider = BrightnessSequenceProvider(statuses: [
             DisplayBrightnessStatus(level: 40),
-            DisplayBrightnessStatus(level: 52)
+            DisplayBrightnessStatus(level: 60)
         ])
         let model = BrightnessFeatureModel(provider: provider)
 
-        await model.refresh()
         #expect(model.activity == nil)
 
-        await model.refresh()
-        #expect(model.activity == DisplayBrightnessStatus(level: 52))
+        await model.refreshForBrightnessKeyPress()
+        #expect(model.activity == DisplayBrightnessStatus(level: 40))
+
+        model.consumeActivity()
+        #expect(model.activity == nil)
+
+        await model.refreshForBrightnessKeyPress()
+        #expect(model.activity == DisplayBrightnessStatus(level: 60))
+    }
+
+    @Test
+    func recognizesBrightnessKeyDownButNotOtherSystemEvents() {
+        #expect(BrightnessKeyPress.isBrightnessKeyDown(subtype: 8, data1: (2 << 16) | (0x0A << 8)))
+        #expect(BrightnessKeyPress.isBrightnessKeyDown(subtype: 8, data1: (3 << 16) | (0x0A << 8)))
+        #expect(!BrightnessKeyPress.isBrightnessKeyDown(subtype: 8, data1: (2 << 16) | (0x0B << 8)))
+        #expect(!BrightnessKeyPress.isBrightnessKeyDown(subtype: 8, data1: (0 << 16) | (0x0A << 8)))
+        #expect(!BrightnessKeyPress.isBrightnessKeyDown(subtype: 7, data1: (2 << 16) | (0x0A << 8)))
+    }
+
+    @Test
+    func brightnessDoesNotReplaceChargingActivity() throws {
+        let model = SystemActivityFeatureModel()
+        model.present(kind: .charging, level: 58)
+        let charging = try #require(model.activity)
+
+        model.present(kind: .brightness, level: 75)
+
+        #expect(model.activity == charging)
+        model.dismiss(id: charging.id)
+        model.present(kind: .brightness, level: 75)
+        #expect(model.activity?.kind == .brightness)
+    }
+
+    @Test
+    func brightnessDoesNotHideVolumeChanges() {
+        let model = SystemActivityFeatureModel()
+        model.present(kind: .brightness, level: 40)
+        model.present(kind: .volume(isMuted: false), level: 50)
+        let volume = model.activity
+
+        model.present(kind: .brightness, level: 60)
+
+        #expect(model.activity == volume)
+        model.present(kind: .volume(isMuted: false), level: 55)
+        #expect(model.activity?.level == 55)
+    }
+
+    @Test
+    func volumeFallsBackToAvailableOutputChannels() {
+        let volume = VolumeChannelReading.volume { channel in
+            switch channel {
+            case 1: 0.4
+            case 2: 0.6
+            default: nil
+            }
+        }
+
+        #expect(volume == 0.5)
+        #expect(VolumeChannelReading.volume { $0 == 2 ? 0.7 : nil } == 0.7)
+        #expect(VolumeChannelReading.volume { _ in nil } == nil)
+        #expect(VolumeChannelReading.volume { $0 == 0 ? 0.8 : 0.2 } == 0.8)
     }
 
     @Test

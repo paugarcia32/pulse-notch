@@ -76,7 +76,8 @@ SwiftPM executable.
   Settings, including workflows triggered by pushes and tags.
 - Active browser downloads and Homebrew operations.
 - Now Playing controls, artwork, and playback progress.
-- Charging, volume, brightness, and Bluetooth-headphone activities.
+- Charging, volume, brightness-key presses, and Bluetooth-headphone activities.
+  Automatic display-brightness adjustments do not trigger the notch indicator.
 - Stopwatch and timer activity.
 - Multiple displays, Spaces, full-screen apps, keyboard shortcuts, and configurable
   collapsed indicators.
@@ -98,6 +99,10 @@ Pulse Notch processes activity locally and does not include telemetry.
 - Downloads monitoring observes the selected local folder and can be disabled.
 - Battery, Bluetooth, volume, brightness, and media state are read locally and kept
   in memory.
+- When the brightness indicator is enabled, Pulse Notch listens for brightness-key
+  events and reads the current brightness only after a key press. It does not store
+  keystrokes. macOS may require Input Monitoring access to deliver these events
+  while another app is focused; without it, the brightness indicator may not appear.
 - Update checks query the public GitHub Releases API at most once per day and can be
   disabled in Settings.
 - No credentials are stored by Pulse Notch.
