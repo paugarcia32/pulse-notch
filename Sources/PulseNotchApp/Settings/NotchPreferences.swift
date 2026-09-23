@@ -95,6 +95,7 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var pageOrder: [NotchPage]
     @Published private(set) var visiblePages: Set<NotchPage>
     @Published private(set) var dynamicPagesEnabled: Bool
+    @Published private(set) var activeDynamicPages: [NotchPage] = []
     @Published private(set) var summaryPriorityOrder: [SummaryPriority]
     @Published var openAtLogin: Bool {
         didSet {
@@ -243,6 +244,9 @@ final class NotchPreferences: ObservableObject {
     }
 
     var orderedVisiblePages: [NotchPage] { pageOrder.filter { visiblePages.contains($0) } }
+    var shortcutPages: [NotchPage] {
+        dynamicPagesEnabled ? activeDynamicPages : orderedVisiblePages
+    }
     var calendarReminderLeadTime: TimeInterval { TimeInterval(calendarReminderLeadTimeMinutes * 60) }
     var transientSystemActivityDuration: Duration { .seconds(transientSystemActivityDurationSeconds) }
     var downloadsDirectoryURL: URL { URL(fileURLWithPath: downloadsDirectoryPath, isDirectory: true) }
@@ -263,20 +267,29 @@ final class NotchPreferences: ObservableObject {
     }
 
     func page(for action: ShortcutAction) -> NotchPage? {
-        switch action {
+        let pages = dynamicPagesEnabled ? activeDynamicPages : orderedVisiblePages
+        return switch action {
         case .openNotch: nil
-        case .firstPage: orderedVisiblePages[safe: 0]
-        case .secondPage: orderedVisiblePages[safe: 1]
-        case .thirdPage: orderedVisiblePages[safe: 2]
-        case .fourthPage: orderedVisiblePages[safe: 3]
-        case .fifthPage: orderedVisiblePages[safe: 4]
-        case .sixthPage: orderedVisiblePages[safe: 5]
-        case .seventhPage: orderedVisiblePages[safe: 6]
+        case .firstPage: pages[safe: 0]
+        case .secondPage: pages[safe: 1]
+        case .thirdPage: pages[safe: 2]
+        case .fourthPage: pages[safe: 3]
+        case .fifthPage: pages[safe: 4]
+        case .sixthPage: pages[safe: 5]
+        case .seventhPage: pages[safe: 6]
         }
     }
 
+    func setActiveDynamicPages(_ pages: [NotchPage]) {
+        guard activeDynamicPages != pages else { return }
+        activeDynamicPages = pages
+    }
+
     func shortcutTitle(for action: ShortcutAction) -> String {
-        action == .openNotch ? "Open notch" : "Page \(shortcutActions.firstIndex(of: action)!): \(page(for: action)!.name)"
+        guard action != .openNotch else { return "Open notch" }
+        let index = shortcutActions.firstIndex(of: action)!
+        guard let page = orderedVisiblePages[safe: index - 1] else { return "Page \(index)" }
+        return "Page \(index): \(page.name)"
     }
 
     func setVisible(_ page: NotchPage, isVisible: Bool) {

@@ -47,24 +47,32 @@ struct PulseNotchApp: App {
                     .keyboardShortcut(",", modifiers: .command)
             }
 
-            CommandMenu("Pulse Notch") {
-                Button("Open Notch") {
-                    NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
-                }
+            PulseNotchPageCommands(preferences: notchController.preferences)
+        }
+    }
+}
 
-                Button("Close Notch") {
-                    NotificationCenter.default.post(name: .pulseNotchClose, object: nil)
-                }
-                .keyboardShortcut(.escape, modifiers: [])
+private struct PulseNotchPageCommands: Commands {
+    @ObservedObject var preferences: NotchPreferences
 
-                Divider()
+    var body: some Commands {
+        CommandMenu("Pulse Notch") {
+            Button("Open Notch") {
+                NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
+            }
 
-                ForEach(Array(notchController.preferences.orderedVisiblePages.enumerated()), id: \.element) { index, page in
-                    Button("Show \(page.name)") {
-                        NotificationCenter.default.post(name: .pulseNotchShow(page), object: nil)
-                    }
-                    .keyboardShortcut(notchController.preferences.shortcut(for: .page(at: index)).keyboardShortcut)
+            Button("Close Notch") {
+                NotificationCenter.default.post(name: .pulseNotchClose, object: nil)
+            }
+            .keyboardShortcut(.escape, modifiers: [])
+
+            Divider()
+
+            ForEach(Array(preferences.shortcutPages.enumerated()), id: \.element) { index, page in
+                Button("Show \(page.name)") {
+                    NotificationCenter.default.post(name: .pulseNotchShow(page), object: nil)
                 }
+                .keyboardShortcut(preferences.shortcut(for: .page(at: index)).keyboardShortcut)
             }
         }
     }

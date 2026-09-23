@@ -213,6 +213,7 @@ struct NotchSurface: View {
         TimelineView(.periodic(from: .now, by: clockModel.isRunning ? 1 : 15)) { context in
             let pages = displayedPages(at: context.date)
             notch(at: context.date, pages: pages)
+                .onAppear { handleVisiblePagesChange(pages) }
                 .onChange(of: pages) { _, pages in handleVisiblePagesChange(pages) }
         }
     }
@@ -226,6 +227,7 @@ struct NotchSurface: View {
     }
 
     private func handleVisiblePagesChange(_ pages: [NotchPage]) {
+        preferences.setActiveDynamicPages(pages)
         if !pages.contains(selectedPage), let firstPage = pages.first {
             selectedPage = firstPage
             pageDragOffset = 0

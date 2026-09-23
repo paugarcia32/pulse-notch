@@ -500,6 +500,7 @@ struct FeatureModelTests {
         #expect(restoredPreferences.orderedVisiblePages == [.github, .summary, .calendar, .media, .clock, .downloads])
         #expect(restoredPreferences.dynamicPagesEnabled)
         #expect(restoredPreferences.summaryPriorityOrder == [.media, .calendarEvent, .githubAttention, .openPullRequest, .clock, .usageLimits])
+        restoredPreferences.setActiveDynamicPages(restoredPreferences.orderedVisiblePages)
         #expect(restoredPreferences.page(for: .firstPage) == .github)
         #expect(restoredPreferences.shortcut(for: .firstPage).displayName == "⌥⌘G")
         #expect(restoredPreferences.calendarReminderLeadTimeMinutes == 5)
@@ -524,6 +525,41 @@ struct FeatureModelTests {
         #expect(restoredPreferences.testingFeaturesEnabled)
         #expect(preferences.testingSystemActivity == .volume)
         #expect(preferences.testingSystemActivityTrigger != nil)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    @Test
+    func dynamicPageShortcutsFollowCurrentlyActivePages() {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = NotchPreferences(defaults: defaults)
+        preferences.setActiveDynamicPages([.downloads])
+
+        #expect(preferences.page(for: .firstPage) == .downloads)
+        #expect(preferences.page(for: .secondPage) == nil)
+        #expect(preferences.shortcutPages == [.downloads])
+
+        preferences.setDynamicPagesEnabled(false)
+        #expect(preferences.page(for: .firstPage) == .summary)
+        #expect(preferences.page(for: .seventhPage) == .downloads)
+
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    @Test
+    func shortcutTitlesIncludeTheLastConfiguredPageWithoutCrashing() {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = NotchPreferences(defaults: defaults)
+
+        #expect(preferences.shortcutTitle(for: .firstPage) == "Page 1: Summary")
+        #expect(preferences.shortcutTitle(for: .seventhPage) == "Page 7: Downloads")
+
+        preferences.setVisible(.downloads, isVisible: false)
+        #expect(preferences.shortcutTitle(for: .sixthPage) == "Page 6: Clock")
 
         defaults.removePersistentDomain(forName: suiteName)
     }
