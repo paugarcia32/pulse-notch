@@ -19,7 +19,7 @@ final class SettingsWindowController: NSWindowController {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
-        window.backgroundColor = .underPageBackgroundColor
+        window.backgroundColor = .windowBackgroundColor
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 760, height: 480)

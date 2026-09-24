@@ -36,7 +36,7 @@ struct PreferencesView: View {
                                 .frame(width: settingsSidebarWidth)
                             Divider()
                         }
-                        Color(nsColor: .underPageBackgroundColor)
+                        Color(nsColor: .windowBackgroundColor)
                     }
                 }
                 .ignoresSafeArea(edges: .top)

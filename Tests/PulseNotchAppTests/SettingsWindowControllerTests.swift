@@ -23,6 +23,7 @@ struct SettingsWindowControllerTests {
         #expect(window.styleMask.contains(.titled))
         #expect(window.styleMask.contains(.fullSizeContentView))
         #expect(window.titlebarAppearsTransparent)
+        #expect(window.backgroundColor == .windowBackgroundColor)
         #expect(window.toolbar == nil)
         #expect(window.contentView is NSHostingView<PreferencesView>)
         let contentView = try #require(window.contentView)
