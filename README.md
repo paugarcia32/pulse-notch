@@ -19,7 +19,8 @@
 
 <p align="center">
   <a href="Docs/Assets/pulse-notch-demo.mov">
-    <img width="800" height="389" alt="pulse-notch-demo" src="https://github.com/user-attachments/assets/599cfd5e-b757-4b37-b5d2-62e22235243f" />
+    <img width="1200" height="600" alt="pulse-notch-demo" src="https://github.com/user-attachments/assets/a644001a-adf5-4e1d-99da-a140b370f1ea" />
+    />
   </a>
 </p>
 
