@@ -118,8 +118,21 @@ struct AIAgentSettings: Codable, Hashable, Sendable {
             restrictions: ApplicationRestrictions(allowedBundleIDs: Set(allowedBundleIDs), deniedBundleIDs: Set(deniedBundleIDs)),
             limits: override ?? limits,
             computerUseEnabled: computerUseEnabled && (capabilityReport?.toolCallsVerified ?? false),
-            visionVerified: capabilityReport?.visionVerified ?? false
+            visionVerified: capabilityReport?.visionVerified ?? false,
+            computerUseUnavailableReason: computerUseUnavailableReason
         )
+    }
+
+    /// Why computer use is off although the user enabled it, so the agent can say so.
+    var computerUseUnavailableReason: String? {
+        guard computerUseEnabled else { return nil }
+        guard let report = capabilityReport else {
+            return "the selected model has not been checked yet. Run Test connection in AI Agent settings."
+        }
+        guard report.toolCallsVerified else {
+            return "the selected model (\(report.modelID)) did not return a structured tool call in the capability check. Choose a model with tool support in AI Agent settings."
+        }
+        return nil
     }
 
     /// Reports what is missing before the agent can run with these settings.

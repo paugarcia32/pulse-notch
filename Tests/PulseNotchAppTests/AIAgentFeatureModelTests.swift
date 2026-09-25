@@ -103,6 +103,39 @@ struct AIAgentFeatureModelTests {
     }
 
     @Test
+    func enablingComputerUseChecksTheModelAutomaticallyOnTheFirstRun() async throws {
+        let toolCall = StubURLProtocol.Stub.sse([
+            #"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c","type":"function","function":{"name":"add_numbers","arguments":"{\"a\":2,\"b\":3}"}}]},"finish_reason":"tool_calls"}]}"#,
+            "data: [DONE]"
+        ])
+        let vision = StubURLProtocol.Stub.sse([#"data: {"choices":[{"delta":{"content":"red"},"finish_reason":"stop"}]}"#, "data: [DONE]"])
+        let harness = try makeHarness(
+            id: #function,
+            configure: { settings in
+                settings.decisionKind = .layaEndpoint
+                settings.languageKind = .localEndpoint
+                settings.localEndpointModel = "mimo"
+                settings.computerUseEnabled = true
+            },
+            stubs: [toolCall, vision, .sse(Self.chatReply)]
+        )
+        defer { harness.cleanUp() }
+        let model = harness.model
+        await model.setEnabled(true)
+        #expect(model.settings.computerUseUnavailableReason != nil)
+
+        model.draft = "Open Discord"
+        await model.sendDraft()
+        await waitForIdle(model)
+
+        #expect(model.settings.capabilityReport?.toolCallsVerified == true)
+        #expect(model.settings.capabilityReport?.visionVerified == true)
+        #expect(model.settings.computerUseUnavailableReason == nil)
+        #expect(model.settings.configuration().computerUseEnabled)
+        #expect(StubURLProtocol.recordedRequests(#function).count == 3)
+    }
+
+    @Test
     func hostedProvidersRequireKeysAndTheDataDisclosure() async throws {
         let credentials = InMemoryCredentialStore()
         let harness = try makeHarness(id: #function, configure: { settings in

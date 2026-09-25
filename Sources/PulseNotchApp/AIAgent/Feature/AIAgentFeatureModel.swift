@@ -362,8 +362,8 @@ final class AIAgentFeatureModel: ObservableObject {
         live.resumeMessages = history
         liveRuns[run.id] = live
         let settings = self.settings
-        let configuration = settings.configuration(limits: limits)
-        let executor = configuration.computerUseEnabled ? self.executor : nil
+        let computerExecutor = self.executor
+        let visionHint = catalog.first { $0.id == settings.openRouterModel }?.capabilities.supportsVision
         let environmentParts = (availability: availability, lease: lease, clock: clock)
         let runID = run.id
 
@@ -376,6 +376,21 @@ final class AIAgentFeatureModel: ObservableObject {
             do {
                 let decision = try await factory.decisionProvider(for: settings)
                 let language = try await factory.languageProvider(for: settings)
+                var runSettings = settings
+                // A model directs computer use only after a real tool-call check; run it
+                // automatically the first time instead of silently staying text-only.
+                if runSettings.computerUseEnabled, runSettings.capabilityReport == nil {
+                    continuation.yield(.event(ExecutionEvent(timestamp: environmentParts.clock.now, kind: .status, summary: "Checking that \(runSettings.languageSelection.modelID) can use tools and see screenshots…")))
+                    let report = await CapabilityProbe(provider: language).run(
+                        model: runSettings.languageSelection.modelID,
+                        checkVision: runSettings.languageKind == .openRouter ? (visionHint ?? true) : true
+                    )
+                    runSettings.capabilityReports[runSettings.capabilityKey] = report
+                    self?.settings.capabilityReports[runSettings.capabilityKey] = report
+                    continuation.yield(.event(ExecutionEvent(timestamp: environmentParts.clock.now, kind: .status, summary: report.detail)))
+                }
+                let configuration = runSettings.configuration(limits: limits)
+                let executor = configuration.computerUseEnabled ? computerExecutor : nil
                 let runner = AgentRunner(
                     task: AgentTask(
                         runID: runID,

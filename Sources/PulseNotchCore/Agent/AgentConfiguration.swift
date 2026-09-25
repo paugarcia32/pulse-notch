@@ -122,6 +122,8 @@ public struct AgentConfiguration: Codable, Hashable, Sendable {
     public var computerUseEnabled: Bool
     /// Set only after the selected language model passed a vision capability check.
     public var visionVerified: Bool
+    /// When computer use was requested but is unavailable, the reason to tell the user.
+    public var computerUseUnavailableReason: String?
 
     public init(
         decision: DecisionProviderSelection,
@@ -130,7 +132,8 @@ public struct AgentConfiguration: Codable, Hashable, Sendable {
         restrictions: ApplicationRestrictions = ApplicationRestrictions(),
         limits: RunLimits = .default,
         computerUseEnabled: Bool = true,
-        visionVerified: Bool = false
+        visionVerified: Bool = false,
+        computerUseUnavailableReason: String? = nil
     ) {
         self.decision = decision
         self.language = language
@@ -139,6 +142,7 @@ public struct AgentConfiguration: Codable, Hashable, Sendable {
         self.limits = limits
         self.computerUseEnabled = computerUseEnabled
         self.visionVerified = visionVerified
+        self.computerUseUnavailableReason = computerUseUnavailableReason
     }
 
     /// True only when both inference providers run on this Mac. Browsing or using
