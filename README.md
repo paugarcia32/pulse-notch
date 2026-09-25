@@ -90,63 +90,163 @@ of useful, time-sensitive signals visible and stays out of the way until expande
 
 ## AI Agent (optional)
 
-The AI Agent page lets you chat with an agent, delegate tasks on your Mac, track
-goals with explicit completion criteria, and schedule daily or weekday routines. It
-is off by default: enable it in **Settings → Pages → AI Agent**, then finish setup
-from the **Settings** tab on the AI Agent page. The page uses a larger 640×520 surface
-(smaller on small displays), stays open when the pointer leaves so drafts are kept,
-and collapses on Esc or a click elsewhere without stopping work.
+The AI Agent page adds an assistant to the notch that can chat, operate apps on your
+Mac, work toward goals with explicit completion criteria, and run daily or weekday
+routines. It is **off by default**.
 
-Two provider roles are configured independently. The language model directs: it
-talks with you, plans, and describes each desktop step in words. The decision model
-operates: for each step it chooses the concrete actions on screen, checks sensitive
-actions for side effects, verifies each outcome, and decides when the step is done.
+### Turn it on
 
-| Role | Hosted | Local |
+1. Open **Settings → Pages → AI Agent** and select **Enable AI Agent**.
+2. Open the notch and press **⌘8**, or use the page dots, to show the AI Agent page. It
+   has four tabs: **Chat**, **Goals**, **Routines**, and **Settings**.
+3. Finish setup in the page's **Settings** tab: choose providers, add keys or install
+   local models, and optionally allow computer use.
+
+The page uses a larger 640×520 surface, or less on small displays. It stays open when
+the pointer leaves, so drafts and keyboard focus are kept. Page swipes are disabled so
+text selection works. Esc or a click elsewhere collapses it without stopping running
+work.
+
+### How it works: the language model directs, the decision model operates
+
+The agent uses two independently configured providers:
+
+| Role | What it does | Hosted | Local |
+|---|---|---|---|
+| **Language model** (director) | Talks with you. Plans the task as natural-language steps such as "click the Save button" or "type into the message body". Supplies text to type. Reviews a screenshot after each step. Asks you for help when something looks wrong. | OpenRouter (API key and a model with tool support) | A managed `llama.cpp` server (MiMo-V2.6-Distill-Qwen-9B), or any OpenAI-compatible server |
+| **Decision model** (operator) | For each step, chooses every concrete on-screen action from the visible controls. Checks sensitive actions for side effects. Decides when the step is done. Confirms goal completion. It never writes chat replies. | JEV through TypeSafe's System One API (API key) | Laya, managed by Pulse Notch or through an existing System One-compatible service |
+
+All four combinations work. The loop follows the patterns of the most-used JEV
+computer-use projects; see [Docs/AI-AGENT.md](Docs/AI-AGENT.md) for details.
+
+- **JEV is recommended for computer use.** Published community evaluations found that
+  the official Laya checkpoints choose on-screen controls much less reliably than JEV
+  without fine-tuning. Laya remains available and fully local.
+- Pulse Notch calls a configuration *fully local inference* only when both providers
+  run on your Mac. Tasks that use online apps still reach the network.
+
+### Choose providers
+
+- **Hosted.**
+  1. Choose *JEV* and *OpenRouter*, and paste your TypeSafe and OpenRouter keys. Keys
+     are stored in the Keychain.
+  2. Pick an OpenRouter model. The catalog shows tool and vision support, context
+     length, and prices. You can also type a model ID.
+  3. Confirm the privacy notice.
+- **Managed local.**
+  1. Choose *Laya (managed on this Mac)* and *Local model (managed on this Mac)*.
+  2. Select **Install** for each component. Nothing downloads before you do.
+     Components are reused offline and can be removed individually.
+  3. Optionally, import a GGUF model and its vision projector.
+- **Existing services.** Enter a Laya-compatible System One endpoint (for example
+  `laya-serve`) and an OpenAI-compatible endpoint with a model ID. Keys are optional.
+
+Then select **Test connection**. It sends a real decision request and checks that the
+language model returns a **structured tool call** and can describe an image.
+
+- Only models that pass the tool-call check can direct computer use.
+- Only models that also pass the image check receive screenshots.
+- If you skip the test, the first computer-use task runs it automatically.
+- If the model fails, the agent tells you why. Choose a model marked "tools".
+
+### Give Pulse Notch access to your Mac (computer use)
+
+Computer use needs two macOS privacy permissions. macOS only lets you grant them
+yourself in System Settings; no app or script can grant them.
+
+| Permission | Required? | Used for |
 |---|---|---|
-| Decisions: choosing each on-screen action, risk checks, outcome verification | JEV through TypeSafe's System One API (API key) | Laya, managed by Pulse Notch or an existing System One-compatible service |
-| Conversation, planning, and visual reasoning | OpenRouter (API key and model) | A managed `llama.cpp` server, or an existing OpenAI-compatible server |
+| **Accessibility** | Yes | Reading the controls in the frontmost window, and clicking, typing, pressing keys, and scrolling |
+| **Screen Recording** | Optional | Screenshots, so a vision-capable language model can check that the work is on track. Screenshots stay in memory and are never saved. |
 
-All four combinations work. Pulse Notch calls a configuration *fully local inference*
-only when both providers run on your Mac; tasks that use online apps still reach the
-network.
+#### Installed app (Homebrew or DMG)
 
-**Hosted setup.** Choose JEV and OpenRouter, paste the TypeSafe and OpenRouter keys,
-choose a model from the catalog (capabilities and prices are shown) or enter a model
-ID, review what is sent, and select **Test connection**.
+1. On the AI Agent page, open **Settings** and turn on **Allow computer use**.
+   macOS shows the Accessibility prompt.
+2. Choose **Open System Settings**. In **Privacy & Security → Accessibility**, turn
+   on **Pulse Notch**. If it is not listed, click **+**, choose
+   `/Applications/Pulse Notch.app`, and turn it on.
+3. Optional, for screenshots: back on the AI Agent Settings tab, select **Request**
+   next to *Screen Recording*. That adds Pulse Notch to **Privacy & Security →
+   Screen & System Audio Recording**. Turn it on there, then quit and reopen Pulse
+   Notch; macOS applies this permission only after a restart.
+4. The *Accessibility* and *Screen Recording* rows in the Settings tab turn green
+   when the permissions are active.
 
-**Managed local setup.** Choose *Laya (managed on this Mac)* and *Local model
-(managed on this Mac)*, then select **Install** for each component. Nothing is
-downloaded before you do. Installed components are reused offline and can be removed
-individually. You can also import a compatible GGUF model and its vision projector.
+#### A build from source
 
-**Connect an existing service.** Enter a Laya-compatible System One endpoint
-(for example `laya-serve`) and an OpenAI-compatible endpoint with a manual model ID.
-Keys are optional; the presets use loopback addresses.
+Development builds are ad-hoc signed by default. The signature changes on every
+build, so macOS forgets the permissions after each rebuild and reports "Pulse Notch
+needs Accessibility permission to control apps". Two scripts make the approval stick:
 
-**Computer use.** Turn on *Allow computer use* and grant Accessibility (required) and
-Screen Recording (optional, for screenshots). A language model can direct computer use
-only after **Test connection** verifies a real tool call. When it also passes a vision
-check, it receives a screenshot after every step. It uses the screenshot to judge
-whether the work is on track, and asks you for help when it is not. Runs are autonomous by
-default; *Supervised* mode asks before each action, and you can deny or allow specific
-apps by bundle identifier. Each run is limited to 50 actions or 10 minutes by default
-(editable per goal and routine). After two failed replans it pauses with an
-explanation. One desktop task runs at a time; others queue. The agent waits while the
-Mac is locked or asleep and while you type in its composer.
+1. Run the setup script once:
 
-Use **Pause**, **Resume**, and **Stop** on any run, or the global emergency stop
-**⌃⌥⌘.** (configurable under Shortcuts). Stopping prevents further actions and cancels
-inference; it does not undo completed actions.
+   ```sh
+   ./Scripts/setup-computer-use.sh
+   ```
 
-**Goals and routines.** Saving a goal does not start it; choose **Run**. A goal
-completes only when the decision provider confirms the observed screen satisfies its
-criteria, and the evidence is shown with the result. Routines use an IANA time zone
-(your current one by default), run while Pulse Notch is open, and run at most once per
-occurrence, including across daylight-saving changes. Occurrences missed while the
-Mac was asleep or Pulse Notch was closed are listed with **Run now**; they are never
-replayed automatically. Runs interrupted by quitting are marked for review, not
-repeated. Launch at login uses the existing *Open at login* setting.
+   It does the following:
+   - creates a local code-signing identity named "Pulse Notch Development" in your
+     login keychain (macOS asks for your password to trust it for code signing);
+   - rebuilds and signs the app with that identity; `build-app.sh` uses it
+     automatically from then on, so later builds keep their permissions;
+   - clears stale Accessibility and Screen Recording entries for the bundle ID;
+   - launches the build and opens the Accessibility pane.
+
+   Later runs keep existing permissions. Pass `--reset` to clear them.
+2. In **Accessibility**, turn on **Pulse Notch**. If it is not listed, click **+**,
+   press **⇧⌘G**, and choose `.build/Pulse Notch.app` in the repository.
+3. For screenshots, run:
+
+   ```sh
+   ./Scripts/grant-screen-recording.sh
+   ```
+
+   It opens **Screen & System Audio Recording** and waits while you turn on Pulse
+   Notch (add `.build/Pulse Notch.app` with **+** if needed). Then it restarts the app.
+
+> **Two copies with the same bundle ID.** If Pulse Notch is also installed in
+> `/Applications`, macOS may relaunch that copy instead of your build, for example
+> after *Quit & Reopen* in System Settings or at login. The AI Agent page then seems
+> to disappear. Quit it and open `.build/Pulse Notch.app` again, or rename the
+> installed copy while you test. Permissions are granted per copy.
+
+To revoke access, turn Pulse Notch off in the same System Settings panes, or turn
+off *Allow computer use*.
+
+### Using computer use
+
+- Ask in **Chat**, for example "Open Telegram and read me the last message". You can
+  also create a **Goal** with completion criteria, or schedule a **Routine**.
+- The run's timeline shows each step:
+  - the decision model's choice and confidence;
+  - risk checks;
+  - executed actions and whether the screen changed.
+- Runs are **autonomous** by default. **Supervised** mode asks you to approve each
+  action. You can deny or allow specific apps by bundle identifier.
+- **Limits.** A run is limited to 50 actions or 10 minutes by default; this is
+  editable per goal and routine. After two failed replans, a run pauses with an
+  explanation.
+- **Queueing and waiting.** One desktop task runs at a time; others queue. The agent
+  waits while the Mac is locked or asleep, and while you type in its composer, so it
+  never types into its own UI.
+- **Stopping.** Use **Pause**, **Resume**, and **Stop** on any run, or the global
+  emergency stop **⌃⌥⌘.** (configurable under Shortcuts). Stopping prevents further
+  actions and cancels inference. It does not undo completed actions.
+
+### Goals and routines
+
+- **Goals.** Saving a goal does not start it; choose **Run**. A goal completes only
+  when the decision model confirms that the observed screen satisfies its criteria.
+  The evidence is shown with the result.
+- **Routines.** Each routine uses an IANA time zone, your current one by default. It
+  runs while Pulse Notch is open, even with the notch collapsed, at most once per
+  occurrence, including across daylight-saving changes.
+- **Missed occurrences.** Occurrences missed while the Mac slept or Pulse Notch was
+  closed appear with **Run now**. They are never replayed automatically.
+- **Interrupted runs.** Runs interrupted by quitting are marked for review, not
+  repeated.
+- **Launch at login.** Use the existing *Open at login* setting.
 
 ## Privacy and permissions
 
