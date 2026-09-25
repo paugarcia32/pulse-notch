@@ -5,8 +5,9 @@
 # macOS does not let any script grant Accessibility or Screen Recording: the user
 # must approve them in System Settings. This script makes that approval stick by
 # signing development builds with a stable local identity (ad-hoc signatures change
-# on every build, so macOS forgets the grant), clears stale grants, rebuilds, and
-# opens the right Settings pane.
+# on every build, so macOS forgets the grant), rebuilds, and opens the right
+# Settings pane. It clears stale grants only when it creates the identity, or when
+# run with --reset.
 
 set -euo pipefail
 
@@ -16,7 +17,12 @@ app_path="$repository_root/.build/Pulse Notch.app"
 identity="Pulse Notch Development"
 bundle_identifier=$(plutil -extract CFBundleIdentifier raw "$repository_root/Sources/PulseNotchApp/Info.plist")
 
+created_identity=false
+reset_grants=false
+[[ "${1:-}" == "--reset" ]] && reset_grants=true
+
 if ! security find-identity -v -p codesigning | grep -q "\"$identity\""; then
+    created_identity=true
     print "Creating the local code-signing identity \"$identity\"…"
     work=$(mktemp -d)
     trap 'rm -rf "$work"' EXIT
@@ -52,10 +58,16 @@ sleep 2
 print "Building and signing with \"$identity\"…"
 PULSE_NOTCH_CODESIGN_IDENTITY=$identity "$script_directory/build-app.sh" debug >/dev/null
 
-print "Clearing stale Accessibility and Screen Recording entries for $bundle_identifier…"
-print "(Any other copy of Pulse Notch with this bundle ID will need to be approved again.)"
-tccutil reset Accessibility "$bundle_identifier" || true
-tccutil reset ScreenCapture "$bundle_identifier" || true
+# Grants made for the old ad-hoc signature no longer match, so clear them once when
+# switching to the stable identity. Later runs keep the user's approval.
+if [[ "$created_identity" == true || "$reset_grants" == true ]]; then
+    print "Clearing stale Accessibility and Screen Recording entries for $bundle_identifier…"
+    print "(Any other copy of Pulse Notch with this bundle ID will need to be approved again.)"
+    tccutil reset Accessibility "$bundle_identifier" || true
+    tccutil reset ScreenCapture "$bundle_identifier" || true
+else
+    print "Keeping existing permissions (the signature is unchanged). Use --reset to clear them."
+fi
 
 open "$app_path"
 sleep 2
