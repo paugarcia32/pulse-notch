@@ -6,6 +6,8 @@ struct DynamicPageActivity: Equatable {
     let media: Bool
     let clock: Bool
     let downloads: Bool
+    /// The AI Agent page stays reachable whenever the feature is enabled, even while idle.
+    let aiAgent: Bool
 
     init(
         calendar: Bool,
@@ -14,7 +16,8 @@ struct DynamicPageActivity: Equatable {
         github: Bool,
         media: Bool,
         clock: Bool = false,
-        downloads: Bool = false
+        downloads: Bool = false,
+        aiAgent: Bool = false
     ) {
         self.calendar = calendar
         self.agents = agents
@@ -23,6 +26,7 @@ struct DynamicPageActivity: Equatable {
         self.media = media
         self.clock = clock
         self.downloads = downloads
+        self.aiAgent = aiAgent
     }
 
     func visiblePages(from configuredPages: [NotchPage], isEnabled: Bool) -> [NotchPage] {
@@ -39,6 +43,7 @@ struct DynamicPageActivity: Equatable {
         case .media: media
         case .clock: clock
         case .downloads: downloads
+        case .aiAgent: aiAgent
         }
     }
 }

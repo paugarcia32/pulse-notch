@@ -12,6 +12,17 @@ info_plist_path="$repository_root/Sources/PulseNotchApp/Info.plist"
 icon_path="$repository_root/Sources/PulseNotchApp/Resources/PulseNotch.icns"
 media_remote_adapter_path="$repository_root/Vendor/MediaRemoteAdapter"
 bundle_identifier=$(plutil -extract CFBundleIdentifier raw "$info_plist_path")
+development_identity="Pulse Notch Development"
+
+# Ad-hoc signatures change with every build, so macOS forgets privacy grants such
+# as Accessibility after each rebuild. A stable local identity keeps them.
+if [[ -n "${PULSE_NOTCH_CODESIGN_IDENTITY:-}" ]]; then
+    signing_identity=$PULSE_NOTCH_CODESIGN_IDENTITY
+elif security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$development_identity\""; then
+    signing_identity=$development_identity
+else
+    signing_identity=-
+fi
 
 if (( $# > 1 )); then
     print -u2 "Usage: $0 [debug|release]"
@@ -69,24 +80,24 @@ ditto "$media_remote_adapter_path" "$contents_path/Resources/MediaRemoteAdapter"
 
 codesign \
     --force \
-    --sign - \
+    --sign "$signing_identity" \
     "$contents_path/Resources/MediaRemoteAdapter/MediaRemoteAdapter.framework"
 
 codesign \
     --force \
-    --sign - \
+    --sign "$signing_identity" \
     --identifier "$bundle_identifier.ClaudeBridge" \
     "$contents_path/MacOS/PulseNotchClaudeBridge"
 
 codesign \
     --force \
-    --sign - \
+    --sign "$signing_identity" \
     --identifier "$bundle_identifier.Updater" \
     "$contents_path/MacOS/PulseNotchUpdater"
 
 codesign \
     --force \
-    --sign - \
+    --sign "$signing_identity" \
     --identifier "$bundle_identifier" \
     "$app_path"
 

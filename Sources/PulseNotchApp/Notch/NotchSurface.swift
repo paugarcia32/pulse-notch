@@ -16,10 +16,16 @@ struct NotchSurface: View {
     @ObservedObject var preferences: NotchPreferences
     @ObservedObject var updateModel: UpdateFeatureModel
     @ObservedObject var homebrewUpdate: HomebrewUpdateCoordinator
+    @ObservedObject var aiAgentModel: AIAgentFeatureModel
+    @ObservedObject var computerUsePermissions: ComputerUsePermissions
     let physicalNotchSize: CGSize?
     let collapsedSize: CGSize
     let expandedSize: CGSize
+    /// The larger surface used by the AI Agent page.
+    let aiAgentExpandedSize: CGSize
     let onExpansionChanged: (Bool) -> Void
+    /// Lets the panel controller size the window for the selected page.
+    let onPageChanged: (NotchPage) -> Void
     @State private var isExpanded = false
     @State private var expansionProgress: CGFloat = 0
     @State private var selectedPage = NotchPage.summary
@@ -102,15 +108,23 @@ struct NotchSurface: View {
         }
     }
 
+    /// The expanded size for the selected page. The window can be briefly larger
+    /// while it shrinks after leaving a larger page, so content stays top-aligned.
+    private var currentExpandedSize: CGSize {
+        selectedPage == .aiAgent ? aiAgentExpandedSize : expandedSize
+    }
+
     @ViewBuilder
     var body: some View {
         if #available(macOS 15.0, *) {
             activitySurface
-                .frame(width: expandedSize.width, height: expandedSize.height)
+                .frame(width: currentExpandedSize.width, height: currentExpandedSize.height)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .windowResizeBehavior(.disabled)
         } else {
             activitySurface
-                .frame(width: expandedSize.width, height: expandedSize.height)
+                .frame(width: currentExpandedSize.width, height: currentExpandedSize.height)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
 
@@ -152,6 +166,12 @@ struct NotchSurface: View {
             openNotch()
             selectPage(.downloads)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .pulseNotchShowAIAgent)) { _ in
+            openNotch()
+            selectPage(.aiAgent)
+        }
+        .onChange(of: selectedPage) { _, page in onPageChanged(page) }
+        .onAppear { onPageChanged(selectedPage) }
         .onChange(of: preferences.orderedVisiblePages) { _, _ in
             handleVisiblePagesChange(displayedPages(at: .now))
         }
@@ -344,7 +364,7 @@ struct NotchSurface: View {
             expandedContent(at: date, pages: pages)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
-                .frame(width: expandedSize.width, height: expandedSize.height, alignment: .top)
+                .frame(width: currentExpandedSize.width, height: currentExpandedSize.height, alignment: .top)
                 .opacity(expansionProgress)
                 .allowsHitTesting(isExpanded)
                 .accessibilityHidden(!isExpanded)
@@ -379,7 +399,7 @@ struct NotchSurface: View {
             }
         }
         .foregroundStyle(.white)
-        .frame(width: expandedSize.width, height: expandedSize.height, alignment: .top)
+        .frame(width: currentExpandedSize.width, height: currentExpandedSize.height, alignment: .top)
         .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: systemActivityModel.activity)
         .onChange(of: isExpanded) { _, isOpen in
             if isOpen { NotchHapticFeedback.performOpen() }
@@ -664,6 +684,8 @@ struct NotchSurface: View {
         .contentShape(Rectangle())
         .background {
             TrackpadSwipeDetector {
+                // Horizontal swipes on the AI Agent page would fight text selection and scrolling.
+                guard selectedPage != .aiAgent else { return }
                 selectPage($0 == .left ? nextPage(in: pages) : previousPage(in: pages), in: pages)
             }
         }
@@ -679,7 +701,8 @@ struct NotchSurface: View {
                         return
                     }
                     selectPage($0.translation.width < 0 ? nextPage(in: pages) : previousPage(in: pages), in: pages)
-                }
+                },
+            including: selectedPage == .aiAgent ? .subviews : .all
         )
     }
 
@@ -694,7 +717,7 @@ struct NotchSurface: View {
                 .padding(.horizontal, 5)
                 .frame(height: 18)
                 .frame(
-                    maxWidth: max(0, (expandedSize.width - (physicalNotchSize?.width ?? 0)) / 2 - 18),
+                    maxWidth: max(0, (currentExpandedSize.width - (physicalNotchSize?.width ?? 0)) / 2 - 18),
                     alignment: .leading
                 )
         }
@@ -734,8 +757,8 @@ struct NotchSurface: View {
         let bottomRadius = interpolated(from: 8, to: 18)
         return NotchBackgroundShape(
             size: CGSize(
-                width: interpolated(from: collapsedSize.width, to: expandedSize.width),
-                height: interpolated(from: collapsedSize.height, to: expandedSize.height)
+                width: interpolated(from: collapsedSize.width, to: currentExpandedSize.width),
+                height: interpolated(from: collapsedSize.height, to: currentExpandedSize.height)
             ),
             topRadius: 0,
             bottomRadius: bottomRadius
@@ -776,6 +799,7 @@ struct NotchSurface: View {
             downloads: preferences.showDownloads ? downloadModel.activeDownloads : [],
             mediaPlayback: mediaPlaybackModel.playback,
             clock: clockModel.status(at: date),
+            aiAgent: preferences.aiAgentEnabled ? aiAgentModel.indicatorState : nil,
             at: date,
             calendarReminderLeadTime: preferences.calendarReminderLeadTime
         ).filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
@@ -891,7 +915,9 @@ struct NotchSurface: View {
                 guard !Task.isCancelled else { return }
                 openNotch()
             }
-        } else if isExpanded {
+        } else if isExpanded, selectedPage != .aiAgent {
+            // The AI Agent page stays open when the pointer leaves so drafts and
+            // keyboard focus survive; explicit dismissal still collapses it.
             hoverTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(150))
                 guard !Task.isCancelled else { return }
@@ -948,6 +974,12 @@ struct NotchSurface: View {
         case .media: MediaPlaybackPage(model: mediaPlaybackModel, testingPlayback: testingData.media)
         case .clock: ClockPage(model: clockModel, testingStatus: testingData.clock)
         case .downloads: DownloadsPage(model: downloadModel, testingDownloads: testingData.downloads)
+        case .aiAgent:
+            AIAgentPage(
+                model: aiAgentModel,
+                permissions: computerUsePermissions,
+                isActive: isExpanded && selectedPage == .aiAgent
+            )
         }
     }
 
@@ -960,7 +992,8 @@ struct NotchSurface: View {
             github: testingData.hasGitHubActivity || gitHubHasActivity,
             media: testingData.media != nil || mediaPlaybackModel.isPageActive(at: date),
             clock: testingData.clock != nil || clockModel.status(at: date, includePaused: true) != nil,
-            downloads: !(testingData.downloads ?? []).isEmpty || !downloadModel.activeDownloads.isEmpty
+            downloads: !(testingData.downloads ?? []).isEmpty || !downloadModel.activeDownloads.isEmpty,
+            aiAgent: preferences.aiAgentEnabled
         ).visiblePages(
             from: preferences.orderedVisiblePages,
             isEnabled: preferences.dynamicPagesEnabled

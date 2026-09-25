@@ -49,4 +49,13 @@ struct DynamicPageVisibilityTests {
 
         #expect(activity.visiblePages(from: [.summary, .agents], isEnabled: true) == [.summary, .agents])
     }
+
+    @Test
+    func aiAgentPageStaysReachableWhileEnabledEvenWhenIdle() {
+        let enabled = DynamicPageActivity(calendar: false, agents: false, github: false, media: false, aiAgent: true)
+        let disabled = DynamicPageActivity(calendar: false, agents: false, github: false, media: false)
+
+        #expect(enabled.visiblePages(from: [.summary, .calendar, .aiAgent], isEnabled: true) == [.summary, .aiAgent])
+        #expect(disabled.visiblePages(from: [.summary, .aiAgent], isEnabled: true) == [.summary])
+    }
 }

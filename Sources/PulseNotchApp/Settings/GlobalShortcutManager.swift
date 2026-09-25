@@ -35,7 +35,7 @@ final class GlobalShortcutManager {
         hotKeys.removeAll(keepingCapacity: true)
 
         for (index, action) in ShortcutAction.allCases.enumerated() {
-            guard action == .openNotch else { continue }
+            guard action.isGlobal else { continue }
             guard let shortcut = shortcuts[action], let keyCode = shortcut.carbonKeyCode else { continue }
             var ref: EventHotKeyRef?
             let result = RegisterEventHotKey(
@@ -94,7 +94,9 @@ private extension AppShortcut {
         case "5": return 23
         case "6": return 22
         case "7": return 26
+        case "8": return 28
         case "n": return 45
+        case ".": return 47
         default: return nil
         }
     }

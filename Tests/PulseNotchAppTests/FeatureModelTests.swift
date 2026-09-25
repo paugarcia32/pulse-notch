@@ -547,13 +547,13 @@ struct FeatureModelTests {
         #expect(!preferences.addMonitoredGitHubRepository(named: "not-a-repository"))
         preferences.setPreferredDisplayID("42")
         preferences.setCollapsedIndicatorMaximumPerSide(4)
-        preferences.moveCollapsedIndicatorPriorities(from: IndexSet(integer: 5), to: 0)
+        preferences.moveCollapsedIndicatorPriorities(from: IndexSet(integer: 6), to: 0)
         preferences.setCollapsedIndicatorCategory(.githubActions, isVisible: false)
         preferences.setTestingFeaturesEnabled(true)
         preferences.triggerTestingSystemActivity(.volume)
 
         let restoredPreferences = NotchPreferences(defaults: defaults)
-        #expect(restoredPreferences.pageOrder == [.github, .summary, .calendar, .agents, .media, .clock, .downloads])
+        #expect(restoredPreferences.pageOrder == [.github, .summary, .calendar, .agents, .media, .clock, .downloads, .aiAgent])
         #expect(restoredPreferences.orderedVisiblePages == [.github, .summary, .calendar, .media, .clock, .downloads])
         #expect(restoredPreferences.dynamicPagesEnabled)
         #expect(restoredPreferences.summaryPriorityOrder == [.media, .calendarEvent, .githubAttention, .openPullRequest, .clock, .usageLimits])
@@ -573,7 +573,7 @@ struct FeatureModelTests {
         #expect(restoredPreferences.monitoredGitHubRepositories.map(\.nameWithOwner) == ["paugarcia32/pulse-notch"])
         #expect(restoredPreferences.preferredDisplayID == "42")
         #expect(restoredPreferences.collapsedIndicatorMaximumPerSide == 4)
-        #expect(restoredPreferences.collapsedIndicatorPriorityOrder == [.codingAgents, .mediaPlayback, .clock, .calendar, .githubActions, .downloads])
+        #expect(restoredPreferences.collapsedIndicatorPriorityOrder == [.codingAgents, .aiAgent, .mediaPlayback, .clock, .calendar, .githubActions, .downloads])
         #expect(!restoredPreferences.isCollapsedIndicatorCategoryVisible(.githubActions))
         #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.calendar))
         #expect(restoredPreferences.isCollapsedIndicatorCategoryVisible(.codingAgents))
@@ -617,6 +617,53 @@ struct FeatureModelTests {
         preferences.setVisible(.downloads, isVisible: false)
         #expect(preferences.shortcutTitle(for: .sixthPage) == "Page 6: Clock")
 
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    @Test
+    func aiAgentPageAppearsOnlyWhileEnabledAndTakesTheEighthShortcut() {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = NotchPreferences(defaults: defaults)
+        preferences.setDynamicPagesEnabled(false)
+
+        #expect(!preferences.aiAgentEnabled)
+        #expect(!preferences.orderedVisiblePages.contains(.aiAgent))
+        #expect(!preferences.shortcutActions.contains(.agentEmergencyStop))
+        #expect(preferences.page(for: .eighthPage) == nil)
+
+        preferences.setAIAgentEnabled(true)
+        #expect(preferences.orderedVisiblePages.last == .aiAgent)
+        #expect(preferences.page(for: .eighthPage) == .aiAgent)
+        #expect(preferences.shortcutTitle(for: .eighthPage) == "Page 8: AI Agent")
+        #expect(preferences.shortcut(for: .eighthPage).displayName == "⌘8")
+        #expect(preferences.shortcutActions.last == .agentEmergencyStop)
+        #expect(preferences.shortcut(for: .agentEmergencyStop).displayName == "⌃⌥⌘.")
+        #expect(ShortcutAction.agentEmergencyStop.isGlobal)
+        #expect(!ShortcutAction.eighthPage.isGlobal)
+
+        #expect(NotchPreferences(defaults: defaults).aiAgentEnabled)
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    @Test
+    func existingPageSelectionsGainTheAIAgentPageAndIndicator() {
+        let suiteName = "PulseNotchTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(["summary", "calendar", "agents", "github", "media", "clock", "downloads"], forKey: "settings.visiblePages")
+        defaults.set(["calendar", "codingAgents"], forKey: "settings.visibleCollapsedIndicatorCategories")
+        for key in ["mediaPageIntroduced", "summaryPageIntroduced", "clockPageIntroduced", "downloadsPageIntroduced",
+                    "mediaCollapsedIndicatorIntroduced", "clockCollapsedIndicatorIntroduced"] {
+            defaults.set(true, forKey: "settings.\(key)")
+        }
+
+        let preferences = NotchPreferences(defaults: defaults)
+
+        #expect(preferences.isVisible(.aiAgent))
+        #expect(preferences.pageOrder.last == .aiAgent)
+        #expect(preferences.isCollapsedIndicatorCategoryVisible(.aiAgent))
         defaults.removePersistentDomain(forName: suiteName)
     }
 

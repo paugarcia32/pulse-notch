@@ -11,6 +11,7 @@ extension Notification.Name {
     static let pulseNotchShowMedia = Notification.Name("pulseNotchShowMedia")
     static let pulseNotchShowClock = Notification.Name("pulseNotchShowClock")
     static let pulseNotchShowDownloads = Notification.Name("pulseNotchShowDownloads")
+    static let pulseNotchShowAIAgent = Notification.Name("pulseNotchShowAIAgent")
     static let pulseNotchClose = Notification.Name("pulseNotchClose")
     static let pulseNotchDisplayPreferencesChanged = Notification.Name("pulseNotchDisplayPreferencesChanged")
     static let pulseNotchShortcutsChanged = Notification.Name("pulseNotchShortcutsChanged")
@@ -102,6 +103,7 @@ extension Notification.Name {
         case .media: .pulseNotchShowMedia
         case .clock: .pulseNotchShowClock
         case .downloads: .pulseNotchShowDownloads
+        case .aiAgent: .pulseNotchShowAIAgent
         }
     }
 }
