@@ -243,6 +243,9 @@ struct LocalRuntimeManagerTests {
         #expect(manifest.runtime("llama.cpp")?.executable == "llama-server")
         #expect(manifest.model("laya-multilingual")?.contextLimit == 1_024)
         #expect(manifest.model(AIAgentSettings.defaultLocalModelID)?.files.contains { $0.role == .visionProjector } == true)
+        let verified = manifest.model(AIAgentSettings.defaultLocalModelID)?.verifiedWith?.first
+        #expect(verified?.version == manifest.runtime("llama.cpp")?.version)
+        #expect(verified?.toolCalls == true && verified?.vision == true)
         #expect((manifest.decisionModels + manifest.languageModels).allSatisfy { $0.revision.count == 40 && !$0.license.isEmpty })
         #expect(checksums.allSatisfy { $0.count == 64 || $0.count == 40 })
     }

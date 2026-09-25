@@ -44,6 +44,16 @@ struct RuntimeManifest: Codable, Hashable, Sendable {
         let gitBlobSHA1: String?
     }
 
+    /// A runtime and model combination whose tool calls and image handling were
+    /// verified on the packaged runtime before release.
+    struct VerifiedCompatibility: Codable, Hashable, Sendable {
+        let runtime: String
+        let version: String
+        let toolCalls: Bool
+        let vision: Bool
+        let verifiedOn: String
+    }
+
     struct Model: Codable, Hashable, Sendable, Identifiable {
         let id: String
         let name: String
@@ -57,6 +67,7 @@ struct RuntimeManifest: Codable, Hashable, Sendable {
         let contextLength: Int?
         let minimumMemoryGB: Int?
         let notes: String?
+        var verifiedWith: [VerifiedCompatibility]? = nil
 
         var downloadSize: Int64 { files.reduce(0) { $0 + $1.size } }
 

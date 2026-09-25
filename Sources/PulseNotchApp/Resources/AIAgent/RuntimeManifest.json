@@ -70,6 +70,9 @@
       "contextLength": 16384,
       "minimumMemoryGB": 16,
       "notes": "Uses the package's embedded, adapted chat template; the server is launched with --jinja and no template override.",
+      "verifiedWith": [
+        { "runtime": "llama.cpp", "version": "b11146", "toolCalls": true, "vision": true, "verifiedOn": "2026-09-25" }
+      ],
       "files": [
         { "path": "MiMo-V2.6-Distill-Qwen-9B-Q8_0.gguf", "role": "model", "size": 9527498048, "sha256": "de6dae10334e088876358ef9f574835bb3b401ea2ecf5d6a9473f37894df6b73" },
         { "path": "mmproj-MiMo-V2.6-Distill-Qwen-9B-Q8_0.gguf", "role": "visionProjector", "size": 624229728, "sha256": "4b77e812662a106d6739edf2a3e8e16e0e22291154c0b22a13dab42450410337" }
