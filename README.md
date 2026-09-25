@@ -215,6 +215,13 @@ space and at least 16 GB of memory. It uses its embedded, adapted chat template.
 
 ### AI Agent troubleshooting
 
+- **"Pulse Notch needs Accessibility permission" on a build from source:** ad-hoc
+  signatures change with every build, so macOS forgets the grant. Run
+  `./Scripts/setup-computer-use.sh` once. It creates a local code-signing identity,
+  rebuilds with it so later builds keep their permissions, clears stale entries, and
+  opens System Settings, where you turn on Pulse Notch. macOS does not allow any
+  script to grant this permission on your behalf.
+
 - **"Not ready for computer use":** run **Test connection**. The model must return a
   structured tool call; text alone does not qualify. Choose a model that supports tools.
 - **Screenshots unavailable:** the model did not pass the vision check, or Screen
