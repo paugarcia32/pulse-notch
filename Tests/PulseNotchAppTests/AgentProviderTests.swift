@@ -315,7 +315,7 @@ struct OpenAICompatibleProviderTests {
         #expect(response.finishReason == .stop)
         #expect(sent?.value(forHTTPHeaderField: "Authorization") == "Bearer or-key")
         #expect(sent?.url?.absoluteString == "https://openrouter.ai/api/v1/chat/completions")
-        #expect((body["tools"] as? [Any])?.count == 10)
+        #expect((body["tools"] as? [Any])?.count == 7)
         #expect(((parts[1]["image_url"] as? [String: Any])?["url"] as? String)?.hasPrefix("data:image/png;base64,") == true)
         #expect(!provider.isLocal)
     }

@@ -70,28 +70,42 @@ final class FakeDecisionProvider: DecisionProvider, @unchecked Sendable {
     let metadata: DecisionProviderMetadata
     let requests = Locked<[DecisionRequest]>([])
     private let answer: @Sendable (DecisionQuestion) -> DecisionAnswer
+    /// Scripted action choices: each entry matches an option's description; `done`
+    /// is chosen once the script runs out.
+    private let script: Locked<[String]>
 
     init(
         contextLimit: Int = 32_000,
         isLocal: Bool = false,
+        choosing script: [String] = [],
         answer: @escaping @Sendable (DecisionQuestion) -> DecisionAnswer = FakeDecisionProvider.approving
     ) {
         self.contextLimit = contextLimit
         self.metadata = DecisionProviderMetadata(provider: isLocal ? "Laya" : "JEV", model: "test", isLocal: isLocal)
         self.answer = answer
+        self.script = Locked(script)
+    }
+
+    private func choose(_ question: DecisionQuestion) -> DecisionAnswer {
+        guard case .choice(let options) = question.kind else { return answer(question) }
+        let wanted = script.withValue { $0.isEmpty ? ActionCandidate.doneOption : $0.removeFirst() }
+        let option = options.first { $0.value.contains(wanted) } ?? options.last!
+        return .choice(selected: option.value, probabilities: [option.value: 0.9], confidence: 0.9)
     }
 
     func decide(_ request: DecisionRequest) async throws -> DecisionResponse {
         requests.withValue { $0.append(request) }
         var answers: [String: DecisionAnswer] = [:]
-        for question in request.questions { answers[question.id] = answer(question) }
+        for question in request.questions {
+            answers[question.id] = question.id == "action" ? choose(question) : answer(question)
+        }
         return DecisionResponse(answers: answers, metadata: metadata)
     }
 
     /// Approves every action, keeps the proposed target, and reports success.
     @Sendable static func approving(_ question: DecisionQuestion) -> DecisionAnswer {
         switch question.kind {
-        case .noul: .noul(probabilityYes: 0.95, confidence: 0.95)
+        case .noul: .noul(probabilityYes: 0.05, confidence: 0.95)
         case .choice: .choice(selected: "keep", probabilities: [:], confidence: 0.1)
         case .score(let levels): .score(value: Double(levels.count - 1), level: levels.count - 1, confidence: 0.9)
         }

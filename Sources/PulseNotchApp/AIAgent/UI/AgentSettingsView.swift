@@ -337,10 +337,10 @@ struct AgentSettingsView: View {
     private var privacyText: String {
         var lines: [String] = []
         if !model.settings.decisionSelection.isLocal {
-            lines.append("• Decisions (\(model.settings.decisionKind.title)): your instruction, the proposed action, and the names and values of up to 60 on-screen controls are sent for each step. Screenshots are never sent to the decision provider.")
+            lines.append("• Decisions (\(model.settings.decisionKind.title)): for each step, your instruction, the step, and the names of the relevant on-screen controls are sent so the decision model can choose and verify actions. Screenshots are never sent to the decision provider.")
         }
         if !model.settings.languageSelection.isLocal {
-            lines.append("• Language model (\(model.settings.languageKind.title)): the conversation, observed screen text, and — only for models that pass the vision check — screenshots you allow it to capture.")
+            lines.append("• Language model (\(model.settings.languageKind.title)): the conversation, a summary of the screen after each step, and — only for models that pass the vision check — a screenshot after each step.")
         }
         if lines.isEmpty {
             lines.append("Both providers run on this Mac. Browsing or using online apps during a task can still reach the network.")

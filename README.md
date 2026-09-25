@@ -97,11 +97,14 @@ from the **Settings** tab on the AI Agent page. The page uses a larger 640×520 
 (smaller on small displays), stays open when the pointer leaves so drafts are kept,
 and collapses on Esc or a click elsewhere without stopping work.
 
-Two provider roles are configured independently:
+Two provider roles are configured independently. The language model directs: it
+talks with you, plans, and describes each desktop step in words. The decision model
+operates: for each step it chooses the concrete actions on screen, checks sensitive
+actions for side effects, verifies each outcome, and decides when the step is done.
 
 | Role | Hosted | Local |
 |---|---|---|
-| Decisions: action choice, target selection, risk checks, outcome verification | JEV through TypeSafe's System One API (API key) | Laya, managed by Pulse Notch or an existing System One-compatible service |
+| Decisions: choosing each on-screen action, risk checks, outcome verification | JEV through TypeSafe's System One API (API key) | Laya, managed by Pulse Notch or an existing System One-compatible service |
 | Conversation, planning, and visual reasoning | OpenRouter (API key and model) | A managed `llama.cpp` server, or an existing OpenAI-compatible server |
 
 All four combinations work. Pulse Notch calls a configuration *fully local inference*
@@ -122,10 +125,10 @@ individually. You can also import a compatible GGUF model and its vision project
 Keys are optional; the presets use loopback addresses.
 
 **Computer use.** Turn on *Allow computer use* and grant Accessibility (required) and
-Screen Recording (optional, for screenshots). A model is allowed to control the Mac
-only after **Test connection** verifies a real tool call; screenshots are offered only
-to models that also pass a vision check. The agent prefers accessible controls and
-falls back to coordinates only on a current screenshot. Runs are autonomous by
+Screen Recording (optional, for screenshots). A language model can direct computer use
+only after **Test connection** verifies a real tool call. When it also passes a vision
+check, it receives a screenshot after every step. It uses the screenshot to judge
+whether the work is on track, and asks you for help when it is not. Runs are autonomous by
 default; *Supervised* mode asks before each action, and you can deny or allow specific
 apps by bundle identifier. Each run is limited to 50 actions or 10 minutes by default
 (editable per goal and routine). After two failed replans it pauses with an
@@ -169,12 +172,12 @@ AI Agent sends data only to the providers you configure, as described below.
 - AI Agent (off by default):
   - Credentials for TypeSafe, OpenRouter, and optional local endpoints are stored in
     the macOS Keychain. **Disconnect** removes them.
-  - With a hosted decision provider, each step sends the instruction, the proposed
-    action, and the names and values of up to 60 relevant on-screen controls. The
-    decision provider never receives screenshots.
-  - With a hosted language model, the conversation and observed screen text are sent.
-    Screenshots are sent only to models that pass the vision check, and only when the
-    agent captures one.
+  - With a hosted decision provider, each step sends the instruction, the step, and
+    the names of the relevant on-screen controls. The decision provider never receives
+    screenshots.
+  - With a hosted language model, the conversation and a summary of the screen after
+    each step are sent. Models that pass the vision check also receive a screenshot
+    after each step.
   - Secure fields are never read, sent, typed into, or logged. Screen content is
     treated as task data, never as instructions that change permissions or rules.
   - Screenshots stay in memory and are discarded after use. Conversations, run

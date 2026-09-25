@@ -115,13 +115,6 @@ public struct Observation: Hashable, Sendable, Identifiable {
     public func element(withID id: String) -> AccessibleElement? {
         elements.first { $0.id == id }
     }
-
-    /// Finds the element in this observation that corresponds to one seen earlier.
-    public func matching(_ element: AccessibleElement) -> AccessibleElement? {
-        if let exact = self.element(withID: element.id), exact.semanticKey == element.semanticKey { return exact }
-        let candidates = elements.filter { $0.semanticKey == element.semanticKey }
-        return candidates.count == 1 ? candidates[0] : nil
-    }
 }
 
 public enum KeyModifier: String, Codable, Hashable, Sendable, CaseIterable {
@@ -187,15 +180,6 @@ public enum ProposedAction: Hashable, Sendable {
         case .click(let target): target
         case .typeText(_, let target), .scroll(_, _, let target): target
         case .openApplication, .activateApplication, .openURL, .pressKeys: nil
-        }
-    }
-
-    public func retargeted(to target: ActionTarget) -> ProposedAction {
-        switch self {
-        case .click: .click(target)
-        case .typeText(let text, _): .typeText(text, into: target)
-        case .scroll(let direction, let amount, _): .scroll(direction, amount: amount, at: target)
-        case .openApplication, .activateApplication, .openURL, .pressKeys: self
         }
     }
 

@@ -16,41 +16,59 @@ external agent installation.
 | Persistence | `…/AIAgent/Persistence` | Versioned SQLite store for conversations, goals, routines, runs, and occurrences. |
 | Feature and UI | `…/AIAgent/Feature`, `…/AIAgent/UI` | `@MainActor` model that owns run tasks and the scheduler, plus the SwiftUI page. |
 
-## Execution loop
+## Execution loop: the language model directs, JEV or Laya operates
 
-1. The language model receives the conversation and the tool definitions.
-   - Desktop tools are offered only when computer use is on and the model passed a
-     tool-call probe.
-   - `capture_screen` is offered only when the model also passed a vision probe.
-2. Each desktop tool call runs through these steps:
-   1. The run acquires the exclusive desktop lease; other runs wait in a queue.
-   2. The run waits until the Mac is unlocked and awake, and the composer is not focused.
-   3. It checks application restrictions.
-   4. It takes a fresh observation and re-anchors the target: elements by role and
-      label, coordinates only within the same window.
-   5. The executor validates the action against that observation.
-   6. The decision provider answers typed questions. These are `noul` (is the
-      action aligned with the instruction and free of unrequested side effects?) and
-      `choice` (which listed control, if any, is the right target?).
-      - A high-confidence choice can correct the target.
-      - Low alignment moves the run to Needs input.
-   7. In supervised mode, the user approves the action.
-   8. The action is executed.
-   9. A new observation is taken.
-   10. A `score` question verifies the outcome.
-3. Goals finish only after a `score` question confirms that the observed state
-   satisfies the completion criteria. The evidence is stored with the run.
-4. Failure handling:
-   - Recoverable failures are stale targets, missing controls, and failed checks. After
-     `maximumReplans` of them (default two), the run pauses with an explanation.
-   - Reaching the action or time limit moves the run to Needs input.
-   - Provider errors fail the run. The runner never switches providers.
+The language model (OpenRouter or local) is the director. It never picks on-screen
+controls itself. Instead it breaks the task into natural-language steps and calls
+`operate(step:text:)` for each one, for example "click the Save button" or "type the
+text into the document body" with `text: "ciao"`. It can also call `open_app`,
+`open_url`, `observe_screen`, and, for vision-capable models, `capture_screen`.
+
+Within each step, JEV or Laya is the operator:
+
+1. Pulse Notch takes a fresh Accessibility observation and builds the candidate
+   actions.
+   - There is one candidate per relevant control: click, or type into text inputs.
+   - Generic actions are always available: type at the cursor, Return, Tab, Escape,
+     and scroll.
+   - Two outcome options are always available: "the step is already done on screen"
+     and "none of these actions helps".
+   - Option names are descriptive, because Laya weighs option names more than their
+     descriptions.
+2. The decision provider picks the next action with a `choice` question.
+   - "Done" requires at least 50% confidence.
+   - Any other choice requires at least 20%.
+3. Some actions are potentially sensitive: controls labelled Delete, Send, Buy, Quit,
+   Allow, and similar, plus Return and modifier shortcuts. For these, a `noul` question
+   asks about unrequested side effects. A likely side effect moves the run to Needs
+   input.
+4. The rest of the pipeline follows:
+   - the executor validates the target;
+   - in supervised mode, the user approves the action;
+   - the action is executed and a new observation is taken;
+   - a `score` question verifies the effect.
+5. The loop repeats until the decision provider chooses "done". A step is limited to
+   eight actions, and a repeated action ends it.
+6. The step result returns to the language model. With a model that passed the vision
+   check, the result includes an ephemeral screenshot. The model confirms the work is
+   on track, corrects course with another step, or asks the user for help.
+
+Goals finish only after a `score` question confirms that the observed state satisfies
+the completion criteria. The evidence is stored with the run.
+
+Failure handling:
+
+- Recoverable failures are abstentions, stale targets, failed checks, and typing
+  steps that arrive without text. After `maximumReplans` of them (default two), the
+  run pauses with an explanation.
+- Reaching the action or time limit moves the run to Needs input.
+- Provider errors fail the run. The runner never switches providers.
 
 Decision state is fitted to the provider's context limit: 1,024 tokens for Laya
 Multilingual, and 32k for JEV's state plus the longest question.
 
-- Controls are ranked by relevance to the instruction.
-- The proposed target is always kept.
+- Candidate controls are ranked by relevance to the step.
+- The generic and outcome options are always kept.
 - Secure fields are dropped.
 - If the decisive information does not fit, the run reports insufficient context
   instead of truncating it.
@@ -89,6 +107,7 @@ directly.
 | MiMo image interpretation (capability probe) | Passed |
 | MiMo agent turn with the real tool schema ("Open TextEdit.") | `open_app {"name": "TextEdit"}` in 3 s |
 | Unauthenticated request to the managed server | Rejected (401) |
+| MiMo directing Laya on a simulated TextEdit window ("write the word ciao") | Completed in 15 s. MiMo recovered from a missing `text` argument; Laya chose to type (45%), then "done" (55%); MiMo checked the screenshot and finished with evidence. |
 
 Some checks still need a person: hosted providers with real keys, computer use with
 Accessibility granted, VoiceOver, multiple displays, and macOS 14. They are listed in

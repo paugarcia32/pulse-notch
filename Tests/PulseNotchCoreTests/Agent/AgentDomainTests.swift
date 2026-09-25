@@ -135,13 +135,59 @@ struct AgentDomainTests {
             try AgentTools.parse(ToolCall(id: "1", name: name, argumentsJSON: arguments))
         }
 
-        #expect(try parse("press_keys", #"{"keys":"cmd+shift+T"}"#) == .pressKeys(KeyShortcut(key: "t", modifiers: [.command, .shift])))
-        #expect(try parse("click", #"{"x":10,"y":20}"#) == .click(elementID: nil, imagePoint: ImagePoint(x: 10, y: 20)))
-        #expect(try parse("scroll", #"{"direction":"down","amount":99}"#) == .scroll(.down, amount: 20, elementID: nil))
+        #expect(try parse("operate", #"{"step":"click Save"}"#) == .operate(step: "click Save", text: nil))
+        #expect(try parse("operate", #"{"step":"type the note","text":"ciao"}"#) == .operate(step: "type the note", text: "ciao"))
+        #expect(try parse("open_app", #"{"name":"TextEdit"}"#) == .openApplication(name: "TextEdit"))
         #expect(throws: AgentToolError.self) { try parse("open_url", #"{"url":"file:///etc/passwd"}"#) }
-        #expect(throws: AgentToolError.self) { try parse("press_keys", #"{"keys":"hyper+a"}"#) }
-        #expect(throws: AgentToolError.self) { try parse("rm_rf", "{}") }
-        #expect(throws: AgentToolError.self) { try parse("click", "{}") }
+        #expect(throws: AgentToolError.self) { try parse("click", #"{"element_id":"e1"}"#) }
+        #expect(throws: AgentToolError.self) { try parse("operate", "{}") }
+    }
+
+    @Test
+    func languageModelsDirectStepsButNeverTargetControls() {
+        let names = AgentTools.definitions(computerUse: true, vision: true).map(\.name)
+
+        #expect(names == ["operate", "open_app", "open_url", "observe_screen", "capture_screen", "finish_task", "ask_user"])
+        #expect(!AgentTools.definitions(computerUse: true, vision: false).map(\.name).contains("capture_screen"))
+    }
+
+    // MARK: Action candidates
+
+    @Test
+    func candidatesCoverControlsTypingKeysAndStepOutcomes() {
+        let observation = Observation(
+            capturedAt: Date(timeIntervalSince1970: 0),
+            applicationName: "TextEdit",
+            bundleID: "com.apple.TextEdit",
+            elements: [
+                AccessibleElement(id: "t", role: "AXTextArea", label: "Document"),
+                AccessibleElement(id: "s", role: "AXButton", label: "Save"),
+                AccessibleElement(id: "x", role: "AXStaticText", label: "Untitled"),
+                AccessibleElement(id: "d", role: "AXButton", label: "Disabled", isEnabled: false),
+                AccessibleElement(id: "p", role: "AXSecureTextField", label: "Password", isSecure: true)
+            ]
+        )
+        let candidates = ActionCandidates.build(for: observation, step: "type the note", text: "ciao")
+        let descriptions = candidates.map(\.description)
+
+        #expect(descriptions.contains("type the text into the “Document” text area"))
+        #expect(descriptions.contains("click the “Save” button"))
+        #expect(!descriptions.contains { $0.contains("Untitled") || $0.contains("Disabled") || $0.contains("Password") })
+        #expect(candidates.suffix(2).map(\.option) == [ActionCandidate.doneOption, ActionCandidate.abstainOption])
+        #expect(Set(candidates.map(\.option)).count == candidates.count)
+        #expect(!ActionCandidates.build(for: observation, step: "save", text: nil).map(\.description).contains { $0.hasPrefix("type") })
+    }
+
+    @Test
+    func candidateFittingKeepsGenericActionsAndReportsWhenNothingFits() throws {
+        let many = (0..<120).map { AccessibleElement(id: "b\($0)", role: "AXButton", label: "Button number \($0) in a long toolbar") }
+        let observation = Observation(capturedAt: Date(timeIntervalSince1970: 0), applicationName: "App", bundleID: "a", elements: many)
+        let candidates = ActionCandidates.build(for: observation, step: "press button 7", text: nil)
+
+        let fitted = try #require(ActionCandidates.fit(candidates, state: "{}", instructions: "Choose.", limit: 400))
+        #expect(fitted.included.count < candidates.count)
+        #expect(fitted.included.contains { $0.kind == .done } && fitted.included.contains { $0.kind == .abstain })
+        #expect(ActionCandidates.fit(candidates, state: "{}", instructions: "Choose.", limit: 20) == nil)
     }
 
     // MARK: Context budget

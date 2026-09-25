@@ -36,6 +36,11 @@ struct AgentRunnerTests {
         return (await runner.run(), language)
     }
 
+    private static func operate(_ step: String, text: String? = nil) -> ScriptedTurn {
+        let arguments = text.map { #"{"step":"\#(step)","text":"\#($0)"}"# } ?? #"{"step":"\#(step)"}"#
+        return .respond(ScriptedLanguageProvider.call("operate", arguments))
+    }
+
     @Test
     func plainChatCompletesWithoutConsultingTheDecisionProvider() async {
         let decision = FakeDecisionProvider()
@@ -53,13 +58,12 @@ struct AgentRunnerTests {
     }
 
     @Test
-    func desktopActionIsDecidedExecutedAndVerified() async {
+    func theDecisionProviderOperatesTheScreenForEachLanguageModelStep() async {
         let executor = FakeExecutor()
-        let decision = FakeDecisionProvider()
-        let (outcome, _) = await run(
+        let decision = FakeDecisionProvider(choosing: ["click the “Save” button", "done"])
+        let (outcome, language) = await run(
             [
-                .respond(ScriptedLanguageProvider.call("observe_screen")),
-                .respond(ScriptedLanguageProvider.call("click", #"{"element_id":"e1"}"#)),
+                Self.operate("click the Save button"),
                 .respond(ScriptedLanguageProvider.call("finish_task", #"{"summary":"Saved","evidence":"Title shows saved"}"#))
             ],
             decision: decision,
@@ -68,36 +72,65 @@ struct AgentRunnerTests {
 
         #expect(outcome.status == .completed(evidence: "Title shows saved"))
         #expect(outcome.actionCount == 1)
-        #expect(executor.executed.current.count == 1)
-        let questionIDs = decision.requests.current.flatMap { $0.questions.map(\.id) }
-        #expect(questionIDs == ["aligned", "target", "effect"])
+        guard case .click(.element(let id, _)) = executor.executed.current.first else {
+            Issue.record("Expected a click chosen by the decision provider")
+            return
+        }
+        #expect(id == "e1")
+        #expect(decision.requests.current.flatMap { $0.questions.map(\.id) } == ["action", "effect", "action"])
+        let report = language.requests.current.last?.messages.last { $0.role == .tool }?.text ?? ""
+        #expect(report.hasPrefix("Step done: click the Save button"))
     }
 
     @Test
-    func decisionProviderCanCorrectTheTargetWithHighConfidence() async {
-        let executor = FakeExecutor(observations: [[
-            AccessibleElement(id: "e1", role: "AXButton", label: "Cancel"),
-            AccessibleElement(id: "e2", role: "AXButton", label: "Save")
-        ]])
-        let decision = FakeDecisionProvider { question in
-            if case .choice = question.kind { return .choice(selected: "e2", probabilities: ["e2": 0.9], confidence: 0.9) }
-            return FakeDecisionProvider.approving(question)
-        }
+    func theLanguageModelSuppliesTheTextThatTheDecisionProviderTypes() async {
+        let area = AccessibleElement(id: "t", role: "AXTextArea", label: "Document")
+        let executor = FakeExecutor(observations: [[area]])
+        let decision = FakeDecisionProvider(choosing: ["type the text into the “Document” text area", "done"])
         let (_, _) = await run(
-            [
-                .respond(ScriptedLanguageProvider.call("observe_screen")),
-                .respond(ScriptedLanguageProvider.call("click", #"{"element_id":"e1"}"#)),
-                .respond(LanguageResponse(text: "Done"))
-            ],
+            [Self.operate("fill the note", text: "ciao"), .respond(LanguageResponse(text: "Written"))],
             decision: decision,
             executor: executor
         )
 
-        guard case .click(.element(let id, _)) = executor.executed.current.first else {
-            Issue.record("Expected a click")
+        #expect(executor.executed.current == [.typeText("ciao", into: .element(id: "t", observationID: executor.executed.current.first?.target?.observationID ?? UUID()))])
+        let secondChoice = decision.requests.current.last { $0.questions.first?.id == "action" }
+        let options = secondChoice.flatMap { request -> [DecisionOption]? in
+            if case .choice(let options) = request.questions[0].kind { return options }
+            return nil
+        } ?? []
+        #expect(!options.contains { $0.value.hasPrefix("type") })
+    }
+
+    @Test
+    func repeatedAbstentionsReturnControlToTheLanguageModelAndThenPause() async {
+        let decision = FakeDecisionProvider(choosing: ["abstain", "abstain", "abstain"])
+        let recorder = UpdateRecorder()
+        let (outcome, _) = await run(
+            [Self.operate("do something vague"), Self.operate("try again"), Self.operate("once more")],
+            decision: decision,
+            recorder: recorder
+        )
+
+        guard case .paused(let reason) = outcome.status else {
+            Issue.record("Expected a pause, got \(outcome.status)")
             return
         }
-        #expect(id == "e2")
+        #expect(reason?.contains("3 failed attempts") == true)
+        #expect(recorder.events.filter { $0.kind == .retried }.count == 3)
+    }
+
+    @Test
+    func staleTargetsAreRefreshedAndRepeatedFailuresPause() async {
+        let executor = FakeExecutor(validation: { _ in .stale("The control moved.") })
+        let decision = FakeDecisionProvider(choosing: Array(repeating: "click the “Save” button", count: 5))
+        let (outcome, _) = await run([Self.operate("click Save")], decision: decision, executor: executor)
+
+        #expect(executor.executed.current.isEmpty)
+        guard case .paused = outcome.status else {
+            Issue.record("Expected a pause, got \(outcome.status)")
+            return
+        }
     }
 
     @Test
@@ -110,12 +143,9 @@ struct AgentRunnerTests {
             await control.answerApproval(false)
         }
         let (outcome, language) = await run(
-            [
-                .respond(ScriptedLanguageProvider.call("observe_screen")),
-                .respond(ScriptedLanguageProvider.call("click", #"{"element_id":"e1"}"#)),
-                .respond(LanguageResponse(text: "I will not save it."))
-            ],
+            [Self.operate("click Save"), .respond(LanguageResponse(text: "I will not save it."))],
             configuration: testConfiguration(mode: .supervised),
+            decision: FakeDecisionProvider(choosing: ["click the “Save” button"]),
             executor: executor,
             control: control,
             recorder: recorder
@@ -124,7 +154,7 @@ struct AgentRunnerTests {
 
         #expect(executor.executed.current.isEmpty)
         #expect(outcome.status == .completed(evidence: "I will not save it."))
-        #expect(recorder.statuses.contains(.needsInput(.approval(actionSummary: "Click element e1"))))
+        #expect(recorder.statuses.contains { if case .needsInput(.approval) = $0 { true } else { false } })
         let lastToolResult = language.requests.current.last?.messages.last { $0.role == .tool }?.text ?? ""
         #expect(lastToolResult.contains("declined"))
     }
@@ -143,12 +173,9 @@ struct AgentRunnerTests {
     }
 
     @Test
-    func actionsInADisallowedFrontmostApplicationNeedInput() async {
+    func stepsInADisallowedFrontmostApplicationNeedInput() async {
         let (outcome, _) = await run(
-            [
-                .respond(ScriptedLanguageProvider.call("observe_screen")),
-                .respond(ScriptedLanguageProvider.call("press_keys", #"{"keys":"cmd+s"}"#))
-            ],
+            [Self.operate("save")],
             configuration: testConfiguration(restrictions: ApplicationRestrictions(allowedBundleIDs: ["com.apple.Safari"]))
         )
 
@@ -156,39 +183,12 @@ struct AgentRunnerTests {
     }
 
     @Test
-    func staleTargetsAreRefreshedAndRepeatedFailuresPause() async {
-        let save = AccessibleElement(id: "e1", role: "AXButton", label: "Save")
-        let executor = FakeExecutor(observations: [[save], []])
-        let recorder = UpdateRecorder()
-        let (outcome, _) = await run(
-            [
-                .respond(ScriptedLanguageProvider.call("observe_screen")),
-                .respond(ScriptedLanguageProvider.call("click", #"{"element_id":"e1"}"#)),
-                .respond(ScriptedLanguageProvider.call("click", #"{"element_id":"e1"}"#)),
-                .respond(ScriptedLanguageProvider.call("click", #"{"element_id":"e1"}"#))
-            ],
-            executor: executor,
-            recorder: recorder
-        )
-
-        #expect(executor.executed.current.isEmpty)
-        guard case .paused(let reason) = outcome.status else {
-            Issue.record("Expected a pause, got \(outcome.status)")
-            return
-        }
-        #expect(reason?.contains("3 failed attempts") == true)
-        #expect(recorder.events.filter { $0.kind == .retried }.count == 3)
-    }
-
-    @Test
     func reachingTheActionLimitNeedsInput() async {
         let executor = FakeExecutor()
         let (outcome, _) = await run(
-            [
-                .respond(ScriptedLanguageProvider.call("press_keys", #"{"keys":"cmd+s"}"#)),
-                .respond(ScriptedLanguageProvider.call("press_keys", #"{"keys":"cmd+s"}"#))
-            ],
+            [Self.operate("press return twice")],
             configuration: testConfiguration(limits: RunLimits(maximumActions: 1)),
+            decision: FakeDecisionProvider(choosing: ["press Return", "press Return"]),
             executor: executor
         )
 
@@ -201,11 +201,9 @@ struct AgentRunnerTests {
         let clock = TestClock()
         let executor = FakeExecutor(clock: clock)
         let (outcome, _) = await run(
-            [
-                .respond(ScriptedLanguageProvider.call("press_keys", #"{"keys":"cmd+s"}"#)),
-                .respond(ScriptedLanguageProvider.call("press_keys", #"{"keys":"cmd+s"}"#))
-            ],
+            [Self.operate("press return twice")],
             configuration: testConfiguration(limits: RunLimits(maximumDuration: 1)),
+            decision: FakeDecisionProvider(choosing: ["press Return", "press Return"]),
             executor: executor,
             clock: clock
         )
@@ -215,23 +213,39 @@ struct AgentRunnerTests {
     }
 
     @Test
-    func unlikelyActionsNeedInputInAutonomousMode() async {
-        let decision = FakeDecisionProvider { question in
-            if case .noul = question.kind { return .noul(probabilityYes: 0.1, confidence: 0.9) }
+    func riskyActionsNeedInputInAutonomousMode() async {
+        let decision = FakeDecisionProvider(choosing: ["click the “Delete” button"]) { question in
+            if case .noul = question.kind { return .noul(probabilityYes: 0.9, confidence: 0.9) }
             return FakeDecisionProvider.approving(question)
         }
-        let executor = FakeExecutor()
-        let (outcome, _) = await run(
-            [.respond(ScriptedLanguageProvider.call("press_keys", #"{"keys":"cmd+delete"}"#))],
-            decision: decision,
-            executor: executor
-        )
+        let executor = FakeExecutor(observations: [[AccessibleElement(id: "d", role: "AXButton", label: "Delete")]])
+        let (outcome, _) = await run([Self.operate("clean up")], decision: decision, executor: executor)
 
         guard case .needsInput(.unresolvedIntent) = outcome.status else {
             Issue.record("Expected unresolved intent, got \(outcome.status)")
             return
         }
         #expect(executor.executed.current.isEmpty)
+    }
+
+    @Test
+    func onlyPotentiallySensitiveActionsGetARiskCheck() {
+        let observation = Observation(
+            capturedAt: Date(timeIntervalSince1970: 0),
+            applicationName: "Mail",
+            bundleID: "com.apple.mail",
+            elements: [
+                AccessibleElement(id: "s", role: "AXButton", label: "Send"),
+                AccessibleElement(id: "b", role: "AXButton", label: "Bold")
+            ]
+        )
+        let target = { (id: String) in ActionTarget.element(id: id, observationID: observation.id) }
+
+        #expect(AgentRunner.isPotentiallySensitive(.click(target("s")), in: observation))
+        #expect(!AgentRunner.isPotentiallySensitive(.click(target("b")), in: observation))
+        #expect(AgentRunner.isPotentiallySensitive(.pressKeys(KeyShortcut(key: "return")), in: observation))
+        #expect(!AgentRunner.isPotentiallySensitive(.openApplication(name: "TextEdit"), in: observation))
+        #expect(!AgentRunner.isPotentiallySensitive(.typeText("ciao", into: nil), in: observation))
     }
 
     @Test
@@ -289,13 +303,10 @@ struct AgentRunnerTests {
     }
 
     @Test
-    func decisionsThatExceedTheContextLimitReportInsufficientContext() async {
+    func stepsThatExceedTheDecisionContextReportInsufficientContext() async {
         let executor = FakeExecutor()
         let (outcome, _) = await run(
-            [
-                .respond(ScriptedLanguageProvider.call("observe_screen")),
-                .respond(ScriptedLanguageProvider.call("click", #"{"element_id":"e1"}"#))
-            ],
+            [Self.operate("click Save")],
             decision: FakeDecisionProvider(contextLimit: 20, isLocal: true),
             executor: executor
         )
@@ -318,20 +329,24 @@ struct AgentRunnerTests {
     }
 
     @Test
-    func screenshotsAreOfferedOnlyAfterVisionVerificationAndNotRetained() async {
-        let (_, textOnly) = await run([.respond(LanguageResponse(text: "ok"))])
-        #expect(textOnly.requests.current.first?.tools.contains { $0.name == "capture_screen" } == false)
-
-        let (_, vision) = await run(
-            [.respond(ScriptedLanguageProvider.call("capture_screen")), .respond(LanguageResponse(text: "I see it"))],
-            configuration: testConfiguration(vision: true)
-        )
-        let requests = vision.requests.current
-        #expect(requests.count == 2)
+    func visionModelsReviewAScreenshotAfterEveryStep() async {
         let hasImage: (LanguageRequest) -> Bool = { request in
             request.messages.contains { $0.content.contains { if case .imagePNG = $0 { true } else { false } } }
         }
+        let (_, textOnly) = await run([Self.operate("save"), .respond(LanguageResponse(text: "ok"))])
+        #expect(textOnly.requests.current.count == 2)
+        #expect(!hasImage(textOnly.requests.current[1]))
+        #expect(textOnly.requests.current.first?.tools.contains { $0.name == "capture_screen" } == false)
+
+        let (_, vision) = await run(
+            [Self.operate("save"), Self.operate("check"), .respond(LanguageResponse(text: "Looks right"))],
+            configuration: testConfiguration(vision: true)
+        )
+        let requests = vision.requests.current
+        #expect(requests.count == 3)
         #expect(hasImage(requests[1]))
+        // Screenshots are ephemeral: only the latest one stays in the transcript.
+        #expect(requests[2].messages.filter { $0.content.contains { if case .imagePNG = $0 { true } else { false } } }.count == 1)
     }
 
     @Test
@@ -343,7 +358,8 @@ struct AgentRunnerTests {
         let executor = FakeExecutor()
         let waiting = Task {
             await run(
-                [.respond(ScriptedLanguageProvider.call("press_keys", #"{"keys":"return"}"#)), .respond(LanguageResponse(text: "ok"))],
+                [Self.operate("press return"), .respond(LanguageResponse(text: "ok"))],
+                decision: FakeDecisionProvider(choosing: ["press Return"]),
                 executor: executor,
                 recorder: recorder,
                 lease: lease
