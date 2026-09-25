@@ -276,6 +276,14 @@ struct AgentSettingsView: View {
                     }
                 }
             ))
+            if model.settings.computerUseEnabled && model.settings.decisionKind != .jev {
+                Label(
+                    "JEV is recommended for computer use. In published community tests the official Laya checkpoints chose the right on-screen control far less reliably than JEV without fine-tuning.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
             if model.settings.computerUseEnabled {
                 permissionRow("Accessibility", granted: permissions.accessibilityGranted, request: permissions.requestAccessibility, open: permissions.openAccessibilitySettings)
                 permissionRow("Screen Recording (optional, for screenshots)", granted: permissions.screenRecordingGranted, request: permissions.requestScreenRecording, open: permissions.openScreenRecordingSettings)

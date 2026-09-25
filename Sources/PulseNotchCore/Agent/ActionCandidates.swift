@@ -10,8 +10,8 @@ public struct ActionCandidate: Hashable, Sendable {
         case abstain
     }
 
-    public static let doneOption = "the step is already done on screen"
-    public static let abstainOption = "none of these actions helps"
+    public static let doneOption = "done: the step is visibly complete"
+    public static let abstainOption = "blocked: no offered action makes progress"
 
     /// The option name sent to the decision provider. Laya weighs option names more
     /// than their descriptions, so the name itself describes the action.
@@ -50,14 +50,17 @@ public enum ActionCandidates {
             candidates.append(ActionCandidate(option: description, description: description, kind: .act(action)))
         }
 
+        let mentionsMenu = step.lowercased().contains("menu")
         let ranked = ElementShortlist.ranked(observation.elements, relevantTo: "\(step) \(text ?? "")")
-            .filter(\.isEnabled)
+            // Menu bars dominate native apps (121 of 147 elements in Calculator) and
+            // drown out the window's own controls unless the step is about menus.
+            .filter { $0.isEnabled && (mentionsMenu || !menuRoles.contains($0.role)) }
         var controls = 0
         for element in ranked where controls < maximumControls {
             let target = ActionTarget.element(id: element.id, observationID: observation.id)
-            let name = "the “\(element.label)” \(Self.roleName(element.role))"
+            let name = "\(Self.roleName(element.role)) “\(element.label)”" + Self.currentValue(element)
             if textInputRoles.contains(element.role) {
-                if let text { add("type the text into \(name)", .typeText(text, into: target)) }
+                if let text { add("type into \(name)", .typeText(text, into: target)) }
                 add("click \(name)", .click(target))
                 controls += 1
             } else if pressableRoles.contains(element.role) || element.actions.contains("AXPress") {
@@ -66,7 +69,7 @@ public enum ActionCandidates {
             }
         }
 
-        if let text { add("type the text at the current cursor", .typeText(text, into: nil)) }
+        if let text { add("type at the current cursor", .typeText(text, into: nil)) }
         add("press Return", .pressKeys(KeyShortcut(key: "return")))
         add("press Tab", .pressKeys(KeyShortcut(key: "tab")))
         add("press Escape", .pressKeys(KeyShortcut(key: "escape")))
@@ -77,23 +80,46 @@ public enum ActionCandidates {
         return candidates
     }
 
+    static let menuRoles: Set<String> = ["AXMenuBarItem", "AXMenuItem", "AXMenuBar", "AXMenu"]
+
+    /// Web-style role names, which match the vocabulary decision models were trained on.
     static func roleName(_ role: String) -> String {
         switch role {
-        case "AXTextArea": "text area"
-        case "AXTextField": "text field"
-        case "AXSearchField": "search field"
-        case "AXComboBox": "combo box"
-        case "AXPopUpButton": "pop-up menu"
-        case "AXMenuButton": "menu button"
-        case "AXMenuItem": "menu item"
-        case "AXMenuBarItem": "menu"
+        case "AXTextArea", "AXTextField": "textbox"
+        case "AXSearchField": "searchbox"
+        case "AXComboBox", "AXPopUpButton": "combobox"
+        case "AXMenuButton", "AXMenuBarItem": "menu"
+        case "AXMenuItem": "menuitem"
         case "AXCheckBox": "checkbox"
-        case "AXRadioButton": "radio button"
+        case "AXRadioButton": "radio"
         case "AXTab": "tab"
         case "AXCell", "AXRow": "row"
         case "AXLink": "link"
+        case "AXSlider", "AXIncrementor": "slider"
         default: "button"
         }
+    }
+
+    /// Shows a field's current value so the decision model does not refill it.
+    static func currentValue(_ element: AccessibleElement) -> String {
+        guard let value = element.value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return "" }
+        return textInputRoles.contains(element.role) || element.role == "AXCheckBox" || element.role == "AXPopUpButton"
+            ? " = “\(value.prefix(40))”"
+            : ""
+    }
+
+    /// Identifies what is visibly on screen, to tell whether an action changed anything.
+    public static func fingerprint(_ observation: Observation) -> Int {
+        var hasher = Hasher()
+        hasher.combine(observation.bundleID)
+        hasher.combine(observation.windowTitle)
+        for element in observation.elements {
+            hasher.combine(element.role)
+            hasher.combine(element.label)
+            hasher.combine(element.value)
+            hasher.combine(element.isEnabled)
+        }
+        return hasher.finalize()
     }
 
     /// Fits the choice question into the decision provider's context by dropping the
@@ -103,8 +129,10 @@ public enum ActionCandidates {
         _ candidates: [ActionCandidate],
         state: String,
         instructions: String,
-        limit: Int
+        limit: Int,
+        companionQuestions: [DecisionQuestion] = []
     ) -> (question: DecisionQuestion, included: [ActionCandidate])? {
+        let companionCost = companionQuestions.map(TokenEstimator.estimate).max() ?? 0
         let controlCount = candidates.prefix { candidate in
             if case .act(let action) = candidate.kind, action.target != nil { return true }
             return false
@@ -118,7 +146,7 @@ public enum ActionCandidates {
                 instructions: instructions,
                 kind: .choice(included.map { DecisionOption($0.option) })
             )
-            if TokenEstimator.estimate(state) + TokenEstimator.estimate(question) <= limit {
+            if TokenEstimator.estimate(state) + max(TokenEstimator.estimate(question), companionCost) <= limit {
                 return (question, included)
             }
             keep -= keep > 8 ? max(1, keep / 4) : 1

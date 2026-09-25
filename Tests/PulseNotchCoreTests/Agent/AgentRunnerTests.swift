@@ -60,7 +60,7 @@ struct AgentRunnerTests {
     @Test
     func theDecisionProviderOperatesTheScreenForEachLanguageModelStep() async {
         let executor = FakeExecutor()
-        let decision = FakeDecisionProvider(choosing: ["click the “Save” button", "done"])
+        let decision = FakeDecisionProvider(choosing: ["click button “Save”", "done"])
         let (outcome, language) = await run(
             [
                 Self.operate("click the Save button"),
@@ -77,7 +77,7 @@ struct AgentRunnerTests {
             return
         }
         #expect(id == "e1")
-        #expect(decision.requests.current.flatMap { $0.questions.map(\.id) } == ["action", "effect", "action"])
+        #expect(decision.requests.current.flatMap { $0.questions.map(\.id) } == ["action", "step_done", "action", "step_done"])
         let report = language.requests.current.last?.messages.last { $0.role == .tool }?.text ?? ""
         #expect(report.hasPrefix("Step done: click the Save button"))
     }
@@ -86,7 +86,7 @@ struct AgentRunnerTests {
     func theLanguageModelSuppliesTheTextThatTheDecisionProviderTypes() async {
         let area = AccessibleElement(id: "t", role: "AXTextArea", label: "Document")
         let executor = FakeExecutor(observations: [[area]])
-        let decision = FakeDecisionProvider(choosing: ["type the text into the “Document” text area", "done"])
+        let decision = FakeDecisionProvider(choosing: ["type into textbox “Document”", "done"])
         let (_, _) = await run(
             [Self.operate("fill the note", text: "ciao"), .respond(LanguageResponse(text: "Written"))],
             decision: decision,
@@ -100,6 +100,33 @@ struct AgentRunnerTests {
             return nil
         } ?? []
         #expect(!options.contains { $0.value.hasPrefix("type") })
+    }
+
+    @Test
+    func aConfidentStepDoneAnswerEndsTheStepWithoutActing() async {
+        let decision = FakeDecisionProvider(choosing: ["press Return"]) { question in
+            question.id == "step_done" ? .noul(probabilityYes: 0.9, confidence: 0.9) : FakeDecisionProvider.approving(question)
+        }
+        let executor = FakeExecutor()
+        let (_, language) = await run([Self.operate("save"), .respond(LanguageResponse(text: "ok"))], decision: decision, executor: executor)
+
+        #expect(executor.executed.current.isEmpty)
+        #expect(language.requests.current.last?.messages.last { $0.role == .tool }?.text.hasPrefix("Step done") == true)
+    }
+
+    @Test
+    func actionsWithoutVisibleEffectAreSetAsideThenTheStepReturnsToThePlanner() async {
+        let executor = FakeExecutor()
+        let decision = FakeDecisionProvider(choosing: ["press Return", "press Return", "press Tab"])
+        let (_, language) = await run([Self.operate("submit"), .respond(LanguageResponse(text: "ok"))], decision: decision, executor: executor)
+
+        #expect(executor.executed.current == [
+            .pressKeys(KeyShortcut(key: "return")),
+            .pressKeys(KeyShortcut(key: "return")),
+            .pressKeys(KeyShortcut(key: "tab"))
+        ])
+        let report = language.requests.current.last?.messages.last { $0.role == .tool }?.text ?? ""
+        #expect(report.contains("produced no visible change"))
     }
 
     @Test
@@ -123,7 +150,7 @@ struct AgentRunnerTests {
     @Test
     func staleTargetsAreRefreshedAndRepeatedFailuresPause() async {
         let executor = FakeExecutor(validation: { _ in .stale("The control moved.") })
-        let decision = FakeDecisionProvider(choosing: Array(repeating: "click the “Save” button", count: 5))
+        let decision = FakeDecisionProvider(choosing: Array(repeating: "click button “Save”", count: 5))
         let (outcome, _) = await run([Self.operate("click Save")], decision: decision, executor: executor)
 
         #expect(executor.executed.current.isEmpty)
@@ -145,7 +172,7 @@ struct AgentRunnerTests {
         let (outcome, language) = await run(
             [Self.operate("click Save"), .respond(LanguageResponse(text: "I will not save it."))],
             configuration: testConfiguration(mode: .supervised),
-            decision: FakeDecisionProvider(choosing: ["click the “Save” button"]),
+            decision: FakeDecisionProvider(choosing: ["click button “Save”"]),
             executor: executor,
             control: control,
             recorder: recorder
@@ -214,8 +241,8 @@ struct AgentRunnerTests {
 
     @Test
     func riskyActionsNeedInputInAutonomousMode() async {
-        let decision = FakeDecisionProvider(choosing: ["click the “Delete” button"]) { question in
-            if case .noul = question.kind { return .noul(probabilityYes: 0.9, confidence: 0.9) }
+        let decision = FakeDecisionProvider(choosing: ["click button “Delete”"]) { question in
+            if question.id == "risky" { return .noul(probabilityYes: 0.9, confidence: 0.9) }
             return FakeDecisionProvider.approving(question)
         }
         let executor = FakeExecutor(observations: [[AccessibleElement(id: "d", role: "AXButton", label: "Delete")]])

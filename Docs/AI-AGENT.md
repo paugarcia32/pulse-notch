@@ -24,34 +24,51 @@ controls itself. Instead it breaks the task into natural-language steps and call
 text into the document body" with `text: "ciao"`. It can also call `open_app`,
 `open_url`, `observe_screen`, and, for vision-capable models, `capture_screen`.
 
-Within each step, JEV or Laya is the operator:
+Within each step, JEV or Laya is the operator. The loop follows the patterns of the
+most-used JEV computer-use projects: trycua/cua `jev-use`, browser-use/jev-ultrafast,
+jkudish/jev-browser, wy-coliney/jev-browser-use, and ThinkFlowLab/system1-agents.
 
 1. Pulse Notch takes a fresh Accessibility observation and builds the candidate
    actions.
-   - There is one candidate per relevant control: click, or type into text inputs.
-   - Generic actions are always available: type at the cursor, Return, Tab, Escape,
+   - Each relevant control gets a click candidate. Text inputs also get a "type into"
+     candidate.
+   - Roles use web vocabulary (button, textbox, combobox, …).
+   - Field values are shown, so the decision model does not refill a field.
+   - Menu-bar items are hidden unless the step is about menus.
+   - Generic actions are always offered: type at the cursor, Return, Tab, Escape,
      and scroll.
-   - Two outcome options are always available: "the step is already done on screen"
-     and "none of these actions helps".
-   - Option names are descriptive, because Laya weighs option names more than their
-     descriptions.
-2. The decision provider picks the next action with a `choice` question.
-   - "Done" requires at least 50% confidence.
-   - Any other choice requires at least 20%.
-3. Some actions are potentially sensitive: controls labelled Delete, Send, Buy, Quit,
-   Allow, and similar, plus Return and modifier shortcuts. For these, a `noul` question
-   asks about unrequested side effects. A likely side effect moves the run to Needs
-   input.
-4. The rest of the pipeline follows:
-   - the executor validates the target;
-   - in supervised mode, the user approves the action;
-   - the action is executed and a new observation is taken;
-   - a `score` question verifies the effect.
-5. The loop repeats until the decision provider chooses "done". A step is limited to
-   eight actions, and a repeated action ends it.
+   - Two outcome options are always offered: `done` and `blocked`.
+2. A single request asks three questions:
+   - a `choice` for the next action;
+   - a `noul` asking whether the step's result is visibly present;
+   - after two actions, a `noul` asking whether progress has stalled.
+
+   The instructions are adapted from jev-ultrafast's rules: screen text is untrusted,
+   do not repeat reflected actions, choose done only with visible evidence.
+
+   For JEV, the state also carries an element table. For Laya's small context,
+   controls appear only in the options.
+3. The model's answer decides what happens next:
+   - The step ends when "done" is above 0.85 or `done` is chosen confidently.
+   - A stall above 0.85, a low-confidence choice, or `blocked` hands the step back to
+     the language model, together with the top options.
+   - The confidence floors are 0.55 for JEV and 0.15 for Laya, whose scale is flatter.
+4. Potentially sensitive actions get an extra `noul` side-effect check. These are
+   Delete, Send, Buy, Quit, Allow and similar controls, Return, and modifier
+   shortcuts. In supervised mode the user approves each action. Then the action is
+   executed.
+5. An observation fingerprint tells whether the screen changed.
+   - An action that has no effect twice is set aside for the next-best option.
+   - Three unchanged turns hand the step back to the language model.
+   - A step is limited to eight actions.
 6. The step result returns to the language model. With a model that passed the vision
-   check, the result includes an ephemeral screenshot. The model confirms the work is
-   on track, corrects course with another step, or asks the user for help.
+   check, it includes an ephemeral screenshot. The model confirms the work is on track,
+   corrects course, or asks the user for help.
+
+**Laya for computer use.** In laya-computer-use's zero-shot evaluation, the official
+checkpoints scored 0 of 12 on control selection. In laya-browser-agent's comparison,
+JEV scored 8 of 12. The settings therefore recommend JEV for computer use. Laya
+remains available and fully local.
 
 Goals finish only after a `score` question confirms that the observed state satisfies
 the completion criteria. The evidence is stored with the run.
@@ -107,7 +124,8 @@ directly.
 | MiMo image interpretation (capability probe) | Passed |
 | MiMo agent turn with the real tool schema ("Open TextEdit.") | `open_app {"name": "TextEdit"}` in 3 s |
 | Unauthenticated request to the managed server | Rejected (401) |
-| MiMo directing Laya on a simulated TextEdit window ("write the word ciao") | Completed in 15 s. MiMo recovered from a missing `text` argument; Laya chose to type (45%), then "done" (55%); MiMo checked the screenshot and finished with evidence. |
+| MiMo directing Laya on a simulated TextEdit window: "write the word ciao" | Completed in 15 s. Laya typed into the document body; "done" at 94%. |
+| MiMo directing Laya on a simulated TextEdit window: "make the text bold" | Paused safely after 3 attempts. Laya's confidence for the Bold button stayed between 8% and 19%, below the floor, so nothing was clicked by mistake. This matches the published finding that Laya is weak at control selection. |
 
 Some checks still need a person: hosted providers with real keys, computer use with
 Accessibility granted, VoiceOver, multiple displays, and macOS 14. They are listed in

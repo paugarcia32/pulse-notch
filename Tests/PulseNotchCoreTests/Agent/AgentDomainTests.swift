@@ -170,12 +170,30 @@ struct AgentDomainTests {
         let candidates = ActionCandidates.build(for: observation, step: "type the note", text: "ciao")
         let descriptions = candidates.map(\.description)
 
-        #expect(descriptions.contains("type the text into the “Document” text area"))
-        #expect(descriptions.contains("click the “Save” button"))
+        #expect(descriptions.contains("type into textbox “Document”"))
+        #expect(descriptions.contains("click button “Save”"))
         #expect(!descriptions.contains { $0.contains("Untitled") || $0.contains("Disabled") || $0.contains("Password") })
         #expect(candidates.suffix(2).map(\.option) == [ActionCandidate.doneOption, ActionCandidate.abstainOption])
         #expect(Set(candidates.map(\.option)).count == candidates.count)
         #expect(!ActionCandidates.build(for: observation, step: "save", text: nil).map(\.description).contains { $0.hasPrefix("type") })
+    }
+
+    @Test
+    func candidatesHideMenusShowFieldValuesAndFingerprintsTrackChanges() {
+        let elements = [
+            AccessibleElement(id: "m", role: "AXMenuBarItem", label: "File"),
+            AccessibleElement(id: "t", role: "AXTextField", label: "Name", value: "Pau")
+        ]
+        let observation = Observation(capturedAt: Date(timeIntervalSince1970: 0), applicationName: "App", bundleID: "a", elements: elements)
+        let descriptions = ActionCandidates.build(for: observation, step: "rename", text: nil).map(\.description)
+
+        #expect(descriptions.first == "click textbox “Name” = “Pau”")
+        #expect(!descriptions.contains { $0.contains("File") })
+        #expect(ActionCandidates.build(for: observation, step: "open the File menu", text: nil).map(\.description).contains("click menu “File”"))
+
+        let edited = Observation(capturedAt: Date(timeIntervalSince1970: 1), applicationName: "App", bundleID: "a", elements: [elements[0], AccessibleElement(id: "t", role: "AXTextField", label: "Name", value: "Pau G")])
+        #expect(ActionCandidates.fingerprint(observation) != ActionCandidates.fingerprint(edited))
+        #expect(ActionCandidates.fingerprint(observation) == ActionCandidates.fingerprint(Observation(capturedAt: Date(timeIntervalSince1970: 9), applicationName: "App", bundleID: "a", elements: elements)))
     }
 
     @Test
