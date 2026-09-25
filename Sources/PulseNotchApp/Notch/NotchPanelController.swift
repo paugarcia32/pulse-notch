@@ -457,7 +457,10 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     }
 
     private func registerGlobalShortcuts() {
-        shortcutManager?.replace(with: preferences.shortcuts)
+        // Only actions that currently apply are registered, so the emergency stop
+        // claims its hot key only while the AI Agent is enabled.
+        let active = Set(preferences.shortcutActions)
+        shortcutManager?.replace(with: preferences.shortcuts.filter { active.contains($0.key) })
     }
 
     private func performShortcut(_ action: ShortcutAction) {
