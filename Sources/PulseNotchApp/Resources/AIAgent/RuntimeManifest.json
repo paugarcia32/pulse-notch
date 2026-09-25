@@ -1,0 +1,79 @@
+{
+  "manifestVersion": 1,
+  "runtimes": [
+    {
+      "id": "python",
+      "name": "Python runtime for Laya",
+      "version": "3.12.14+20260924",
+      "license": "PSF-2.0",
+      "source": "https://github.com/astral-sh/python-build-standalone",
+      "minimumMacOS": "14.0",
+      "architectures": ["arm64"],
+      "archive": {
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260924/cpython-3.12.14%2B20260924-aarch64-apple-darwin-install_only.tar.gz",
+        "size": 25153879,
+        "sha256": "9763f43db2481a6af36af82ec40302aab7a73632f880129d07a6e81aec846277"
+      },
+      "packages": {
+        "lockFile": "laya-requirements.lock",
+        "requirement": "laya-mlx==0.2.0",
+        "estimatedSize": 180000000
+      }
+    },
+    {
+      "id": "llama.cpp",
+      "name": "llama.cpp server (Metal)",
+      "version": "b11146",
+      "license": "MIT",
+      "source": "https://github.com/ggml-org/llama.cpp",
+      "minimumMacOS": "14.0",
+      "architectures": ["arm64"],
+      "archive": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-macos-arm64.tar.gz",
+        "size": 11189714,
+        "sha256": "1ad3f9eff80edb9dbef4259ad564d1720612ef7eea48fa4afed0e54f5f3d5711"
+      },
+      "executable": "llama-server"
+    }
+  ],
+  "decisionModels": [
+    {
+      "id": "laya-multilingual",
+      "name": "Laya Multilingual (MLX, FP16)",
+      "repository": "aac6fef/laya-multilingual-mlx",
+      "revision": "f2b4faf51023039425946074e2cf1361d2db11d5",
+      "upstream": "convaiinnovations/laya-multilingual",
+      "license": "Apache-2.0",
+      "contextLimit": 1024,
+      "runtime": "python",
+      "files": [
+        { "path": "model.safetensors", "size": 643835426, "sha256": "7fc5834af4d8fdfb268d272a9d1a66e5819a0daac98241651c4c888cc43adff1" },
+        { "path": "tokenizer/tokenizer.json", "size": 34363188, "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f" },
+        { "path": "tokenizer/tokenizer_config.json", "size": 524, "gitBlobSHA1": "c255ac0c8cb34a37d066cd0dafe313fd769d27ae" },
+        { "path": "encoder/config.json", "size": 1938, "gitBlobSHA1": "0de0e2d30638873790cf962def52e2acf4db3eef" },
+        { "path": "mlx_config.json", "size": 316, "gitBlobSHA1": "ba5bb5696a3c3c29a400f2013afd229177ba7a72" },
+        { "path": "rl_agent_config.json", "size": 473, "gitBlobSHA1": "68c59e63298a03b7c9ce44a80211d3d446cb92ca" },
+        { "path": "manifest.json", "size": 1773, "gitBlobSHA1": "9529e2500d455339a800453137fc2bc0e3321fd6" },
+        { "path": "LICENSE", "size": 10173, "gitBlobSHA1": "d9a10c0d8e868ebf8da0b3dc95bb0be634c34bfe" },
+        { "path": "NOTICE", "size": 698, "gitBlobSHA1": "a41f006a83bff3f324dfbe8b3d9963f9b39063d6" }
+      ]
+    }
+  ],
+  "languageModels": [
+    {
+      "id": "mimo-v2.6-distill-qwen-9b-q8_0",
+      "name": "MiMo-V2.6-Distill-Qwen-9B (Q8_0)",
+      "repository": "ggml-org/MiMo-V2.6-Distill-Qwen-9B-GGUF",
+      "revision": "81baddc39bc48924a88e87b8d31aceb03058e559",
+      "license": "MIT",
+      "runtime": "llama.cpp",
+      "contextLength": 16384,
+      "minimumMemoryGB": 16,
+      "notes": "Uses the package's embedded, adapted chat template; the server is launched with --jinja and no template override.",
+      "files": [
+        { "path": "MiMo-V2.6-Distill-Qwen-9B-Q8_0.gguf", "role": "model", "size": 9527498048, "sha256": "de6dae10334e088876358ef9f574835bb3b401ea2ecf5d6a9473f37894df6b73" },
+        { "path": "mmproj-MiMo-V2.6-Distill-Qwen-9B-Q8_0.gguf", "role": "visionProjector", "size": 624229728, "sha256": "4b77e812662a106d6739edf2a3e8e16e0e22291154c0b22a13dab42450410337" }
+      ]
+    }
+  ]
+}

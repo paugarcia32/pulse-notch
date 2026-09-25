@@ -41,6 +41,13 @@ public struct AgentRunOutcome: Hashable, Sendable {
     /// The transcript without the system prompt or screenshots, for resuming.
     public let messages: [ChatMessage]
     public let actionCount: Int
+
+    public init(status: RunStatus, finalResponse: String?, messages: [ChatMessage], actionCount: Int) {
+        self.status = status
+        self.finalResponse = finalResponse
+        self.messages = messages
+        self.actionCount = actionCount
+    }
 }
 
 public struct AgentEnvironment: Sendable {
