@@ -11,6 +11,7 @@ enum NotchPage: String, CaseIterable, Identifiable, Hashable {
     case media
     case clock
     case downloads
+    case aiAgent
 
     var id: String { rawValue }
 
@@ -23,6 +24,7 @@ enum NotchPage: String, CaseIterable, Identifiable, Hashable {
         case .media: "Media"
         case .clock: "Clock"
         case .downloads: "Downloads"
+        case .aiAgent: "AI Agent"
         }
     }
 
@@ -35,6 +37,7 @@ enum NotchPage: String, CaseIterable, Identifiable, Hashable {
         case .media: "play.rectangle"
         case .clock: "timer"
         case .downloads: "arrow.down.circle"
+        case .aiAgent: "brain"
         }
     }
 }
@@ -48,12 +51,22 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
     case fifthPage
     case sixthPage
     case seventhPage
+    case eighthPage
+    /// Stops every AI Agent run. Registered globally so it works from any app.
+    case agentEmergencyStop
 
     var id: String { rawValue }
 
+    static let pageActions: [ShortcutAction] = [
+        firstPage, secondPage, thirdPage, fourthPage, fifthPage, sixthPage, seventhPage, eighthPage
+    ]
+
     static func page(at index: Int) -> ShortcutAction {
-        [firstPage, secondPage, thirdPage, fourthPage, fifthPage, sixthPage, seventhPage][index]
+        pageActions[min(max(index, 0), pageActions.count - 1)]
     }
+
+    /// Actions registered as system-wide hot keys rather than menu shortcuts.
+    var isGlobal: Bool { self == .openNotch || self == .agentEmergencyStop }
 }
 
 enum TestingSystemActivity: Equatable {
@@ -115,6 +128,8 @@ final class NotchPreferences: ObservableObject {
     @Published private(set) var testingFeaturesEnabled: Bool
     @Published private(set) var testingSystemActivity: TestingSystemActivity?
     @Published private(set) var testingSystemActivityTrigger: UUID?
+    /// The AI Agent is optional and stays off until the user enables it.
+    @Published private(set) var aiAgentEnabled: Bool
 
     private enum Keys {
         static let pageOrder = "settings.pageOrder"
@@ -124,6 +139,9 @@ final class NotchPreferences: ObservableObject {
         static let summaryPageIntroduced = "settings.summaryPageIntroduced"
         static let clockPageIntroduced = "settings.clockPageIntroduced"
         static let downloadsPageIntroduced = "settings.downloadsPageIntroduced"
+        static let aiAgentPageIntroduced = "settings.aiAgentPageIntroduced"
+        static let aiAgentEnabled = "settings.aiAgentEnabled"
+        static let aiAgentCollapsedIndicatorIntroduced = "settings.aiAgentCollapsedIndicatorIntroduced"
         static let summaryPriorityOrder = "settings.summaryPriorityOrder"
         static let openAtLogin = "settings.openAtLogin"
         static let hideFromDock = "settings.hideFromDock"
@@ -175,6 +193,12 @@ final class NotchPreferences: ObservableObject {
             defaults.set(storedVisiblePages.map(\.rawValue), forKey: Keys.visiblePages)
         }
         defaults.set(true, forKey: Keys.downloadsPageIntroduced)
+        if persistedVisiblePages != nil, defaults.object(forKey: Keys.aiAgentPageIntroduced) == nil {
+            storedVisiblePages.append(.aiAgent)
+            defaults.set(storedVisiblePages.map(\.rawValue), forKey: Keys.visiblePages)
+        }
+        defaults.set(true, forKey: Keys.aiAgentPageIntroduced)
+        aiAgentEnabled = defaults.bool(forKey: Keys.aiAgentEnabled)
         visiblePages = storedVisiblePages.isEmpty ? Set(NotchPage.allCases) : Set(storedVisiblePages)
         dynamicPagesEnabled = defaults.object(forKey: Keys.dynamicPagesEnabled) as? Bool ?? true
         summaryPriorityOrder = Self.summaryPriorities(from: defaults.stringArray(forKey: Keys.summaryPriorityOrder))
@@ -221,6 +245,10 @@ final class NotchPreferences: ObservableObject {
             collapsedIndicatorCategories.insert(.clock)
             defaults.set(true, forKey: Keys.clockCollapsedIndicatorIntroduced)
         }
+        if defaults.object(forKey: Keys.aiAgentCollapsedIndicatorIntroduced) == nil {
+            collapsedIndicatorCategories.insert(.aiAgent)
+            defaults.set(true, forKey: Keys.aiAgentCollapsedIndicatorIntroduced)
+        }
         visibleCollapsedIndicatorCategories = collapsedIndicatorCategories
         testingFeaturesEnabled = defaults.bool(forKey: Keys.testingFeaturesEnabled)
         testingSystemActivity = nil
@@ -228,7 +256,10 @@ final class NotchPreferences: ObservableObject {
         startupError = nil
     }
 
-    var orderedVisiblePages: [NotchPage] { pageOrder.filter { visiblePages.contains($0) } }
+    /// Pages the user chose to show. The AI Agent page appears only while the feature is enabled.
+    var orderedVisiblePages: [NotchPage] {
+        pageOrder.filter { visiblePages.contains($0) && ($0 != .aiAgent || aiAgentEnabled) }
+    }
     var shortcutPages: [NotchPage] {
         dynamicPagesEnabled ? activeDynamicPages : orderedVisiblePages
     }
@@ -236,7 +267,9 @@ final class NotchPreferences: ObservableObject {
     var transientSystemActivityDuration: Duration { .seconds(transientSystemActivityDurationSeconds) }
     var downloadsDirectoryURL: URL { URL(fileURLWithPath: downloadsDirectoryPath, isDirectory: true) }
     var shortcutActions: [ShortcutAction] {
-        [.openNotch] + orderedVisiblePages.indices.map(ShortcutAction.page(at:))
+        [.openNotch]
+            + orderedVisiblePages.indices.prefix(ShortcutAction.pageActions.count).map(ShortcutAction.page(at:))
+            + (aiAgentEnabled ? [.agentEmergencyStop] : [])
     }
 
     func isVisible(_ page: NotchPage) -> Bool { visiblePages.contains(page) }
@@ -262,6 +295,8 @@ final class NotchPreferences: ObservableObject {
         case .fifthPage: pages[safe: 4]
         case .sixthPage: pages[safe: 5]
         case .seventhPage: pages[safe: 6]
+        case .eighthPage: pages[safe: 7]
+        case .agentEmergencyStop: nil
         }
     }
 
@@ -272,7 +307,8 @@ final class NotchPreferences: ObservableObject {
 
     func shortcutTitle(for action: ShortcutAction) -> String {
         guard action != .openNotch else { return "Open notch" }
-        let index = shortcutActions.firstIndex(of: action)!
+        guard action != .agentEmergencyStop else { return "Stop AI Agent (emergency)" }
+        let index = (ShortcutAction.pageActions.firstIndex(of: action) ?? 0) + 1
         guard let page = orderedVisiblePages[safe: index - 1] else { return "Page \(index)" }
         return "Page \(index): \(page.name)"
     }
@@ -281,6 +317,13 @@ final class NotchPreferences: ObservableObject {
         guard isVisible || visiblePages.count > 1 else { return }
         if isVisible { visiblePages.insert(page) } else { visiblePages.remove(page) }
         defaults.set(pageOrder.filter { visiblePages.contains($0) }.map(\.rawValue), forKey: Keys.visiblePages)
+    }
+
+    func setAIAgentEnabled(_ isEnabled: Bool) {
+        guard aiAgentEnabled != isEnabled else { return }
+        aiAgentEnabled = isEnabled
+        defaults.set(isEnabled, forKey: Keys.aiAgentEnabled)
+        NotificationCenter.default.post(name: .pulseNotchShortcutsChanged, object: nil)
     }
 
     func setDynamicPagesEnabled(_ isEnabled: Bool) {
@@ -552,7 +595,9 @@ final class NotchPreferences: ObservableObject {
         .fourthPage: AppShortcut(key: "4", modifiers: [.command]),
         .fifthPage: AppShortcut(key: "5", modifiers: [.command]),
         .sixthPage: AppShortcut(key: "6", modifiers: [.command]),
-        .seventhPage: AppShortcut(key: "7", modifiers: [.command])
+        .seventhPage: AppShortcut(key: "7", modifiers: [.command]),
+        .eighthPage: AppShortcut(key: "8", modifiers: [.command]),
+        .agentEmergencyStop: AppShortcut(key: ".", modifiers: [.command, .option, .control], keyCode: 47)
     ]
 }
 

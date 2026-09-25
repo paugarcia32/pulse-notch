@@ -13,6 +13,24 @@ struct NotchSurfaceSizeTests {
     }
 
     @Test
+    func aiAgentPageUsesALargerSurfaceOnlyForThatPage() {
+        let size = NotchSurfaceSize(notchWidth: 210, notchHeight: 38, displaySize: CGSize(width: 1512, height: 982))
+
+        #expect(size.expanded(for: .aiAgent) == CGSize(width: 640, height: 520))
+        #expect(size.expanded(for: .summary) == CGSize(width: 500, height: 250))
+        #expect(NotchPage.allCases.filter { size.expanded(for: $0) != size.expanded }.map(\.self) == [.aiAgent])
+    }
+
+    @Test
+    func aiAgentSurfaceIsClampedToSmallDisplaysButNeverSmallerThanOtherPages() {
+        let small = NotchSurfaceSize(notchWidth: nil, notchHeight: nil, displaySize: CGSize(width: 600, height: 500))
+        let tiny = NotchSurfaceSize(notchWidth: nil, notchHeight: nil, displaySize: CGSize(width: 300, height: 200))
+
+        #expect(small.aiAgentExpanded == CGSize(width: 568, height: 460))
+        #expect(tiny.aiAgentExpanded == tiny.expanded)
+    }
+
+    @Test
     func usesRectangularNotchOnDisplaysWithoutANotch() {
         let size = NotchSurfaceSize(notchWidth: nil, notchHeight: nil, externalTopBarHeight: 23)
 

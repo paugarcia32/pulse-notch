@@ -277,4 +277,25 @@ struct CollapsedNotchIndicatorsTests {
             status: status
         )
     }
+
+    @Test
+    func aiAgentStatesUseDistinctSymbolsAndLeadTheDefaultPriority() {
+        let indicators = CollapsedNotchIndicators.make(
+            schedule: nil,
+            sessions: [],
+            actionSessions: [],
+            aiAgent: .needsInput,
+            at: Date(timeIntervalSince1970: 1_000),
+            calendarReminderLeadTime: 600
+        )
+
+        #expect(indicators.map(\.content) == [.aiAgent(.needsInput)])
+        #expect(indicators.first?.category == .aiAgent)
+        #expect(indicators.first?.accessibilityLabel == "AI Agent needs input")
+        #expect(Set(AgentIndicatorState.allCases.map(\.symbolName)).count == AgentIndicatorState.allCases.count)
+        #expect(CollapsedNotchIndicatorCategory.defaultPriorityOrder.first == .aiAgent)
+        #expect(CollapsedNotchIndicatorCategory.aiAgent.ownerPage == .aiAgent)
+        #expect(NotchIndicator(id: "a", content: .aiAgent(.running), accessibilityLabel: "").supportsCustomColor)
+        #expect(!NotchIndicator(id: "a", content: .aiAgent(.failed), accessibilityLabel: "").supportsCustomColor)
+    }
 }

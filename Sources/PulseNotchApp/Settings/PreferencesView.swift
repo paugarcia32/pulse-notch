@@ -377,6 +377,10 @@ struct PreferencesView: View {
                 gitHubSettings
             }
 
+            if page == .aiAgent {
+                aiAgentSettings
+            }
+
             if let category = indicatorCategory(for: page) {
                 Section {
                     Toggle("Show \(category.name) when notch is closed", isOn: collapsedIndicatorCategory(category))
@@ -392,6 +396,25 @@ struct PreferencesView: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+    }
+
+    private var aiAgentSettings: some View {
+        Section {
+            Toggle("Enable AI Agent", isOn: Binding(
+                get: { preferences.aiAgentEnabled },
+                set: { preferences.setAIAgentEnabled($0) }
+            ))
+            if preferences.aiAgentEnabled {
+                Button("Open AI Agent") {
+                    NotificationCenter.default.post(name: .pulseNotchShowAIAgent, object: nil)
+                }
+                LabeledContent("Emergency stop", value: preferences.shortcut(for: .agentEmergencyStop).displayName)
+            }
+        } header: {
+            Text("AI Agent")
+        } footer: {
+            Text("Off until you enable it. Choose providers, add credentials, install local models, and grant computer access from the Settings tab of the AI Agent page. Disabling stops every run and managed runtime; history and downloaded models are kept until you delete them. Change the emergency-stop shortcut under Shortcuts.")
+        }
     }
 
     private var downloadsSettings: some View {

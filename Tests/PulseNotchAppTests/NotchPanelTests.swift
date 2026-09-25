@@ -24,6 +24,19 @@ struct NotchPanelTests {
     }
 
     @Test
+    func onlyTheControllerLockCanResizeThePanel() {
+        let panel = NotchPanel(contentRect: NSRect(x: 0, y: 0, width: 500, height: 250))
+
+        panel.lock(to: NSSize(width: 640, height: 520))
+        panel.setFrame(NSRect(x: 10, y: 20, width: 640, height: 520), display: false)
+        #expect(panel.frame == NSRect(x: 10, y: 20, width: 640, height: 520))
+
+        panel.setFrame(NSRect(x: 10, y: 20, width: 500, height: 250), display: false)
+        #expect(panel.frame.size == NSSize(width: 640, height: 520))
+        #expect(panel.minSize == NSSize(width: 640, height: 520))
+    }
+
+    @Test
     func expandedPanelAlwaysReceivesMouseEvents() {
         let frame = NSRect(x: 100, y: 100, width: 200, height: 40)
 

@@ -23,6 +23,7 @@ struct NotchIndicator: Identifiable {
         case githubActions(GitHubPullRequest.ActionStatus)
         case mediaPlayback(MediaPlaybackStatus)
         case clock(ClockStatus)
+        case aiAgent(AgentIndicatorState)
     }
 
     let id: String
@@ -40,6 +41,7 @@ struct NotchIndicator: Identifiable {
         case .githubActions: .green
         case .mediaPlayback: .purple
         case .clock: .orange
+        case let .aiAgent(state): state.notchColor
         }
     }
 
@@ -51,6 +53,7 @@ struct NotchIndicator: Identifiable {
         case .runningDownload: .downloads
         case .mediaPlayback: .mediaPlayback
         case .clock: .clock
+        case .aiAgent: .aiAgent
         }
     }
 
@@ -63,9 +66,10 @@ struct NotchIndicator: Identifiable {
 
     var supportsCustomColor: Bool {
         switch content {
-        case .upcomingCalendarEvent, .runningAgent, .runningDownload, .githubActions(.running), .mediaPlayback, .clock:
+        case .upcomingCalendarEvent, .runningAgent, .runningDownload, .githubActions(.running), .mediaPlayback, .clock,
+             .aiAgent(.running):
             true
-        case .completedAgent, .githubActions:
+        case .completedAgent, .githubActions, .aiAgent:
             false
         }
     }
@@ -79,6 +83,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
     case downloads
     case mediaPlayback
     case clock
+    case aiAgent
 
     var id: String { "collapsed-indicator-\(rawValue)" }
     var colorPickerID: String { "collapsed-indicator-color-\(rawValue)" }
@@ -91,6 +96,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .downloads: "Downloads"
         case .mediaPlayback: "Media playback"
         case .clock: "Clock"
+        case .aiAgent: "AI Agent"
         }
     }
 
@@ -102,6 +108,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .downloads: .downloads
         case .mediaPlayback: .media
         case .clock: .clock
+        case .aiAgent: .aiAgent
         }
     }
 
@@ -113,6 +120,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .downloads: "arrow.down.circle"
         case .mediaPlayback: "waveform"
         case .clock: "timer"
+        case .aiAgent: "brain"
         }
     }
 
@@ -124,10 +132,12 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .downloads: .blue
         case .mediaPlayback: .purple
         case .clock: .orange
+        case .aiAgent: .teal
         }
     }
 
     static let defaultPriorityOrder: [Self] = [
+        .aiAgent,
         .mediaPlayback,
         .clock,
         .calendar,
@@ -149,6 +159,7 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
     case download
     case mediaPlayback
     case clock
+    case aiAgent
 
     var id: String { rawValue }
 
@@ -164,11 +175,12 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
         case .download: "Download"
         case .mediaPlayback: "Media playback"
         case .clock: "Running timer"
+        case .aiAgent: "AI Agent run"
         }
     }
 
     var maximumPreviewCount: Int {
-        self == .calendar || self == .clock ? 1 : 5
+        self == .calendar || self == .clock || self == .aiAgent ? 1 : 5
     }
 
     func indicator(instance: Int, at date: Date = .now) -> NotchIndicator {
@@ -206,6 +218,8 @@ enum CollapsedIndicatorPreview: String, CaseIterable, Identifiable {
                 content: .clock(ClockStatus(mode: .timer, time: 4 * 60 + 32, isRunning: true)),
                 accessibilityLabel: "Timer, 4 minutes, 32 seconds, running"
             )
+        case .aiAgent:
+            return NotchIndicator(id: "ai-agent-preview", content: .aiAgent(.running), accessibilityLabel: AgentIndicatorState.running.label)
         }
     }
 
@@ -303,10 +317,15 @@ enum CollapsedNotchIndicators {
         downloads: [DetectedDownload] = [],
         mediaPlayback: MediaPlaybackStatus? = nil,
         clock: ClockStatus? = nil,
+        aiAgent: AgentIndicatorState? = nil,
         at date: Date,
         calendarReminderLeadTime: TimeInterval
     ) -> [NotchIndicator] {
         var indicators: [NotchIndicator] = []
+
+        if let aiAgent {
+            indicators.append(NotchIndicator(id: "ai-agent", content: .aiAgent(aiAgent), accessibilityLabel: aiAgent.label))
+        }
 
         if let clock, clock.isRunning {
             indicators.append(NotchIndicator(id: "clock", content: .clock(clock), accessibilityLabel: clock.accessibilityLabel))
@@ -479,6 +498,8 @@ struct NotchIndicatorView: View {
                     .foregroundStyle(color)
             case let .clock(status):
                 ClockCollapsedIndicator(status: status, color: color, reduceMotion: reduceMotion)
+            case let .aiAgent(state):
+                AIAgentCollapsedIndicator(state: state, color: color, reduceMotion: reduceMotion)
             }
         }
             .accessibilityLabel(indicator.accessibilityLabel)
@@ -711,6 +732,36 @@ private struct GitHubActionIndicator: View {
         case .failed: "xmark.octagon.fill"
         case .succeeded: "checkmark.circle.fill"
         case .none: "minus.circle"
+        }
+    }
+}
+
+extension AgentIndicatorState {
+    var notchColor: Color {
+        switch self {
+        case .running: .teal
+        case .paused: .yellow
+        case .needsInput: .orange
+        case .completed: .green
+        case .failed: .red
+        }
+    }
+}
+
+/// Each state uses its own symbol so the state never depends on color alone.
+struct AIAgentCollapsedIndicator: View {
+    let state: AgentIndicatorState
+    let color: Color
+    let reduceMotion: Bool
+
+    var body: some View {
+        let symbol = Image(systemName: state.symbolName)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(color)
+        if state == .running && !reduceMotion {
+            symbol.symbolEffect(.pulse, options: .repeating)
+        } else {
+            symbol
         }
     }
 }

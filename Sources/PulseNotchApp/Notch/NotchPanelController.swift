@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import PulseNotchCore
 import SwiftUI
 
@@ -6,15 +7,21 @@ struct NotchSurfaceSize: Equatable {
     static let collapsedIndicatorLaneWidth: CGFloat = 108
     static let physicalNotchContentSpacing: CGFloat = 2
     static let collapsedIndicatorOuterPadding: CGFloat = 10
+    static let aiAgentPreferredSize = CGSize(width: 640, height: 520)
+    /// Keeps the AI Agent surface clear of the display edges on small screens.
+    static let displayMargin = CGSize(width: 32, height: 40)
 
     let collapsed: CGSize
     let expanded: CGSize
+    /// The AI Agent page's larger surface, clamped to the display.
+    let aiAgentExpanded: CGSize
     let physicalNotchSize: CGSize?
 
     init(
         notchWidth: CGFloat?,
         notchHeight: CGFloat?,
-        externalTopBarHeight: CGFloat = 24
+        externalTopBarHeight: CGFloat = 24,
+        displaySize: CGSize? = nil
     ) {
         if let notchWidth, let notchHeight {
             physicalNotchSize = CGSize(width: notchWidth, height: notchHeight)
@@ -27,6 +34,17 @@ struct NotchSurfaceSize: Equatable {
             collapsed = CGSize(width: 190, height: externalTopBarHeight)
         }
         expanded = CGSize(width: 500, height: 250)
+        let available = displaySize.map {
+            CGSize(width: $0.width - Self.displayMargin.width, height: $0.height - Self.displayMargin.height)
+        } ?? Self.aiAgentPreferredSize
+        aiAgentExpanded = CGSize(
+            width: max(expanded.width, min(Self.aiAgentPreferredSize.width, available.width)),
+            height: max(expanded.height, min(Self.aiAgentPreferredSize.height, available.height))
+        )
+    }
+
+    func expanded(for page: NotchPage) -> CGSize {
+        page == .aiAgent ? aiAgentExpanded : expanded
     }
 }
 
@@ -62,6 +80,20 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         ) ?? AppVersion(major: 0, minor: 0, patch: 0)
     )
     let homebrewUpdate = HomebrewUpdateCoordinator()
+    let computerUsePermissions = ComputerUsePermissions()
+    private let desktopSession = DesktopSessionMonitor()
+    private let frontmostApplications = FrontmostApplicationTracker()
+    private(set) lazy var aiAgentModel: AIAgentFeatureModel = {
+        let session = desktopSession
+        return AIAgentFeatureModel.live(
+            executor: MacComputerUseExecutor(tracker: frontmostApplications),
+            availability: session,
+            onComposerFocusChange: { session.setComposerFocused($0) }
+        )
+    }()
+    private var aiAgentObserver: AnyCancellable?
+    private var currentPage = NotchPage.summary
+    private var pendingResizeTask: Task<Void, Never>?
 
     private var panel: NotchPanel?
     private var hostingView: NotchHostingView<NotchSurface>?
@@ -143,6 +175,23 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         }
         registerGlobalShortcuts()
         updateModel.startAutomaticCheck()
+        aiAgentObserver = preferences.$aiAgentEnabled
+            .removeDuplicates()
+            .sink { [weak self] enabled in
+                guard let self else { return }
+                Task { await self.aiAgentModel.setEnabled(enabled) }
+            }
+    }
+
+    /// Stops agent runs and managed local runtimes before quitting, so no model
+    /// server or helper outlives Pulse Notch.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard preferences.aiAgentEnabled else { return .terminateNow }
+        Task {
+            await aiAgentModel.shutdown()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -169,7 +218,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
 
     func showPanel(on screen: NSScreen?) {
         guard let screen else { return }
-        let size = geometry(for: screen).expanded
+        let size = panelSize(on: screen)
         let panel = NotchPanel(contentRect: frame(for: size, on: screen))
         panel.minSize = size
         panel.maxSize = size
@@ -197,7 +246,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     @objc private func screenParametersDidChange() {
         guard let panel, let screen = displayedScreen() ?? preferredScreen() else { return }
         updateSurface(for: screen)
-        position(panel, on: screen, size: geometry(for: screen).expanded)
+        position(panel, on: screen, size: panelSize(on: screen))
     }
 
     @objc private func movePanelToPointerScreen() {
@@ -216,7 +265,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
            let screen = preferredScreen(),
            displayID(for: screen) != displayedScreenID {
             updateSurface(for: screen)
-            position(panel, on: screen, size: geometry(for: screen).expanded)
+            position(panel, on: screen, size: panelSize(on: screen))
         }
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .pulseNotchOpenSurface, object: nil)
@@ -228,7 +277,7 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         NotificationCenter.default.post(name: .pulseNotchClose, object: nil)
         isExpanded = false
         updateSurface(for: screen)
-        position(panel, on: screen, size: geometry(for: screen).expanded)
+        position(panel, on: screen, size: panelSize(on: screen))
         updateMouseEventHandling()
     }
 
@@ -249,10 +298,14 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             preferences: preferences,
             updateModel: updateModel,
             homebrewUpdate: homebrewUpdate,
+            aiAgentModel: aiAgentModel,
+            computerUsePermissions: computerUsePermissions,
             physicalNotchSize: size.physicalNotchSize,
             collapsedSize: size.collapsed,
             expandedSize: size.expanded,
-            onExpansionChanged: setExpanded
+            aiAgentExpandedSize: size.aiAgentExpanded,
+            onExpansionChanged: setExpanded,
+            onPageChanged: { [weak self] page in self?.pageDidChange(page) }
         )
     }
 
@@ -274,10 +327,14 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
             preferences: preferences,
             updateModel: updateModel,
             homebrewUpdate: homebrewUpdate,
+            aiAgentModel: aiAgentModel,
+            computerUsePermissions: computerUsePermissions,
             physicalNotchSize: size.physicalNotchSize,
             collapsedSize: size.collapsed,
             expandedSize: size.expanded,
-            onExpansionChanged: setExpanded
+            aiAgentExpandedSize: size.aiAgentExpanded,
+            onExpansionChanged: setExpanded,
+            onPageChanged: { [weak self] page in self?.pageDidChange(page) }
         )
     }
 
@@ -292,12 +349,37 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
         return NotchSurfaceSize(
             notchWidth: width,
             notchHeight: height,
-            externalTopBarHeight: menuBarHeight(for: screen)
+            externalTopBarHeight: menuBarHeight(for: screen),
+            displaySize: screen.frame.size
         )
     }
 
-    private func position(_ panel: NSPanel, on screen: NSScreen, size: CGSize) {
+    private func panelSize(on screen: NSScreen) -> CGSize {
+        geometry(for: screen).expanded(for: currentPage)
+    }
+
+    /// Grows the window before a larger page animates in, and shrinks it only
+    /// after the smaller page's animation finishes, so content is never clipped.
+    private func pageDidChange(_ page: NotchPage) {
+        guard page != currentPage else { return }
+        currentPage = page
+        guard let panel, let screen = displayedScreen() ?? preferredScreen() else { return }
+        let target = panelSize(on: screen)
+        pendingResizeTask?.cancel()
+        if target.width >= panel.frame.width && target.height >= panel.frame.height {
+            position(panel, on: screen, size: target)
+        } else {
+            pendingResizeTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(NotchMotion.duration + 0.1))
+                guard !Task.isCancelled, let self, let panel = self.panel else { return }
+                self.position(panel, on: screen, size: self.panelSize(on: screen))
+            }
+        }
+    }
+
+    private func position(_ panel: NotchPanel, on screen: NSScreen, size: CGSize) {
         let targetFrame = frame(for: size, on: screen)
+        panel.lock(to: size)
         displayedScreenID = displayID(for: screen)
         panel.setFrame(targetFrame, display: true)
         panel.orderFrontRegardless()
@@ -379,7 +461,9 @@ final class NotchPanelController: NSObject, NSApplicationDelegate {
     }
 
     private func performShortcut(_ action: ShortcutAction) {
-        if let page = preferences.page(for: action) {
+        if action == .agentEmergencyStop {
+            aiAgentModel.stopAll()
+        } else if let page = preferences.page(for: action) {
             NotificationCenter.default.post(name: .pulseNotchShow(page), object: nil)
         } else if action == .openNotch {
             NotificationCenter.default.post(name: .pulseNotchOpen, object: nil)
@@ -439,6 +523,16 @@ final class NotchPanel: NSPanel {
         isMovable = false
         acceptsMouseMovedEvents = true
         lockedSize = contentRect.size
+    }
+
+    /// The only way to change the panel's size. The controller calls it when the
+    /// selected page needs a different surface; other resize requests are ignored.
+    func lock(to size: NSSize) {
+        lockedSize = size
+        minSize = size
+        maxSize = size
+        contentMinSize = size
+        contentMaxSize = size
     }
 
     override func setFrame(_ frameRect: NSRect, display flag: Bool) {
