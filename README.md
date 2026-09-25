@@ -225,8 +225,10 @@ space and at least 16 GB of memory. It uses its embedded, adapted chat template.
 - **"Not ready for computer use":** run **Test connection**. The model must return a
   structured tool call; text alone does not qualify. Choose a model that supports tools.
 - **Screenshots unavailable:** the model did not pass the vision check, or Screen
-  Recording is not granted. macOS applies a new Screen Recording grant after Pulse
-  Notch restarts.
+  Recording is not granted. For a build from source, run
+  `./Scripts/grant-screen-recording.sh`. It opens the right pane, waits for you to
+  turn on Pulse Notch, and restarts the app, because macOS applies a new Screen
+  Recording grant only after a restart.
 - **Actions do nothing:** grant Accessibility in System Settings → Privacy & Security,
   and remove and re-add Pulse Notch if you updated the app.
 - **"Insufficient context":** the local Laya model accepts 1,024 tokens. The task needs
