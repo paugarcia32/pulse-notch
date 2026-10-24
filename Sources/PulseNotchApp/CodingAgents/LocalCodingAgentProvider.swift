@@ -9,12 +9,16 @@ actor LocalCodingAgentProvider: CodingAgentProviding {
         let date = Date()
         let processList = try CommandOutput.read(
             executable: "/bin/ps",
-            arguments: ["-axo", "pid=,ppid=,etime=,command="]
+            arguments: ["-ww", "-axo", "pid=,ppid=,etime=,command="]
         )
         var agents = LocalCodingAgentProcessParser.parse(
             processList,
             at: date
         )
+
+        let claudeSessions = try ClaudeSessionReader.activeSessions(among: agents, at: date)
+        agents.removeAll { $0.kind == .claude }
+        agents.append(contentsOf: claudeSessions)
 
         if let desktopStartedAt = OpenCodeDesktopSessionReader.launchDate(
             in: processList,
@@ -39,7 +43,7 @@ actor LocalCodingAgentProvider: CodingAgentProviding {
             do {
                 let usage: CodingAgentUsage? = switch kind {
                 case .codex: try CodexUsageReader.read()
-                case .claude: try ClaudeUsageReader.read()
+                case .claude: ClaudeUsageReader.readAvailable()
                 case .antigravity: try AntigravityUsageReader.read()
                 case .cursor, .opencode: nil
                 }
@@ -196,7 +200,15 @@ enum LocalCodingAgentInstallation {
         let searchPaths = (ProcessInfo.processInfo.environment["PATH"] ?? "")
             .split(separator: ":")
             .map(String.init)
+        return installedKinds(home: home, searchPaths: searchPaths)
+    }
 
+    static func installedKinds(
+        home: String,
+        searchPaths: [String],
+        fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)
+    ) -> [CodingAgentKind] {
+        let searchPaths = searchPaths + ["/opt/homebrew/bin", "/usr/local/bin"]
         return CodingAgentKind.allCases.filter { kind in
             let executableNames: [String]
             let fixedPaths: [String]
@@ -206,7 +218,11 @@ enum LocalCodingAgentInstallation {
                 fixedPaths = []
             case .claude:
                 executableNames = ["claude"]
-                fixedPaths = ["\(home)/.local/bin/claude"]
+                fixedPaths = [
+                    "\(home)/.local/bin/claude",
+                    "/Applications/Claude.app",
+                    "\(home)/Applications/Claude.app"
+                ]
             case .cursor:
                 executableNames = ["cursor-agent"]
                 fixedPaths = ["\(home)/.local/bin/cursor-agent"]
@@ -224,7 +240,7 @@ enum LocalCodingAgentInstallation {
 
             return (fixedPaths + searchPaths.flatMap { directory in
                 executableNames.map { "\(directory)/\($0)" }
-            }).contains(where: FileManager.default.fileExists(atPath:))
+            }).contains(where: fileExists)
         }
     }
 }
@@ -371,6 +387,14 @@ enum LocalCodingAgentProcessParser {
 
     private static func kind(for command: String) -> CodingAgentKind? {
         let command = command.lowercased()
+        // Desktop embeds the real CLI in an app bundle, often under a path with spaces.
+        // Match the executable before excluding desktop UI and helper processes.
+        if command.range(
+            of: #"^\"?/(?:[^\s/]+/|application support/)*claude-code/(?:[^\s/]+/)*claude\.app/contents/macos/claude(?:\"|\s|$)"#,
+            options: .regularExpression
+        ) != nil {
+            return .claude
+        }
         guard !command.contains(".app/contents/") else {
             return nil
         }

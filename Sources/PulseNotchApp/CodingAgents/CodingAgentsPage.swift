@@ -297,7 +297,7 @@ struct CodingAgentsPage: View {
     private func unavailableDescription(_ kind: CodingAgentKind) -> String {
         switch kind {
         case .codex, .antigravity: "Usage unavailable"
-        case .claude: "Run /statusline to connect"
+        case .claude: "Open Usage in Claude Desktop to refresh, or connect the CLI status line bridge"
         case .cursor: "View monthly usage in Cursor"
         case .opencode: "Usage depends on its configured provider"
         }
@@ -306,7 +306,7 @@ struct CodingAgentsPage: View {
     private func setupInstruction(_ kind: CodingAgentKind) -> String {
         switch kind {
         case .codex: "Install the Codex app or CLI."
-        case .claude: "Install Claude Code CLI, then connect /statusline."
+        case .claude: "Install Claude Code CLI, then connect the status line bridge."
         case .cursor: "Install cursor-agent, then run cursor-agent login."
         case .antigravity: "Install the agy CLI."
         case .opencode: "Install opencode, then configure a provider with /connect."

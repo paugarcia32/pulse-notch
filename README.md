@@ -70,6 +70,13 @@ SwiftPM executable.
   and OpenCode sessions.
   Codex and OpenCode subagents are grouped under their parent session; Claude Code
   subprocesses are grouped with their ancestor Claude Code process.
+  Claude Code detection includes the CLI embedded in Claude Desktop; the desktop
+  interface and its helpers do not count as coding sessions.
+  Claude sessions count as running only when their local `~/.claude/sessions`
+  registry reports `busy` for the matching live process. `idle`, `waiting`, and
+  missing or unsupported state do not activate the running indicator or dynamic
+  page. Long-running tasks stay active without an arbitrary inactivity timeout.
+  This requires a Claude Code version that publishes session state in that registry.
   OpenCode desktop activity is detected by read-only checks of unfinished responses
   in its local session database while the app is open. Pulse Notch stores no copy;
   closing OpenCode stops detection, and no extra permission is needed.
@@ -94,6 +101,11 @@ Pulse Notch processes activity locally and does not include telemetry.
   stays in memory and refreshes every 30 seconds.
 - Coding-agent detection reads local process and session metadata, never prompts or
   conversation contents.
+- Claude Code usage is read locally every 60 seconds from its CLI status line bridge
+  and Claude Desktop's `plan-usage-history.json`. The newer usable source is shown.
+  Desktop samples older than 15 minutes and expired CLI limits are discarded.
+  No login, Keychain access, or network request is needed by Pulse Notch; without
+  current data, usage is shown as unavailable.
 - GitHub activity refreshes every 30 seconds through the authenticated official
   `gh` CLI and never reads or stores its token. Selected repository names are saved
   locally; removing a repository in Settings stops monitoring it.
@@ -107,6 +119,38 @@ Pulse Notch processes activity locally and does not include telemetry.
 - Update checks query the public GitHub Releases API at most once per day and can be
   disabled in Settings.
 - No credentials are stored by Pulse Notch.
+
+### Claude Code local usage
+
+For Claude Desktop, open its plan usage panel to refresh the local history. Pulse
+Notch reads the latest five-hour and weekly plan percentages from that history,
+without reading credentials or conversation contents. Desktop throttles history
+samples to about one every 4.5 minutes, so this is recent cached usage, not a live
+query. Its history has no reset timestamps, so Pulse Notch does not invent them.
+Only version 2 history is currently supported; unsupported or stale history is
+ignored. No copy of the Desktop history is stored by Pulse Notch.
+
+For CLI sessions, add the following to `~/.claude/settings.json` to feed local rate
+limits to Pulse Notch (merge it with your existing settings):
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "\"/Applications/Pulse Notch.app/Contents/MacOS/PulseNotchClaudeBridge\""
+  }
+}
+```
+
+If you already use a custom status line, have its script pass the same JSON input
+to the bridge as well as to your existing renderer. The bridge produces no visible
+output and saves only rate limits to `~/.claude/pulse-notch-usage.json`, never
+conversation data. Claude Code supplies subscription limits after an API response;
+context-window percentages and token costs are not subscription usage. Remove the
+bridge invocation to disconnect it, and delete the snapshot to remove its saved data.
+Use the installed app path above rather than a development checkout path, which can
+break when the repository moves. The bridge is only needed for the CLI usage source;
+Claude Desktop history and active-session detection work independently of it.
 
 Each integration can be disabled from Settings. macOS requests Calendar, Bluetooth,
 or Downloads access only when the corresponding feature needs it.

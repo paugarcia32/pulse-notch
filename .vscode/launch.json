@@ -39,6 +39,26 @@
             "target": "PulseNotchClaudeBridge",
             "configuration": "release",
             "preLaunchTask": "swift: Build Release PulseNotchClaudeBridge"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:pulse-notch}",
+            "name": "Debug PulseNotchUpdater",
+            "target": "PulseNotchUpdater",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug PulseNotchUpdater"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:pulse-notch}",
+            "name": "Release PulseNotchUpdater",
+            "target": "PulseNotchUpdater",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release PulseNotchUpdater"
         }
     ]
 }

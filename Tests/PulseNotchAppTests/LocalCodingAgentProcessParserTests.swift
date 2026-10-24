@@ -4,6 +4,14 @@ import Testing
 @testable import PulseNotchApp
 
 struct LocalCodingAgentProcessParserTests {
+    @Test(arguments: ["/Applications/Claude.app", "/Users/test/Applications/Claude.app", "/opt/homebrew/bin/claude", "/usr/local/bin/claude"])
+    func detectsClaudeInstallationWhenGUIPathDoesNotIncludeItsCLI(path: String) {
+        #expect(LocalCodingAgentInstallation.installedKinds(
+            home: "/Users/test", searchPaths: ["/usr/bin", "/bin"],
+            fileExists: { $0 == path }
+        ) == [.claude])
+    }
+
     @Test
     func capturesProcessStartTimeFromElapsedDuration() {
         let now = Date(timeIntervalSince1970: 10_000)
@@ -50,6 +58,51 @@ struct LocalCodingAgentProcessParserTests {
         """
 
         #expect(LocalCodingAgentProcessParser.parse(output).isEmpty)
+    }
+
+    @Test
+    func detectsEmbeddedDesktopClaudeWithoutCountingItsUIOrHelpers() {
+        let processes = """
+          10 1 05:00 /Applications/Claude.app/Contents/MacOS/Claude
+          11 10 04:00 /Applications/Claude.app/Contents/Helpers/disclaimer
+          12 11 03:00 /Users/test/Library/Application Support/Claude/claude-code/2.1.308/build/claude.app/Contents/MacOS/claude --name desktop
+          13 12 02:00 /Users/test/Library/Application Support/Claude/claude-code/2.1.308/build/claude.app/Contents/MacOS/claude --name child
+          20 11 01:00 /Users/test/Library/Application Support/Claude/claude-code/2.1.308/build/claude.app/Contents/MacOS/claude
+          21 10 01:00 /Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper
+          22 1 00:01 /bin/zsh -c /Users/test/Library/Application Support/Claude/claude-code/2.1.308/build/claude.app/Contents/MacOS/claude
+        """
+
+        let agents = LocalCodingAgentProcessParser.parse(processes)
+
+        #expect(agents.map(\.id) == ["claude-12", "claude-20"])
+        #expect(agents.first?.title == "desktop")
+    }
+
+    @Test
+    func busyDesktopClaudeSessionsFeedCollapsedIndicatorsAndDynamicPages() throws {
+        let now = Date(timeIntervalSince1970: 10_000)
+        let processes = LocalCodingAgentProcessParser.parse(
+            "12 1 03:00 /Users/test/Library/Application Support/Claude/claude-code/2.1.308/build/claude.app/Contents/MacOS/claude",
+            at: now
+        )
+        let process = try #require(processes.first)
+        let agent = try #require(try ClaudeSessionReader.parse(
+            Data(#"{"pid":12,"sessionId":"session","status":"busy","startedAt":9820000,"statusUpdatedAt":9990000}"#.utf8),
+            process: process, at: now
+        ))
+        var tracker = CodingAgentTracker()
+        let sessions = tracker.update(active: [agent], at: now)
+        let indicators = CollapsedNotchIndicators.make(
+            schedule: nil, sessions: sessions, actionSessions: [], at: now,
+            calendarReminderLeadTime: 600
+        )
+        let activity = DynamicPageActivity(
+            calendar: false, agents: sessions.contains { $0.status == .running },
+            github: false, media: false
+        )
+
+        #expect(indicators.map(\.id) == ["claude-session"])
+        #expect(activity.visiblePages(from: [.summary, .agents], isEnabled: true) == [.summary, .agents])
     }
 
     @Test
