@@ -94,6 +94,10 @@ final class NotchPreferences: ObservableObject {
     @Published var hideFromDock: Bool { didSet { updateDockVisibility() } }
     @Published var hideFromMenuBar: Bool { didSet { defaults.set(hideFromMenuBar, forKey: Keys.hideFromMenuBar) } }
     @Published private(set) var calendarReminderLeadTimeMinutes: Int
+    @Published private(set) var usageWarningRemainingPercent: Int
+    @Published private(set) var testingUsageEnabled = false
+    @Published var testingUsageKind: CodingAgentKind = .codex
+    @Published private(set) var testingUsageRemainingPercent = 12
     @Published private(set) var transientSystemActivityDurationSeconds: Int
     @Published private(set) var showChargingActivity: Bool
     @Published private(set) var showVolumeActivity: Bool
@@ -129,6 +133,8 @@ final class NotchPreferences: ObservableObject {
         static let hideFromDock = "settings.hideFromDock"
         static let hideFromMenuBar = "settings.hideFromMenuBar"
         static let calendarReminderLeadTimeMinutes = "settings.calendarReminderLeadTimeMinutes"
+        static let usageWarningRemainingPercent = "settings.usageWarningRemainingPercent"
+        static let aiUsageIndicatorIntroduced = "settings.aiUsageIndicatorIntroduced"
         static let transientSystemActivityDurationSeconds = "settings.transientSystemActivityDurationSeconds"
         static let showChargingActivity = "settings.showChargingActivity"
         static let showVolumeActivity = "settings.showVolumeActivity"
@@ -182,6 +188,7 @@ final class NotchPreferences: ObservableObject {
         hideFromDock = defaults.bool(forKey: Keys.hideFromDock)
         hideFromMenuBar = defaults.bool(forKey: Keys.hideFromMenuBar)
         calendarReminderLeadTimeMinutes = min(max(defaults.object(forKey: Keys.calendarReminderLeadTimeMinutes) as? Int ?? 10, 1), 60)
+        usageWarningRemainingPercent = min(max(defaults.object(forKey: Keys.usageWarningRemainingPercent) as? Int ?? 20, 0), 100)
         transientSystemActivityDurationSeconds = Self.clampedTransientSystemActivityDuration(
             defaults.object(forKey: Keys.transientSystemActivityDurationSeconds) as? Int ?? 3
         )
@@ -220,6 +227,11 @@ final class NotchPreferences: ObservableObject {
         if defaults.object(forKey: Keys.clockCollapsedIndicatorIntroduced) == nil {
             collapsedIndicatorCategories.insert(.clock)
             defaults.set(true, forKey: Keys.clockCollapsedIndicatorIntroduced)
+        }
+        if defaults.object(forKey: Keys.aiUsageIndicatorIntroduced) == nil {
+            collapsedIndicatorCategories.insert(.aiUsage)
+            defaults.set(collapsedIndicatorCategories.map(\.rawValue), forKey: Keys.visibleCollapsedIndicatorCategories)
+            defaults.set(true, forKey: Keys.aiUsageIndicatorIntroduced)
         }
         visibleCollapsedIndicatorCategories = collapsedIndicatorCategories
         testingFeaturesEnabled = defaults.bool(forKey: Keys.testingFeaturesEnabled)
@@ -294,6 +306,29 @@ final class NotchPreferences: ObservableObject {
         guard calendarReminderLeadTimeMinutes != value else { return }
         calendarReminderLeadTimeMinutes = value
         defaults.set(value, forKey: Keys.calendarReminderLeadTimeMinutes)
+    }
+
+    func setUsageWarningRemainingPercent(_ percent: Int) {
+        usageWarningRemainingPercent = min(max(percent, 0), 100)
+        defaults.set(usageWarningRemainingPercent, forKey: Keys.usageWarningRemainingPercent)
+    }
+
+    func setTestingUsageEnabled(_ enabled: Bool) {
+        guard testingFeaturesEnabled else { return }
+        testingUsageEnabled = enabled
+    }
+
+    func setTestingUsageRemainingPercent(_ percent: Int) {
+        guard testingFeaturesEnabled else { return }
+        testingUsageRemainingPercent = min(max(percent, 0), 100)
+    }
+
+    func testingUsage(at date: Date) -> [CodingAgentUsageAvailability]? {
+        guard testingFeaturesEnabled, testingUsageEnabled else { return nil }
+        return [.available(CodingAgentUsage(kind: testingUsageKind, windows: [
+            .init(durationMinutes: 300, label: "5-hour", usedPercent: Double(100 - testingUsageRemainingPercent),
+                  resetsAt: date.addingTimeInterval(60 * 60))
+        ]))]
     }
 
     func setTransientSystemActivityDurationSeconds(_ seconds: Int) {
@@ -377,6 +412,7 @@ final class NotchPreferences: ObservableObject {
         guard testingFeaturesEnabled != isEnabled else { return }
         testingFeaturesEnabled = isEnabled
         if !isEnabled {
+            testingUsageEnabled = false
             collapsedIndicatorPreviewCounts.removeAll()
             summaryPreviewCounts.removeAll()
         }

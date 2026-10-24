@@ -116,11 +116,14 @@ enum SummaryHighlight: Equatable {
         actions: [GitHubActionSession],
         media: MediaPlaybackStatus?,
         usage: [CodingAgentUsageAvailability] = [],
+        usageRemainingThreshold: Int = 20,
         clock: ClockStatus? = nil,
         priorities: [SummaryPriority],
         at date: Date
     ) -> SummaryHighlight {
-        let mostDepletedLimit = depletedUsageLimit(in: usage)
+        let mostDepletedLimit = CodingAgentUsageWarning.select(
+            in: usage, remainingThreshold: usageRemainingThreshold, at: date
+        )
 
         for priority in priorities {
             switch priority {
@@ -141,25 +144,12 @@ enum SummaryHighlight: Equatable {
             case .clock:
                 if let clock { return .clock(clock) }
             case .usageLimits:
-                if let (kind, window) = mostDepletedLimit {
-                    return .usage(kind: kind, window: window)
+                if let warning = mostDepletedLimit {
+                    return .usage(kind: warning.kind, window: warning.window)
                 }
             }
         }
         return .allClear
-    }
-
-    static func depletedUsageLimit(
-        in usage: [CodingAgentUsageAvailability]
-    ) -> (kind: CodingAgentKind, window: CodingAgentUsage.Window)? {
-        let mostDepletedLimit = usage.compactMap { availability -> CodingAgentUsage? in
-            guard case let .available(usage) = availability else { return nil }
-            return usage
-        }
-        .flatMap { usage in usage.windows.map { (usage.kind, $0) } }
-        .max { $0.1.usedPercent < $1.1.usedPercent }
-        guard let mostDepletedLimit, mostDepletedLimit.1.usedPercent >= 80 else { return nil }
-        return mostDepletedLimit
     }
 }
 
@@ -180,6 +170,7 @@ struct SummaryPage: View {
     let testingUsage: [CodingAgentUsageAvailability]?
     let testingMedia: MediaPlaybackStatus?
     let testingClock: ClockStatus?
+    let usageRemainingThreshold: Int
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
@@ -200,7 +191,8 @@ struct SummaryPage: View {
         testingPullRequests: [GitHubPullRequest]? = nil,
         testingUsage: [CodingAgentUsageAvailability]? = nil,
         testingMedia: MediaPlaybackStatus? = nil,
-        testingClock: ClockStatus? = nil
+        testingClock: ClockStatus? = nil,
+        usageRemainingThreshold: Int = 20
     ) {
         self.calendarModel = calendarModel
         self.codingAgentModel = codingAgentModel
@@ -218,6 +210,7 @@ struct SummaryPage: View {
         self.testingUsage = testingUsage
         self.testingMedia = testingMedia
         self.testingClock = testingClock
+        self.usageRemainingThreshold = usageRemainingThreshold
     }
 
     var body: some View {
@@ -243,6 +236,7 @@ struct SummaryPage: View {
             actions: testingActions ?? gitHubModel.actionSessions,
             media: testingMedia ?? mediaPlaybackModel.playback,
             usage: usageAvailability,
+            usageRemainingThreshold: usageRemainingThreshold,
             clock: testingClock ?? clockModel.status(at: date, includePaused: true),
             priorities: priorities,
             at: date

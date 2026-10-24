@@ -94,7 +94,7 @@ struct NotchSurface: View {
                 sessions: sessions.isEmpty ? nil : sessions,
                 actions: actions.isEmpty ? nil : actions,
                 pullRequests: pullRequests.isEmpty ? nil : pullRequests,
-                usage: usage.isEmpty ? nil : usage,
+                usage: preferences.testingUsage(at: date) ?? (usage.isEmpty ? nil : usage),
                 downloads: downloads.isEmpty ? nil : downloads,
                 media: media,
                 clock: clock
@@ -542,6 +542,19 @@ struct NotchSurface: View {
     private func collapsedIndicator(_ indicator: NotchIndicator?, side: CollapsedIndicatorSide) -> some View {
         if let indicator {
             switch (indicator.content, side) {
+            case let (.lowAgentUsage(warning), .left):
+                AgentUsageWarningIcon(kind: warning.kind, color: collapsedIndicatorColor(for: indicator))
+                    .accessibilityHidden(false)
+                    .accessibilityLabel(indicator.accessibilityLabel)
+                    .help(indicator.accessibilityLabel)
+            case let (.lowAgentUsage(warning), .right):
+                AgentUsageRemainingValue(
+                    remainingPercent: warning.window.remainingPercent,
+                    color: collapsedIndicatorColor(for: indicator),
+                    reduceMotion: reduceMotion
+                )
+                .accessibilityHidden(true)
+                .help(indicator.accessibilityLabel)
             case (.upcomingCalendarEvent, .left):
                 CalendarCountdownIcon(color: collapsedIndicatorColor(for: indicator))
                     .accessibilityLabel(indicator.accessibilityLabel)
@@ -751,9 +764,15 @@ struct NotchSurface: View {
                         preview.indicator(instance: $0, at: date)
                     }
                 }
-            if !previews.isEmpty {
+            if !previews.isEmpty || preferences.testingUsageEnabled {
+                let usageIndicators = CollapsedNotchIndicators.make(
+                    schedule: nil, sessions: [], actionSessions: [],
+                    usage: testingPreviewData(at: date).usage ?? [],
+                    usageRemainingThreshold: preferences.usageWarningRemainingPercent,
+                    at: date, calendarReminderLeadTime: preferences.calendarReminderLeadTime
+                )
                 return CollapsedNotchIndicators.prioritize(
-                    previews.filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) },
+                    (previews + usageIndicators).filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) },
                     using: preferences.collapsedIndicatorPriorityOrder
                 )
             }
@@ -776,6 +795,8 @@ struct NotchSurface: View {
             downloads: preferences.showDownloads ? downloadModel.activeDownloads : [],
             mediaPlayback: mediaPlaybackModel.playback,
             clock: clockModel.status(at: date),
+            usage: usageAvailability(at: date),
+            usageRemainingThreshold: preferences.usageWarningRemainingPercent,
             at: date,
             calendarReminderLeadTime: preferences.calendarReminderLeadTime
         ).filter { preferences.isCollapsedIndicatorCategoryVisible($0.category) }
@@ -818,7 +839,8 @@ struct NotchSurface: View {
     }
 
     private var usageMonitoringEnabled: Bool {
-        isExpanded && (selectedPage == .agents || selectedPage == .summary)
+        preferences.isCollapsedIndicatorCategoryEnabled(.aiUsage)
+            || (isExpanded && (selectedPage == .agents || selectedPage == .summary))
     }
 
     private func scheduleSystemActivityDismissal(_ activity: SystemActivityFeatureModel.Activity?) {
@@ -934,7 +956,8 @@ struct NotchSurface: View {
                 testingPullRequests: testingData.pullRequests,
                 testingUsage: testingData.usage,
                 testingMedia: testingData.media,
-                testingClock: testingData.clock
+                testingClock: testingData.clock,
+                usageRemainingThreshold: preferences.usageWarningRemainingPercent
             )
         case .calendar: CalendarPage(model: calendarModel, date: date, testingSchedule: testingData.schedule)
         case .agents: CodingAgentsPage(model: codingAgentModel, date: date, testingSessions: testingData.sessions)
@@ -956,7 +979,7 @@ struct NotchSurface: View {
         return DynamicPageActivity(
             calendar: testingData.schedule != nil || calendarHasActivity(at: date),
             agents: !(testingData.sessions ?? []).isEmpty || agentsHaveActivity,
-            agentUsage: usageLimitNeedsAttention,
+            agentUsage: usageLimitNeedsAttention(at: date),
             github: testingData.hasGitHubActivity || gitHubHasActivity,
             media: testingData.media != nil || mediaPlaybackModel.isPageActive(at: date),
             clock: testingData.clock != nil || clockModel.status(at: date, includePaused: true) != nil,
@@ -981,9 +1004,18 @@ struct NotchSurface: View {
         return sessions.contains { $0.status == .running }
     }
 
-    private var usageLimitNeedsAttention: Bool {
-        guard case let .loaded(availability) = codingAgentModel.usageState else { return false }
-        return SummaryHighlight.depletedUsageLimit(in: availability) != nil
+    private func usageAvailability(at date: Date) -> [CodingAgentUsageAvailability] {
+        if let testingUsage = testingPreviewData(at: date).usage { return testingUsage }
+        guard case let .loaded(availability) = codingAgentModel.usageState else { return [] }
+        return availability
+    }
+
+    private func usageLimitNeedsAttention(at date: Date) -> Bool {
+        CodingAgentUsageWarning.select(
+            in: usageAvailability(at: date),
+            remainingThreshold: preferences.usageWarningRemainingPercent,
+            at: date
+        ) != nil
     }
 
     private var gitHubHasActivity: Bool {

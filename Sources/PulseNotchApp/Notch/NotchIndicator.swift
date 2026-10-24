@@ -19,6 +19,7 @@ struct NotchIndicator: Identifiable {
         case upcomingCalendarEvent(minutesUntilStart: Int)
         case runningAgent(CodingAgentKind)
         case completedAgent(CodingAgentKind)
+        case lowAgentUsage(CodingAgentUsageWarning)
         case runningDownload(percentage: Int?)
         case githubActions(GitHubPullRequest.ActionStatus)
         case mediaPlayback(MediaPlaybackStatus)
@@ -34,6 +35,7 @@ struct NotchIndicator: Identifiable {
         case .upcomingCalendarEvent: .pink
         case let .runningAgent(kind): kind.notchColor
         case .completedAgent: .green
+        case let .lowAgentUsage(warning): warning.window.remainingPercent == 0 ? .red : .orange
         case .runningDownload: .blue
         case .githubActions(.running): .orange
         case .githubActions(.failed): .red
@@ -48,6 +50,7 @@ struct NotchIndicator: Identifiable {
         case .upcomingCalendarEvent: .calendar
         case .githubActions: .githubActions
         case .runningAgent, .completedAgent: .codingAgents
+        case .lowAgentUsage: .aiUsage
         case .runningDownload: .downloads
         case .mediaPlayback: .mediaPlayback
         case .clock: .clock
@@ -56,7 +59,7 @@ struct NotchIndicator: Identifiable {
 
     var occupiesBothSides: Bool {
         switch content {
-        case .upcomingCalendarEvent, .runningDownload, .mediaPlayback, .clock: true
+        case .upcomingCalendarEvent, .runningDownload, .mediaPlayback, .clock, .lowAgentUsage: true
         default: false
         }
     }
@@ -65,7 +68,7 @@ struct NotchIndicator: Identifiable {
         switch content {
         case .upcomingCalendarEvent, .runningAgent, .runningDownload, .githubActions(.running), .mediaPlayback, .clock:
             true
-        case .completedAgent, .githubActions:
+        case .completedAgent, .githubActions, .lowAgentUsage:
             false
         }
     }
@@ -76,6 +79,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
     case calendar
     case githubActions
     case codingAgents
+    case aiUsage
     case downloads
     case mediaPlayback
     case clock
@@ -88,6 +92,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .calendar: "Calendar reminders"
         case .githubActions: "GitHub Actions"
         case .codingAgents: "Coding agents"
+        case .aiUsage: "AI usage"
         case .downloads: "Downloads"
         case .mediaPlayback: "Media playback"
         case .clock: "Clock"
@@ -99,6 +104,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .calendar: .calendar
         case .githubActions: .github
         case .codingAgents: .agents
+        case .aiUsage: .agents
         case .downloads: .downloads
         case .mediaPlayback: .media
         case .clock: .clock
@@ -110,6 +116,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .calendar: "calendar"
         case .githubActions: "arrow.triangle.2.circlepath"
         case .codingAgents: "terminal"
+        case .aiUsage: "gauge.with.dots.needle.0percent"
         case .downloads: "arrow.down.circle"
         case .mediaPlayback: "waveform"
         case .clock: "timer"
@@ -121,6 +128,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
         case .calendar: .pink
         case .githubActions: .orange
         case .codingAgents: .cyan
+        case .aiUsage: .orange
         case .downloads: .blue
         case .mediaPlayback: .purple
         case .clock: .orange
@@ -128,6 +136,7 @@ enum CollapsedNotchIndicatorCategory: String, CaseIterable, Codable, Identifiabl
     }
 
     static let defaultPriorityOrder: [Self] = [
+        .aiUsage,
         .mediaPlayback,
         .clock,
         .calendar,
@@ -303,10 +312,26 @@ enum CollapsedNotchIndicators {
         downloads: [DetectedDownload] = [],
         mediaPlayback: MediaPlaybackStatus? = nil,
         clock: ClockStatus? = nil,
+        usage: [CodingAgentUsageAvailability] = [],
+        usageRemainingThreshold: Int = 20,
         at date: Date,
         calendarReminderLeadTime: TimeInterval
     ) -> [NotchIndicator] {
         var indicators: [NotchIndicator] = []
+
+        if let warning = CodingAgentUsageWarning.select(
+            in: usage, remainingThreshold: usageRemainingThreshold, at: date
+        ) {
+            let remaining = Int(warning.window.remainingPercent.rounded(.up))
+            let windowName = warning.window.label
+                ?? warning.window.durationMinutes.map { "\($0)-minute limit" }
+                ?? "usage limit"
+            indicators.append(NotchIndicator(
+                id: "ai-usage",
+                content: .lowAgentUsage(warning),
+                accessibilityLabel: "\(warning.kind.displayName): \(remaining) percent remaining, \(windowName)"
+            ))
+        }
 
         if let clock, clock.isRunning {
             indicators.append(NotchIndicator(id: "clock", content: .clock(clock), accessibilityLabel: clock.accessibilityLabel))
@@ -407,6 +432,7 @@ struct CollapsedNotchLayout {
             switch indicator.content {
             case .upcomingCalendarEvent: 28
             case .runningDownload: 34
+            case .lowAgentUsage: 38
             case .mediaPlayback: 22
             case .clock: 48
             default: 16
@@ -470,6 +496,17 @@ struct NotchIndicatorView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(color)
                     .symbolEffect(.bounce, value: indicator.content)
+            case let .lowAgentUsage(warning):
+                HStack(spacing: 8) {
+                    AgentUsageWarningIcon(kind: warning.kind, color: color)
+                    Spacer(minLength: 0)
+                    AgentUsageRemainingValue(
+                        remainingPercent: warning.window.remainingPercent,
+                        color: color,
+                        reduceMotion: reduceMotion
+                    )
+                }
+                    .help(indicator.accessibilityLabel)
             case let .runningDownload(percentage):
                 DownloadCollapsedIndicator(percentage: percentage, color: color, reduceMotion: reduceMotion)
             case let .githubActions(status):
@@ -482,6 +519,41 @@ struct NotchIndicatorView: View {
             }
         }
             .accessibilityLabel(indicator.accessibilityLabel)
+    }
+}
+
+struct AgentUsageWarningIcon: View {
+    let kind: CodingAgentKind
+    let color: Color
+
+    var body: some View {
+        AgentMark(kind: kind, size: 18)
+            .overlay(alignment: .bottomTrailing) {
+                Image(systemName: "exclamationmark")
+                    .font(.system(size: 7, weight: .heavy))
+                    .foregroundStyle(.black)
+                    .frame(width: 10, height: 10)
+                    .background(color, in: Circle())
+                    .overlay(Circle().stroke(.black, lineWidth: 1))
+                    .offset(x: 4, y: 2)
+            }
+            .frame(width: 24, height: 22)
+            .accessibilityHidden(true)
+    }
+}
+
+struct AgentUsageRemainingValue: View {
+    let remainingPercent: Double
+    let color: Color
+    let reduceMotion: Bool
+
+    var body: some View {
+        Text("\(Int(remainingPercent.rounded(.up)))%")
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(color)
+            .contentTransition(reduceMotion ? .identity : .numericText())
+            .fixedSize()
     }
 }
 

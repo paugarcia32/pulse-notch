@@ -373,6 +373,22 @@ struct PreferencesView: View {
                 downloadsSettings
             }
 
+            if page == .agents {
+                Section {
+                    Toggle("Show low AI usage when notch is closed", isOn: collapsedIndicatorCategory(.aiUsage))
+                    Stepper(value: Binding(
+                        get: { preferences.usageWarningRemainingPercent },
+                        set: { preferences.setUsageWarningRemainingPercent($0) }
+                    ), in: 0...100) {
+                        Text("Warn at \(preferences.usageWarningRemainingPercent)% remaining or less")
+                    }
+                } header: {
+                    Text("AI usage warning")
+                } footer: {
+                    Text("Shows the lowest remaining limit for Codex, Claude Code, or Antigravity when data is available. Usage refreshes every 60 seconds while this indicator is enabled. The threshold also applies to Summary. Exhausted limits remain red.")
+                }
+            }
+
             if page == .github {
                 gitHubSettings
             }
@@ -516,6 +532,36 @@ struct PreferencesView: View {
                 Toggle("Enable testing features", isOn: testingFeaturesEnabled)
             }
             if preferences.testingFeaturesEnabled {
+                Section {
+                    Toggle("Simulate AI usage", isOn: Binding(
+                        get: { preferences.testingUsageEnabled },
+                        set: { preferences.setTestingUsageEnabled($0) }
+                    ))
+                    if preferences.testingUsageEnabled {
+                        Picker("Agent", selection: $preferences.testingUsageKind) {
+                            ForEach(CodingAgentKind.allCases, id: \.self) { kind in
+                                Text(kind.displayName).tag(kind)
+                            }
+                        }
+                        Stepper(value: Binding(
+                            get: { preferences.testingUsageRemainingPercent },
+                            set: { preferences.setTestingUsageRemainingPercent($0) }
+                        ), in: 0...100) {
+                            Text("\(preferences.testingUsageRemainingPercent)% remaining")
+                        }
+                        HStack {
+                            Button("Low quota") {
+                                preferences.setTestingUsageRemainingPercent(preferences.usageWarningRemainingPercent)
+                            }
+                            Button("Exhausted") { preferences.setTestingUsageRemainingPercent(0) }
+                            Button("Recovered") { preferences.setTestingUsageRemainingPercent(100) }
+                        }
+                    }
+                } header: {
+                    Text("AI usage warning")
+                } footer: {
+                    Text("Simulated usage feeds the closed notch and Summary, respecting the configured threshold and indicator visibility. Turn off simulation to restore real usage.")
+                }
                 Section {
                     ForEach(CollapsedIndicatorPreview.allCases) { preview in
                         Stepper(value: collapsedIndicatorPreviewCount(preview), in: 0...preview.maximumPreviewCount) {

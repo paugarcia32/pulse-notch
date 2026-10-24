@@ -87,6 +87,14 @@ SwiftPM executable.
 - Charging, volume, brightness-key presses, and Bluetooth-headphone activities.
   Automatic display-brightness adjustments do not trigger the notch indicator.
 - Stopwatch and timer activity.
+- Low AI usage indicator for Codex, Claude Code, and Antigravity when quota data is
+  available. Settings > Pages > Coding Agents lets you disable it or set the
+  remaining-quota threshold (20% by default, 0% for exhausted limits only).
+  The lowest remaining, unexpired limit shows the agent logo with a warning badge
+  on one side of the notch and its remaining percentage on the other, like the
+  calendar countdown. Low quota is amber; exhausted quota shows 0% in red. Summary
+  uses the same threshold. Reorder AI usage
+  in Settings > Notch to control its priority.
 - Multiple displays, Spaces, full-screen apps, keyboard shortcuts, and configurable
   collapsed indicators.
 
@@ -101,6 +109,16 @@ Pulse Notch processes activity locally and does not include telemetry.
   stays in memory and refreshes every 30 seconds.
 - Coding-agent detection reads local process and session metadata, never prompts or
   conversation contents.
+- AI quota refreshes every 60 seconds while its closed-notch indicator is enabled,
+  including while the notch is closed, or while Agents/Summary is expanded. Codex
+  uses its app-server rate-limit command; Antigravity uses its `/usage` command.
+  Quota observations stay in memory, apart from the existing Claude bridge snapshot
+  described below. Cursor and OpenCode quota are currently unavailable. Disabling
+  the indicator stops background quota polling when Agents/Summary is not open.
+  Settings > Advanced > Testing includes an AI usage simulation with an agent
+  selector, remaining percentage, and low/exhausted/recovered presets. Simulation
+  respects indicator visibility and the configured threshold, feeds Summary too,
+  and is cleared when testing is disabled or the app restarts.
 - Claude Code usage is read locally every 60 seconds from its CLI status line bridge
   and Claude Desktop's `plan-usage-history.json`. The newer usable source is shown.
   Desktop samples older than 15 minutes and expired CLI limits are discarded.
