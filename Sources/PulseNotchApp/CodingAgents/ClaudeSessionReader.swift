@@ -55,10 +55,7 @@ enum ClaudeSessionReader {
         // A registry file can outlive a crash and its PID can be reused. Match the
         // process incarnation, not just its number, before trusting a saved busy state.
         if let procStart = session.procStart {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "EEE MMM d HH:mm:ss yyyy"
-            guard let registeredStart = formatter.date(from: procStart),
+            guard let registeredStart = processStartDate(from: procStart),
                   abs(registeredStart.timeIntervalSince(processStartedAt)) <= 2 else { return nil }
         }
         let sessionStartedAt = Date(timeIntervalSince1970: session.startedAt / 1_000)
@@ -77,5 +74,19 @@ enum ClaudeSessionReader {
             startedAt: workStartedAt,
             processID: session.pid
         )
+    }
+
+    /// Claude records `procStart` in `ps -o lstart` format rendered in UTC, regardless of
+    /// the user's time zone. Single-digit days may be space-padded, so whitespace is
+    /// normalized before parsing.
+    static func processStartDate(from procStart: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "EEE MMM d HH:mm:ss yyyy"
+        let normalized = procStart
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        return formatter.date(from: normalized)
     }
 }

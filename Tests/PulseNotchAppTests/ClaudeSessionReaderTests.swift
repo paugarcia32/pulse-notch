@@ -53,6 +53,7 @@ struct ClaudeSessionReaderTests {
     func validatesProcessStartIdentityWhenRegistryProvidesIt() throws {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.dateFormat = "EEE MMM d HH:mm:ss yyyy"
         let matchingStart = formatter.string(from: Date(timeIntervalSince1970: 1000))
         let previousStart = formatter.string(from: Date(timeIntervalSince1970: 900))
@@ -63,6 +64,35 @@ struct ClaudeSessionReaderTests {
             let agent = try ClaudeSessionReader.parse(data, process: process, at: now)
             #expect((agent != nil) == expected)
         }
+    }
+
+    @Test
+    func processStartIsInterpretedAsUTCIndependentOfLocalTimeZone() throws {
+        // Real registry value: the process started at 2026-11-16 14:43:49 UTC
+        // (15:43:49 in CET), and Claude records it in UTC.
+        let processStartedAt = Date(timeIntervalSince1970: 1_794_840_229)
+        let process = DetectedCodingAgent(
+            id: "claude-75605", kind: .claude, title: "Active coding session",
+            startedAt: processStartedAt, processID: 75605
+        )
+        let data = Data("""
+        {"pid":75605,"sessionId":"session","status":"busy","startedAt":1794840339605,
+         "procStart":"Mon Nov 16 14:43:49 2026","statusUpdatedAt":1794840339629}
+        """.utf8)
+
+        let agent = try ClaudeSessionReader.parse(
+            data, process: process, at: processStartedAt.addingTimeInterval(600)
+        )
+
+        #expect(agent?.id == "claude-session")
+    }
+
+    @Test
+    func parsesSpacePaddedSingleDigitDayInProcessStart() {
+        #expect(
+            ClaudeSessionReader.processStartDate(from: "Fri Nov  6 09:05:01 2026")
+                == Date(timeIntervalSince1970: 1_793_955_901)
+        )
     }
 
     @Test
